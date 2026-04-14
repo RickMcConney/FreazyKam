@@ -4,7 +4,7 @@
  */
 
 // Version number based on latest commit date
-var APP_VERSION = "Ver 2026-04-11";
+var APP_VERSION = "Ver 2026-04-14";
 
 var mode = "Select";
 var options = [];
@@ -159,36 +159,39 @@ function saveGcodeProfiles() {
     localStorage.setItem('gcodeProfiles', JSON.stringify(gcodeProfiles));
 }
 
+function getDefaultOptions() {
+    return [
+        { recid: 1,  option: 'showGrid',           value: true,            desc: 'Show Grid',                                   hidden: true  },
+        { recid: 2,  option: 'showOrigin',          value: true,            desc: 'Show Origin',                                 hidden: true  },
+        { recid: 3,  option: 'Inches',              value: false,           desc: 'Display Inches',                              hidden: false },
+        { recid: 4,  option: 'safeHeight',          value: 5,               desc: 'Safe Height in mm',                           hidden: false },
+        { recid: 5,  option: 'tolerance',           value: 0.1,             desc: 'Tool path tolerance (mm)',                    hidden: false },
+        { recid: 6,  option: 'zbacklash',           value: 0.1,             desc: 'Back lash compensation in mm',                hidden: false },
+        { recid: 7,  option: 'workpieceWidth',      value: 300,             desc: 'Workpiece Width (mm)',                        hidden: true  },
+        { recid: 8,  option: 'workpieceLength',     value: 200,             desc: 'Workpiece Length (mm)',                       hidden: true  },
+        { recid: 9,  option: 'workpieceThickness',  value: 19,              desc: 'Workpiece Thickness (mm)',                    hidden: true  },
+        { recid: 10, option: 'woodSpecies',         value: 'Pine',          desc: 'Wood Species',                                hidden: true  },
+        { recid: 11, option: 'autoFeedRate',        value: false,           desc: 'Auto Calculate Feed Rates',                   hidden: false },
+        { recid: 12, option: 'minFeedRate',         value: 100,             desc: 'Minimum Feed Rate (mm/min)',                  hidden: false },
+        { recid: 13, option: 'maxFeedRate',         value: 1000,            desc: 'Maximum Feed Rate (mm/min)',                  hidden: false },
+        { recid: 14, option: 'originPosition',      value: 'middle-center', desc: 'Origin Position',                             hidden: true  },
+        { recid: 15, option: 'gridSize',            value: 10,              desc: 'Grid Size (mm)',                              hidden: true  },
+        { recid: 16, option: 'showWorkpiece',       value: true,            desc: 'Show Workpiece',                              hidden: true  },
+        { recid: 17, option: 'tableWidth',          value: 4000,            desc: 'Max cutting width (X travel) in mm',          hidden: false },
+        { recid: 18, option: 'tableDepth',          value: 2000,            desc: 'Max cutting length (Y travel) in mm',         hidden: false },
+        { recid: 21, option: 'tableHeight',         value: 100,             desc: 'Max cutting depth (Z travel) in mm',          hidden: false },
+        { recid: 19, option: 'showTooltips',        value: true,            desc: 'Tooltips enabled',                            hidden: false },
+        { recid: 20, option: 'snapGrid',            value: true,            desc: 'Snap to Grid',                                hidden: true  }
+    ];
+}
+
 // Load options from localStorage
 function loadOptions() {
     var optionData = localStorage.getItem('options');
     if (optionData) {
         options = JSON.parse(optionData);
     } else {
-        options = [
-            { recid: 1, option: 'showGrid', value: true, desc: 'Show Grid', hidden: true },
-            { recid: 2, option: 'showOrigin', value: true, desc: 'Show Origin', hidden: true },
-            { recid: 3, option: 'Inches', value: false, desc: 'Display Inches', hidden: false },
-            { recid: 4, option: 'safeHeight', value: 5, desc: 'Safe Height in mm', hidden: false },
-            { recid: 5, option: 'tolerance', value: 0.1, desc: 'Tool path tolerance (mm)', hidden: false },
-            { recid: 6, option: 'zbacklash', value: 0.1, desc: 'Back lash compensation in mm', hidden: false },
-            { recid: 7, option: 'workpieceWidth', value: 300, desc: 'Workpiece Width (mm)', hidden: true },
-            { recid: 8, option: 'workpieceLength', value: 200, desc: 'Workpiece Length (mm)', hidden: true },
-            { recid: 9, option: 'workpieceThickness', value: 19, desc: 'Workpiece Thickness (mm)', hidden: true },
-            { recid: 10, option: 'woodSpecies', value: 'Pine', desc: 'Wood Species', hidden: true },
-            { recid: 11, option: 'autoFeedRate', value: false, desc: 'Auto Calculate Feed Rates', hidden: false },
-            { recid: 12, option: 'minFeedRate', value: 100, desc: 'Minimum Feed Rate (mm/min)', hidden: false },
-            { recid: 13, option: 'maxFeedRate', value: 1000, desc: 'Maximum Feed Rate (mm/min)', hidden: false },
-            { recid: 14, option: 'originPosition', value: 'middle-center', desc: 'Origin Position', hidden: true },
-            { recid: 15, option: 'gridSize', value: 10, desc: 'Grid Size (mm)', hidden: true },
-            { recid: 16, option: 'showWorkpiece', value: true, desc: 'Show Workpiece', hidden: true },
-            { recid: 17, option: 'tableWidth', value: 4000, desc: 'Max cutting width (X travel)in mm', hidden: false },
-            { recid: 18, option: 'tableDepth', value: 2000, desc: 'Max cutting length (Y travel) in mm', hidden: false },
-            { recid: 21, option: 'tableHeight', value: 100, desc: 'Max cutting depth in mm (Z travel)', hidden: false },
-            { recid: 19, option: 'showTooltips', value: true, desc: 'Tooltips enabled', hidden: false },
-            { recid: 20, option: 'snapGrid', value: true, desc: 'Snap to Grid', hidden: true }
-
-        ];
+        options = getDefaultOptions();
     }
 }
 
@@ -444,7 +447,7 @@ function removeBoundaryPaths(svgString) {
         var paths = svgDoc.querySelectorAll('path');
         var pathsToRemove = [];
 
-        // Threshold for considering a path as boundary (within 5% of edge)
+        // Threshold for considering a path as boundary (within 2 pixels of edge)
         var edgeThreshold = 2;
 
         paths.forEach(function(pathElement) {
@@ -3478,30 +3481,7 @@ function performOptionsReset() {
     localStorage.removeItem('options');
 
     // Load default options
-
-    options = [
-        { recid: 1, option: 'showGrid', value: true, desc: 'Show Grid', hidden: true },
-        { recid: 2, option: 'showOrigin', value: true, desc: 'Show Origin', hidden: true },
-        { recid: 3, option: 'Inches', value: false, desc: 'Display Inches', hidden: false },
-        { recid: 4, option: 'safeHeight', value: 5, desc: 'Safe Height in mm', hidden: false },
-        { recid: 5, option: 'tolerance', value: 0.1, desc: 'Tool path tolerance (mm)', hidden: false },
-        { recid: 6, option: 'zbacklash', value: 0.1, desc: 'Back lash compensation in mm', hidden: false },
-        { recid: 7, option: 'workpieceWidth', value: 300, desc: 'Workpiece Width (mm)', hidden: true },
-        { recid: 8, option: 'workpieceLength', value: 200, desc: 'Workpiece Length (mm)', hidden: true },
-        { recid: 9, option: 'workpieceThickness', value: 19, desc: 'Workpiece Thickness (mm)', hidden: true },
-        { recid: 10, option: 'woodSpecies', value: 'Pine', desc: 'Wood Species', hidden: true },
-        { recid: 11, option: 'autoFeedRate', value: false, desc: 'Auto Calculate Feed Rates', hidden: false },
-        { recid: 12, option: 'minFeedRate', value: 100, desc: 'Minimum Feed Rate (mm/min)', hidden: false },
-        { recid: 13, option: 'maxFeedRate', value: 1000, desc: 'Maximum Feed Rate (mm/min)', hidden: false },
-        { recid: 14, option: 'originPosition', value: 'middle-center', desc: 'Origin Position', hidden: true },
-        { recid: 15, option: 'gridSize', value: 10, desc: 'Grid Size (mm)', hidden: true },
-        { recid: 16, option: 'showWorkpiece', value: true, desc: 'Show Workpiece', hidden: true },
-        { recid: 17, option: 'tableWidth', value: 4000, desc: 'Max cutting width (X travel) in mm', hidden: false },
-        { recid: 18, option: 'tableDepth', value: 2000, desc: 'Max cutting length (Y travel) in mm', hidden: false },
-        { recid: 21, option: 'tableHeight', value: 100, desc: 'Max cutting depth (Z travel) in mm', hidden: false },
-        { recid: 19, option: 'showTooltips', value: true, desc: 'Tooltips enabled', hidden: false },
-        { recid: 20, option: 'snapGrid', value: true, desc: 'Snap to Grid', hidden: true }
-    ];
+    options = getDefaultOptions();
 
     // Recalculate origin based on reset workpiece dimensions
     if (typeof calculateOriginFromPosition === 'function' && typeof origin !== 'undefined' && typeof viewScale !== 'undefined') {
@@ -3993,59 +3973,6 @@ function addOrReplaceSvgPath(oldId, id, name) {
 
     lucide.createIcons();
 }
-// STL sidebar management
-function addSTLToSidebar(model) {
-    const section = document.getElementById('stl-models-section');
-    if (!section) return;
-
-    // Remove existing entry for this model
-    const existing = section.querySelector(`[data-stl-id="${model.id}"]`);
-    if (existing) existing.remove();
-
-    const bb = model.bbox3d;
-    const w = (bb.max.x - bb.min.x).toFixed(1);
-    const h = (bb.max.y - bb.min.y).toFixed(1);
-    const d = (bb.max.z - bb.min.z).toFixed(1);
-
-    const item = document.createElement('div');
-    item.className = 'sidebar-item';
-    item.dataset.stlId = model.id;
-    item.innerHTML = `
-        <i data-lucide="mountain"></i>
-        <span class="flex-grow-1">${model.name}</span>
-        <small class="text-muted ms-1">${w}×${h}×${d}</small>
-    `;
-    item.style.display = 'flex';
-    item.style.alignItems = 'center';
-
-    // Right-click context menu
-    item.addEventListener('contextmenu', function(e) {
-        e.preventDefault();
-        showSTLContextMenu(e, model.id);
-    });
-
-    section.appendChild(item);
-    lucide.createIcons();
-}
-
-function removeSTLFromSidebar(modelId) {
-    const section = document.getElementById('stl-models-section');
-    if (!section) return;
-    const item = section.querySelector(`[data-stl-id="${modelId}"]`);
-    if (item) item.remove();
-}
-
-function refreshSTLSidebar() {
-    const section = document.getElementById('stl-models-section');
-    if (!section) return;
-    section.innerHTML = '';
-    if (window.stlModels) {
-        for (const model of window.stlModels) {
-            addSTLToSidebar(model);
-        }
-    }
-}
-
 function showSTLContextMenu(event, stlId) {
     const model = window.stlModels ? window.stlModels.find(m => m.id === stlId) : null;
     if (!model) return;
@@ -4101,7 +4028,6 @@ function deleteSTLModel(stlId) {
     if (window.stlModels) {
         window.stlModels = window.stlModels.filter(m => m.id !== stlId);
     }
-    removeSTLFromSidebar(stlId);
     redraw();
 }
 
@@ -4121,246 +4047,138 @@ function addSvgPath(id, name) {
 }
 
 // Add text group to sidebar (groups all character paths together)
-function addTextGroup(groupId, text, paths) {
+// Shared skeleton for all collapsible sidebar groups.
+// config: { groupId, containerDataKey, headerDataKey, containerClass,
+//           labelHTML, onHeaderClick(groupHeader), getItemIcon(path), paths }
+function addCollapsibleGroup(config) {
+    const { groupId, containerDataKey, headerDataKey, containerClass,
+            labelHTML, onHeaderClick, getItemIcon, paths } = config;
+
     const section = document.getElementById('svg-paths-section');
 
     // Remove any existing group with this ID
-    const existingGroup = section.querySelector(`[data-text-group-id="${groupId}"]`);
-    if (existingGroup) {
-        existingGroup.remove();
-    }
+    // Convert camelCase dataset key to hyphenated attribute name
+    const attrName = 'data-' + containerDataKey.replace(/([A-Z])/g, '-$1').toLowerCase();
+    const existingGroup = section.querySelector(`[${attrName}="${groupId}"]`);
+    if (existingGroup) existingGroup.remove();
 
-    // Create collapsible group container
+    // Group container
     const groupContainer = document.createElement('div');
-    groupContainer.dataset.textGroupId = groupId;
-    groupContainer.className = 'text-group';
+    groupContainer.dataset[containerDataKey] = groupId;
+    groupContainer.className = containerClass;
 
-    // Create group header with separate expand/collapse control
+    // Header
     const groupHeader = document.createElement('div');
     groupHeader.className = 'sidebar-item fw-bold d-flex align-items-center justify-content-between';
-    groupHeader.dataset.textGroupHeader = groupId;
+    groupHeader.dataset[headerDataKey] = groupId;
 
-    // Create text/folder content
+    // Folder label
     const folderContent = document.createElement('span');
-    folderContent.innerHTML = `<i data-lucide="folder"></i>"${text}"`;
+    folderContent.innerHTML = labelHTML;
     folderContent.style.flex = '1';
     folderContent.style.cursor = 'pointer';
 
-    // Create chevron for expand/collapse (positioned after text like SVG Paths section)
+    // Chevron toggle
     const chevronContainer = document.createElement('span');
     chevronContainer.dataset.bsToggle = 'collapse';
     chevronContainer.dataset.bsTarget = `#${groupId}`;
     chevronContainer.setAttribute('aria-expanded', 'false');
     chevronContainer.style.cursor = 'pointer';
-
     const chevron = document.createElement('i');
     chevron.className = 'collapse-chevron';
     chevron.dataset.lucide = 'chevron-down';
     chevron.style.minWidth = '16px';
-
     chevronContainer.appendChild(chevron);
 
     groupHeader.appendChild(folderContent);
     groupHeader.appendChild(chevronContainer);
 
-    // Handle clicking on the chevron - just toggle, don't select
-    chevronContainer.addEventListener('click', (e) => {
-        e.stopPropagation(); // Prevent the folder click handler from firing
-        // Bootstrap will handle the toggle and aria-expanded automatically
+    chevronContainer.addEventListener('click', (e) => { e.stopPropagation(); });
+    folderContent.addEventListener('click', () => onHeaderClick(groupHeader));
+
+    groupContainer.appendChild(groupHeader);
+
+    // Collapse container with path items
+    const collapseContainer = document.createElement('div');
+    collapseContainer.className = 'collapse';
+    collapseContainer.id = groupId;
+
+    paths.forEach(path => {
+        const item = document.createElement('div');
+        item.className = 'sidebar-item ms-4';
+        item.dataset.pathId = path.id;
+        item.innerHTML = `<i data-lucide="${getItemIcon(path)}"></i>${path.name}`;
+        collapseContainer.appendChild(item);
     });
 
-    // Handle clicking on the folder content to select all text paths
-    folderContent.addEventListener('click', (e) => {
-        const textPaths = svgpaths.filter(p => p.textGroupId === groupId);
-        if (textPaths.length > 0) {
-            // Deselect all other paths
+    groupContainer.appendChild(collapseContainer);
+    section.appendChild(groupContainer);
+    lucide.createIcons();
+}
+
+function addTextGroup(groupId, text, paths) {
+    addCollapsibleGroup({
+        groupId,
+        containerDataKey: 'textGroupId',
+        headerDataKey:    'textGroupHeader',
+        containerClass:   'text-group',
+        labelHTML:        `<i data-lucide="folder"></i>"${text}"`,
+        getItemIcon:      () => 'type-outline',
+        paths,
+        onHeaderClick(groupHeader) {
+            const textPaths = svgpaths.filter(p => p.textGroupId === groupId);
+            if (textPaths.length === 0) return;
             selectMgr.unselectAll();
-            // Select all paths in this text group
             textPaths.forEach(p => selectMgr.selectPath(p));
-            // Highlight the group header
             document.querySelectorAll('.sidebar-item.selected').forEach(el => el.classList.remove('selected'));
             groupHeader.classList.add('selected');
-
-            // Show properties for the first path in the group
             if (textPaths[0].creationTool && textPaths[0].creationProperties) {
                 showPathPropertiesEditor(textPaths[0]);
                 cncController.setMode("Text");
             }
-
             redraw();
         }
     });
-
-    groupContainer.appendChild(groupHeader);
-
-    // Create collapsible container for individual paths
-    const collapseContainer = document.createElement('div');
-    collapseContainer.className = 'collapse'; // Start collapsed
-    collapseContainer.id = groupId;
-
-    // No event listeners needed - Bootstrap handles aria-expanded, CSS handles rotation
-
-    // Add individual character paths
-    paths.forEach(path => {
-        const item = document.createElement('div');
-        item.className = 'sidebar-item ms-4';
-        item.dataset.pathId = path.id;
-        item.innerHTML = `
-            <i data-lucide="type-outline"></i>${path.name}
-        `;
-        collapseContainer.appendChild(item);
-    });
-
-    groupContainer.appendChild(collapseContainer);
-    section.appendChild(groupContainer);
-    lucide.createIcons();
 }
 
-// Add SVG group to sidebar (groups all paths from an SVG import together)
 function addSvgGroup(groupId, groupName, paths) {
-    const section = document.getElementById('svg-paths-section');
-
-    // Remove any existing group with this ID
-    const existingGroup = section.querySelector(`[data-svg-group-id="${groupId}"]`);
-    if (existingGroup) {
-        existingGroup.remove();
-    }
-
-    // Create collapsible group container
-    const groupContainer = document.createElement('div');
-    groupContainer.dataset.svgGroupId = groupId;
-    groupContainer.className = 'svg-group';
-
-    // Create group header with separate expand/collapse control
-    const groupHeader = document.createElement('div');
-    groupHeader.className = 'sidebar-item fw-bold d-flex align-items-center justify-content-between';
-    groupHeader.dataset.svgGroupHeader = groupId;
-
-    // Create folder content
-    const folderContent = document.createElement('span');
-    folderContent.innerHTML = `<i data-lucide="folder"></i>${groupName}`;
-    folderContent.style.flex = '1';
-    folderContent.style.cursor = 'pointer';
-
-    // Create chevron for expand/collapse
-    const chevronContainer = document.createElement('span');
-    chevronContainer.dataset.bsToggle = 'collapse';
-    chevronContainer.dataset.bsTarget = `#${groupId}`;
-    chevronContainer.setAttribute('aria-expanded', 'false');
-    chevronContainer.style.cursor = 'pointer';
-
-    const chevron = document.createElement('i');
-    chevron.className = 'collapse-chevron';
-    chevron.dataset.lucide = 'chevron-down';
-    chevron.style.minWidth = '16px';
-
-    chevronContainer.appendChild(chevron);
-
-    groupHeader.appendChild(folderContent);
-    groupHeader.appendChild(chevronContainer);
-
-    // Handle clicking on the chevron - just toggle, don't select
-    chevronContainer.addEventListener('click', (e) => {
-        e.stopPropagation();
-    });
-
-    // Handle clicking on the folder content to select all SVG paths
-    folderContent.addEventListener('click', (e) => {
-        const svgPaths = svgpaths.filter(p => p.svgGroupId === groupId);
-        if (svgPaths.length > 0) {
-            // Deselect all other paths
+    addCollapsibleGroup({
+        groupId,
+        containerDataKey: 'svgGroupId',
+        headerDataKey:    'svgGroupHeader',
+        containerClass:   'svg-group',
+        labelHTML:        `<i data-lucide="folder"></i>${groupName}`,
+        getItemIcon:      path => getPathIcon(path.name),
+        paths,
+        onHeaderClick(groupHeader) {
+            const svgPaths = svgpaths.filter(p => p.svgGroupId === groupId);
+            if (svgPaths.length === 0) return;
             selectMgr.unselectAll();
-            // Select all paths in this SVG group
             svgPaths.forEach(p => selectMgr.selectPath(p));
-            // Highlight the group header
             document.querySelectorAll('.sidebar-item.selected').forEach(el => el.classList.remove('selected'));
             groupHeader.classList.add('selected');
             redraw();
         }
     });
-
-    groupContainer.appendChild(groupHeader);
-
-    // Create collapsible container for individual paths
-    const collapseContainer = document.createElement('div');
-    collapseContainer.className = 'collapse'; // Start collapsed
-    collapseContainer.id = groupId;
-
-    // Add individual paths
-    paths.forEach(path => {
-        const item = document.createElement('div');
-        item.className = 'sidebar-item ms-4';
-        item.dataset.pathId = path.id;
-        item.innerHTML = `
-            <i data-lucide="${getPathIcon(path.name)}"></i>${path.name}
-        `;
-        collapseContainer.appendChild(item);
-    });
-
-    groupContainer.appendChild(collapseContainer);
-    section.appendChild(groupContainer);
-    lucide.createIcons();
 }
 
 // Add pattern group to sidebar (groups all pattern paths together)
 function addPatternGroup(groupId, groupName, icon, paths, creationTool) {
-    const section = document.getElementById('svg-paths-section');
-
-    // Remove any existing group with this ID
-    const existingGroup = section.querySelector(`[data-pattern-group-id="${groupId}"]`);
-    if (existingGroup) {
-        existingGroup.remove();
-    }
-
-    // Create collapsible group container
-    const groupContainer = document.createElement('div');
-    groupContainer.dataset.patternGroupId = groupId;
-    groupContainer.className = 'pattern-group';
-
-    // Create group header
-    const groupHeader = document.createElement('div');
-    groupHeader.className = 'sidebar-item fw-bold d-flex align-items-center justify-content-between';
-    groupHeader.dataset.patternGroupHeader = groupId;
-
-    // Create folder content
-    const folderContent = document.createElement('span');
-    folderContent.innerHTML = `<i data-lucide="${icon}"></i>${groupName}`;
-    folderContent.style.flex = '1';
-    folderContent.style.cursor = 'pointer';
-
-    // Create chevron for expand/collapse
-    const chevronContainer = document.createElement('span');
-    chevronContainer.dataset.bsToggle = 'collapse';
-    chevronContainer.dataset.bsTarget = `#${groupId}`;
-    chevronContainer.setAttribute('aria-expanded', 'false');
-    chevronContainer.style.cursor = 'pointer';
-
-    const chevron = document.createElement('i');
-    chevron.className = 'collapse-chevron';
-    chevron.dataset.lucide = 'chevron-down';
-    chevron.style.minWidth = '16px';
-
-    chevronContainer.appendChild(chevron);
-
-    groupHeader.appendChild(folderContent);
-    groupHeader.appendChild(chevronContainer);
-
-    // Handle clicking on the chevron - just toggle, don't select
-    chevronContainer.addEventListener('click', (e) => {
-        e.stopPropagation();
-    });
-
-    // Handle clicking on the folder content to select all paths and show properties
-    folderContent.addEventListener('click', (e) => {
-        const groupPaths = svgpaths.filter(p => p.patternGroupId === groupId);
-        if (groupPaths.length > 0) {
+    addCollapsibleGroup({
+        groupId,
+        containerDataKey: 'patternGroupId',
+        headerDataKey:    'patternGroupHeader',
+        containerClass:   'pattern-group',
+        labelHTML:        `<i data-lucide="${icon}"></i>${groupName}`,
+        getItemIcon:      () => icon,
+        paths,
+        onHeaderClick(groupHeader) {
+            const groupPaths = svgpaths.filter(p => p.patternGroupId === groupId);
+            if (groupPaths.length === 0) return;
             document.querySelectorAll('.sidebar-item.selected').forEach(el => el.classList.remove('selected'));
             groupHeader.classList.add('selected');
-
-            // Show properties editor for this group
             const firstPath = groupPaths[0];
             if (firstPath.creationTool && firstPath.creationProperties) {
-                // Select generated paths first (red), then source paths last (magenta)
                 selectMgr.unselectAll();
                 groupPaths.forEach(p => selectMgr.selectPath(p));
                 if (firstPath.creationProperties.sourceIds) {
@@ -4369,46 +4187,19 @@ function addPatternGroup(groupId, groupName, icon, paths, creationTool) {
                         if (srcPath) selectMgr.selectPath(srcPath);
                     });
                 }
-
-                // Switch to Draw Tools tab
                 const drawToolsTab = document.getElementById('draw-tools-tab');
                 const drawToolsPane = document.getElementById('draw-tools');
                 document.querySelectorAll('#sidebar-tabs .nav-link').forEach(tab => tab.classList.remove('active'));
                 document.querySelectorAll('#sidebar-tabs ~ .sidebar-tab-content .tab-pane').forEach(pane => pane.classList.remove('show', 'active'));
                 drawToolsTab.classList.add('active');
                 drawToolsPane.classList.add('show', 'active');
-
                 showPathPropertiesEditor(firstPath);
                 cncController.setMode(creationTool);
             }
-
             redraw();
         }
     });
-
-    groupContainer.appendChild(groupHeader);
-
-    // Create collapsible container for individual paths
-    const collapseContainer = document.createElement('div');
-    collapseContainer.className = 'collapse';
-    collapseContainer.id = groupId;
-
-    // Add individual paths
-    paths.forEach(path => {
-        const item = document.createElement('div');
-        item.className = 'sidebar-item ms-4';
-        item.dataset.pathId = path.id;
-        item.innerHTML = `
-            <i data-lucide="${icon}"></i>${path.name}
-        `;
-        collapseContainer.appendChild(item);
-    });
-
-    groupContainer.appendChild(collapseContainer);
-    section.appendChild(groupContainer);
-    lucide.createIcons();
 }
-
 function addToolPath(id, name, operation, toolName) {
     // Instead of adding directly, we'll refresh the entire display in sorted order
     refreshToolPathsDisplay();

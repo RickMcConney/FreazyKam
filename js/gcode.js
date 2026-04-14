@@ -13,6 +13,10 @@ const chipLoadTable = {
 	'Mahogany': { base: 0.13, min: 0.10, max: 0.16 }
 };
 
+const REFERENCE_TOOL_DIAMETER_MM = 6.0; // Diameter used as baseline for chip-load scaling
+const VBIT_CHIP_LOAD_FACTOR  = 0.6;     // V-bits are more fragile; reduce chip load
+const DRILL_CHIP_LOAD_FACTOR = 0.5;     // Drills have poor chip clearance; reduce chip load
+
 // Get chip load for a specific material and tool combination
 function getChipLoad(woodSpecies, toolDiameter, toolType) {
 	// Get material data, default to Oak if species not found
@@ -21,24 +25,26 @@ function getChipLoad(woodSpecies, toolDiameter, toolType) {
 
 	// Scale by tool diameter (larger tools can handle more chip load)
 	// Using square root scaling to be conservative
-	const diameterFactor = Math.sqrt(toolDiameter / 6.0); // 6mm reference diameter
+	const diameterFactor = Math.sqrt(toolDiameter / REFERENCE_TOOL_DIAMETER_MM);
 	chipLoad *= diameterFactor;
 
 	// Adjust for tool type
 	if (toolType === 'VBit') {
-		chipLoad *= 0.6; // V-bits are more fragile
+		chipLoad *= VBIT_CHIP_LOAD_FACTOR;
 	} else if (toolType === 'Drill') {
-		chipLoad *= 0.5; // Drills have poor chip clearance
+		chipLoad *= DRILL_CHIP_LOAD_FACTOR;
 	}
 
 	// Clamp to safe range for this material
 	return Math.max(materialData.min, Math.min(materialData.max, chipLoad));
 }
 
+const DEFAULT_FEED_MM_MIN = 600; // Fallback feed rate when no tool or auto-feed is disabled
+
 function calculateFeedRate(tool, woodSpecies, operation) {
 	// Manual mode - return user-specified feed rate
 	if (!getOption("autoFeedRate") || !tool) {
-		return tool ? tool.feed : 600;
+		return tool ? tool.feed : DEFAULT_FEED_MM_MIN;
 	}
 
 	if (tool.step == undefined) tool.step = tool.depth || 1;
@@ -93,6 +99,12 @@ function calculateFeedRate(tool, woodSpecies, operation) {
 	return Math.max(minFeed, Math.min(maxFeed, Math.round(feedRate)));
 }
 
+const ZFEED_XY_RATIO           = 0.3;  // Z plunge is ~30% of XY feed rate for wood
+const ZFEED_DEEP_PLUNGE_FACTOR = 0.7;  // Extra reduction when plunge depth > 50% of diameter
+const ZFEED_DEEP_PLUNGE_RATIO  = 0.5;  // Threshold: step > diameter * this → "deep plunge"
+const ZFEED_DRILL_FACTOR       = 0.8;  // Drills need slower plunge for chip evacuation
+const ZFEED_VBIT_FACTOR        = 0.75; // V-bits are fragile at the tip
+
 // Calculate Z feed rate (plunge rate)
 function calculateZFeedRate(tool, woodSpecies, operation) {
 	// Manual mode - return user-specified Z feed rate
@@ -102,23 +114,23 @@ function calculateZFeedRate(tool, woodSpecies, operation) {
 
 	// Z feed is typically 25-35% of XY feed for wood
 	const xyFeed = calculateFeedRate(tool, woodSpecies, operation);
-	let zFeedRate = xyFeed * 0.3;
+	let zFeedRate = xyFeed * ZFEED_XY_RATIO;
 
 	// Additional reduction for deep plunges
 	// Plunging is more aggressive than lateral cutting
 	const diameter = tool.diameter;
 	const step = tool.step || 1;
 
-	if (step > diameter * 0.5) {
+	if (step > diameter * ZFEED_DEEP_PLUNGE_RATIO) {
 		// Deep plunge (more than 50% of diameter) - reduce further
-		zFeedRate *= 0.7;
+		zFeedRate *= ZFEED_DEEP_PLUNGE_FACTOR;
 	}
 
 	// Drills and V-bits need even slower plunge rates
 	if (tool.bit === 'Drill') {
-		zFeedRate *= 0.8; // Drills need slower plunge for chip evacuation
+		zFeedRate *= ZFEED_DRILL_FACTOR;
 	} else if (tool.bit === 'VBit') {
-		zFeedRate *= 0.75; // V-bits are fragile at the tip
+		zFeedRate *= ZFEED_VBIT_FACTOR;
 	}
 
 	// Get user-configured limits from options
@@ -140,29 +152,29 @@ function toolDepth(degrees, radius) {
 	return toMMZ(radius / Math.tan(angle / 2));
 }
 
+// Tiny epsilon prevents floating-point values like -0.000000001 from rounding to -0.00 in G-code output
+const ROUND_EPSILON = 0.00001;
+
 function toMM(x, y) {
 	var cx = (x - origin.x) / viewScale;
 	var cy = (origin.y - y) / viewScale;
 	return {
-		x: Math.round((cx + 0.00001) * 100) / 100,
-		y: Math.round((cy + 0.00001) * 100) / 100
+		x: Math.round((cx + ROUND_EPSILON) * 100) / 100,
+		y: Math.round((cy + ROUND_EPSILON) * 100) / 100
 	};
 }
 
 function toMMZ(z) {
 	var cz = z / viewScale;
-	return Math.round((cz + 0.00001) * 100) / 100;
+	return Math.round((cz + ROUND_EPSILON) * 100) / 100;
 }
 
 // Convert coordinates to G-code units (mm or inches based on profile setting)
-// mm: 2 decimal places, inches: 4 decimal places
+// mm: 2 decimal places (toMM already rounds), inches: 4 decimal places
 function toGcodeUnits(x, y, useInches) {
 	var mm = toMM(x, y);
 	if (!useInches) {
-		return {
-			x: Math.round(mm.x * 100) / 100,
-			y: Math.round(mm.y * 100) / 100
-		};
+		return mm; // toMM already rounds to 2 decimal places
 	}
 	return {
 		x: Math.round(mm.x / MM_PER_INCH * 10000) / 10000,
@@ -178,6 +190,11 @@ function toGcodeUnitsZ(z, useInches) {
 		return Math.round(mm * 100) / 100;
 	}
 	return Math.round(mm / MM_PER_INCH * 10000) / 10000;
+}
+
+// Convert a feed rate (always in mm/min) to G-code units (ipm when useInches)
+function convertFeedUnits(feed, useInches) {
+	return useInches ? Math.round(feed / MM_PER_INCH * 100) / 100 : feed;
 }
 
 // Apply G-code template with selective parameter substitution
@@ -478,6 +495,18 @@ function fitArcsToPath(points, toleranceMM) {
 		return points.map(function(p) { return { type: 'line', x: p.x, y: p.y }; });
 	}
 
+	// Strip duplicate closing point from closed paths. A closed path has its last
+	// point equal to its first (within floating point). Including it confuses the
+	// angular-monotonicity check at the wrap-around and can corrupt arc span math.
+	var lp = points[points.length - 1], fp = points[0];
+	var closingDx = lp.x - fp.x, closingDy = lp.y - fp.y;
+	if (closingDx * closingDx + closingDy * closingDy < 1e-6) {
+		points = points.slice(0, points.length - 1);
+	}
+	if (points.length < 3) {
+		return points.map(function(p) { return { type: 'line', x: p.x, y: p.y }; });
+	}
+
 	var tolerance = toleranceMM * viewScale; // convert mm tolerance to world units
 	var minArcPoints = 4;  // minimum points to consider an arc (start + 3 more)
 	var maxRadius = 10000 * viewScale; // reject arcs with huge radius (nearly straight lines)
@@ -577,6 +606,29 @@ function fitArcsToPath(points, toleranceMM) {
 			continue;
 		}
 
+		// Reject polygon vertices masquerading as arcs. All vertices of a regular
+		// polygon lie on a circle, but the path is made of straight segments — not
+		// a curve. Use chord/radius ratio — scale-independent, unlike a fixed mm
+		// threshold. A 64-point circle has chord/r ≈ 0.10; a 12-gon has 0.52;
+		// a hexagon has 1.0. Threshold 0.3 blocks all polygons up to ~20 sides
+		// while passing any reasonable arc approximation regardless of circle size.
+		var maxChordWorld = 0.3 * circle.r;
+		var arcPts = points.slice(arcStart, arcEnd + 1);
+		var chordOk = true;
+		for (var ci = 1; ci < arcPts.length; ci++) {
+			var dx = arcPts[ci].x - arcPts[ci - 1].x;
+			var dy = arcPts[ci].y - arcPts[ci - 1].y;
+			if (dx * dx + dy * dy > maxChordWorld * maxChordWorld) {
+				chordOk = false;
+				break;
+			}
+		}
+		if (!chordOk) {
+			segments.push({ type: 'line', x: points[i].x, y: points[i].y });
+			i++;
+			continue;
+		}
+
 		// We have an arc from points[arcStart] to points[arcEnd]
 		var arcPoints = points.slice(arcStart, arcEnd + 1);
 		var cw = isArcClockwise(arcPoints, circle.cx, circle.cy);
@@ -623,6 +675,72 @@ function fitArcsToPath(points, toleranceMM) {
 	}
 
 	return segments;
+}
+
+/**
+ * Emit G-code for a 3D helical path with arc fitting and Z interpolation.
+ * Arc segments are emitted as G2/G3 with a Z parameter (helical interpolation).
+ * Line segments are emitted as G1 with the endpoint's Z value.
+ * Falls back to pure G1 if arcs are disabled.
+ *
+ * @param {Array} path        - Array of {x, y, z} points in world coordinates (z in mm)
+ * @param {Object} profile    - G-code profile with templates
+ * @param {boolean} useInches - Whether to convert to inches
+ * @param {number} feedXY     - Feed rate (already in output units)
+ * @returns {string} G-code output
+ */
+function emitHelicalPathWithArcs(path, profile, useInches, feedXY) {
+	var output = '';
+	var arcsEnabled = profile.useArcs && profile.cwArcTemplate && profile.ccwArcTemplate;
+
+	if (!arcsEnabled || path.length < 4) {
+		for (var j = 0; j < path.length; j++) {
+			var p = toGcodeUnits(path[j].x, path[j].y, useInches);
+			var zCoord = toGcodeUnitsZ(path[j].z || 0, useInches);
+			output += applyGcodeTemplate(profile.cutTemplate, { x: p.x, y: p.y, z: zCoord, f: feedXY }) + '\n';
+		}
+		return output;
+	}
+
+	// Ensure arc templates include Z for helical interpolation (insert before I if missing)
+	function withZ(tmpl) {
+		return /\bZ\b/.test(tmpl) ? tmpl : tmpl.replace(/\bI\b/, 'Z I');
+	}
+	var cwTmpl = withZ(profile.cwArcTemplate);
+	var ccwTmpl = withZ(profile.ccwArcTemplate);
+
+	var segments = fitArcsToPath(path, 0.05);
+
+	for (var s = 0; s < segments.length; s++) {
+		var seg = segments[s];
+		// Recover Z for this endpoint by matching coordinates from the original path
+		var segZ = 0;
+		for (var pi = 0; pi < path.length; pi++) {
+			if (path[pi].x === seg.x && path[pi].y === seg.y) {
+				segZ = path[pi].z || 0;
+				break;
+			}
+		}
+
+		if (seg.type === 'arc') {
+			var endCoord = toGcodeUnits(seg.x, seg.y, useInches);
+			var zCoord = toGcodeUnitsZ(segZ, useInches);
+			var iMM = seg.i / viewScale;
+			var jMM = -seg.j / viewScale;
+			if (useInches) {
+				iMM = iMM / MM_PER_INCH;
+				jMM = jMM / MM_PER_INCH;
+			}
+			var tmpl = seg.cw ? cwTmpl : ccwTmpl;
+			output += applyGcodeTemplate(tmpl, { x: endCoord.x, y: endCoord.y, z: zCoord, i: iMM, j: jMM, f: feedXY }) + '\n';
+		} else {
+			var coord = toGcodeUnits(seg.x, seg.y, useInches);
+			var zCoord = toGcodeUnitsZ(segZ, useInches);
+			output += applyGcodeTemplate(profile.cutTemplate, { x: coord.x, y: coord.y, z: zCoord, f: feedXY }) + '\n';
+		}
+	}
+
+	return output;
 }
 
 /**
@@ -724,7 +842,7 @@ function getTabLiftAmount(z, tabs, workpieceThickness, tabHeight) {
 
 // HELPER FUNCTION: Setup G-code profile with defaults
 function _setupGcodeProfile() {
-	return currentGcodeProfile || {
+	var defaults = {
 		startGcode: 'G0 G54 G17 G21 G90 G94',
 		endGcode: 'M5\nG0 Z5',
 		toolChangeGcode: 'M5\nG0 Z5\n(Tool Change)\nM0',
@@ -739,6 +857,9 @@ function _setupGcodeProfile() {
 		commentsEnabled: true,
 		gcodeUnits: 'mm'
 	};
+	// Merge: defaults provide fallback for any fields missing from the saved profile
+	// (old profiles pre-dating arc support won't have cwArcTemplate/useArcs etc.)
+	return Object.assign({}, defaults, currentGcodeProfile);
 }
 
 // HELPER FUNCTION: Return toolpaths in user-defined array order (no auto-sorting)
@@ -826,8 +947,8 @@ function _generateDrillOperationGcode(toolpath, profile, useInches, settings) {
 
 		var z = safeHeight;
 		var zCoordSafe = toGcodeUnitsZ(z, useInches);
-		var feedXY = useInches ? Math.round(feed / MM_PER_INCH * 100) / 100 : feed;
-		var feedZ = useInches ? Math.round(zfeed / MM_PER_INCH * 100) / 100 : zfeed;
+		var feedXY = convertFeedUnits(feed, useInches);
+		var feedZ = convertFeedUnits(zfeed, useInches);
 
 		output += applyGcodeTemplate(profile.rapidTemplate, { z: zCoordSafe, f: feedZ / 2 }) + '\n';
 
@@ -872,8 +993,8 @@ function _generateHelicalDrillOperationGcode(toolpath, profile, useInches, setti
 	var { feed, zfeed, depth, toolStep, safeHeight } = settings;
 	var paths = toolpath.paths;
 
-	var feedXY = useInches ? Math.round(feed / MM_PER_INCH * 100) / 100 : feed;
-	var feedZ = useInches ? Math.round(zfeed / MM_PER_INCH * 100) / 100 : zfeed;
+	var feedXY = convertFeedUnits(feed, useInches);
+	var feedZ = convertFeedUnits(zfeed, useInches);
 	// Use a blended feed rate for helical moves (simultaneous XY + Z)
 	var helicalFeed = Math.min(feedXY, feedZ);
 	var zCoordSafe = toGcodeUnitsZ(safeHeight, useInches);
@@ -895,12 +1016,8 @@ function _generateHelicalDrillOperationGcode(toolpath, profile, useInches, setti
 		// Plunge to surface (z=0)
 		output += applyGcodeTemplate(profile.cutTemplate, { z: toGcodeUnitsZ(0, useInches), f: feedZ }) + '\n';
 
-		// Helical descent and final cleanup circle — all points have z values
-		for (var j = 1; j < path.length; j++) {
-			var p = toGcodeUnits(path[j].x, path[j].y, useInches);
-			var zCoord = toGcodeUnitsZ(path[j].z, useInches);
-			output += applyGcodeTemplate(profile.cutTemplate, { x: p.x, y: p.y, z: zCoord, f: helicalFeed }) + '\n';
-		}
+		// Helical descent and final cleanup circle — arc-fitted with Z (helical interpolation)
+		output += emitHelicalPathWithArcs(path.slice(1), profile, useInches, helicalFeed);
 
 		// Retract to safe height
 		output += applyGcodeTemplate(profile.rapidTemplate, { z: zCoordSafe, f: feedZ / 2 }) + '\n';
@@ -924,8 +1041,8 @@ function _generateVcarveOperationGcode(toolpath, profile, useInches, settings) {
 		var lastZ = z;
 		var movingUp = false;
 		var zCoordSafe = toGcodeUnitsZ(safeHeight, useInches);
-		var feedXY = useInches ? Math.round(feed / MM_PER_INCH * 100) / 100 : feed;
-		var feedZ = useInches ? Math.round(zfeed / MM_PER_INCH * 100) / 100 : zfeed;
+		var feedXY = convertFeedUnits(feed, useInches);
+		var feedZ = convertFeedUnits(zfeed, useInches);
 
 		output += applyGcodeTemplate(profile.rapidTemplate, { z: zCoordSafe, f: feedZ / 2 }) + '\n';
 
@@ -941,12 +1058,12 @@ function _generateVcarveOperationGcode(toolpath, profile, useInches, settings) {
 
 			if (movingUp) {
 				cz += (useInches ? zbacklash / MM_PER_INCH : zbacklash);
-				cz = Math.round((cz + 0.00001) * 10000) / 10000;
+				cz = Math.round((cz + ROUND_EPSILON) * 10000) / 10000;
 				var vcarveZFeed = calculateZFeedRate(toolpath.tool, woodSpecies, toolpath.operation) / 2;
-				feedZ = useInches ? Math.round(vcarveZFeed / MM_PER_INCH * 100) / 100 : vcarveZFeed;
+				feedZ = convertFeedUnits(vcarveZFeed, useInches);
 			} else {
 				var vcarveZFeed = calculateZFeedRate(toolpath.tool, woodSpecies, toolpath.operation);
-				feedZ = useInches ? Math.round(vcarveZFeed / MM_PER_INCH * 100) / 100 : vcarveZFeed;
+				feedZ = convertFeedUnits(vcarveZFeed, useInches);
 			}
 
 			if (j == 0) {
@@ -971,8 +1088,8 @@ function _generateSurfacingOperationGcode(toolpath, profile, useInches, settings
 	var comment = formatComment(toolpath.operation + ' ' + toolpath.id, profile);
 	if (comment) output += comment + '\n';
 
-	var feedXY = useInches ? Math.round(feed / MM_PER_INCH * 100) / 100 : feed;
-	var feedZ  = useInches ? Math.round(zfeed / MM_PER_INCH * 100) / 100 : zfeed;
+	var feedXY = convertFeedUnits(feed, useInches);
+	var feedZ  = convertFeedUnits(zfeed, useInches);
 	var zCoord = toGcodeUnitsZ(-depth, useInches);
 
 	var firstLine = true;
@@ -1011,8 +1128,8 @@ function _generate3dProfileOperationGcode(toolpath, profile, useInches, settings
 	var comment = formatComment(toolpath.operation + ' ' + toolpath.id, profile);
 	if (comment) output += comment + '\n';
 
-	var feedXY = useInches ? Math.round(feed / MM_PER_INCH * 100) / 100 : feed;
-	var feedZ  = useInches ? Math.round(zfeed / MM_PER_INCH * 100) / 100 : zfeed;
+	var feedXY = convertFeedUnits(feed, useInches);
+	var feedZ  = convertFeedUnits(zfeed, useInches);
 	var zCoordSafe = toGcodeUnitsZ(safeHeight, useInches);
 	var lastEndX = null, lastEndY = null, lastEndZ = null;
 	// Threshold for skipping retract: if next start is within this distance (mm)
@@ -1101,6 +1218,30 @@ function _generate3dProfileOperationGcode(toolpath, profile, useInches, settings
 	return output;
 }
 
+// Walk along path and return the point at the given distance from the start,
+// along with the segment index where it lands.
+// Returns { point: {x,y}, segIdx: number }
+function getPointAlongPath(path, distance) {
+	var remaining = distance;
+	var segIdx = 0;
+	var point = path[0];
+	for (var i = 1; i < path.length; i++) {
+		var dx = path[i].x - path[i - 1].x;
+		var dy = path[i].y - path[i - 1].y;
+		var segLen = Math.sqrt(dx * dx + dy * dy);
+		if (segLen > 0 && remaining <= segLen) {
+			var t = remaining / segLen;
+			point = { x: path[i - 1].x + dx * t, y: path[i - 1].y + dy * t };
+			segIdx = i;
+			break;
+		}
+		remaining -= segLen;
+		segIdx = i;
+		point = path[i];
+	}
+	return { point, segIdx };
+}
+
 // HELPER FUNCTION: Generate ramp-in G-code sequence
 // Instead of plunging straight down, ramps in along the path direction:
 // 1. Rapid to a point offset 2x tool diameter along the path from start
@@ -1117,23 +1258,7 @@ function generateRampIn(path, toolDiameter, currentZ, stepdown, safeHeight, prof
 	var currentZCoord = toGcodeUnitsZ(currentZ, useInches);
 
 	// Find the ramp point and which segment index it lands on
-	var rampSegIdx = 0;
-	var remaining = rampDistWorld;
-	var rampPt = path[0];
-	for (var i = 1; i < path.length; i++) {
-		var dx = path[i].x - path[i - 1].x;
-		var dy = path[i].y - path[i - 1].y;
-		var segLen = Math.sqrt(dx * dx + dy * dy);
-		if (segLen > 0 && remaining <= segLen) {
-			var t = remaining / segLen;
-			rampPt = { x: path[i - 1].x + dx * t, y: path[i - 1].y + dy * t };
-			rampSegIdx = i;
-			break;
-		}
-		remaining -= segLen;
-		rampSegIdx = i;
-		rampPt = path[i];
-	}
+	var { point: rampPt, segIdx: rampSegIdx } = getPointAlongPath(path, rampDistWorld);
 
 	var rampCoord = toGcodeUnits(rampPt.x, rampPt.y, useInches);
 
@@ -1203,8 +1328,8 @@ function _generatePocketOperationGcode(toolpath, profile, useInches, settings) {
 
 	var left = depth;
 	var pass = 0;
-	var feedXY = useInches ? Math.round(feed / MM_PER_INCH * 100) / 100 : feed;
-	var feedZ = useInches ? Math.round(zfeed / MM_PER_INCH * 100) / 100 : zfeed;
+	var feedXY = convertFeedUnits(feed, useInches);
+	var feedZ = convertFeedUnits(zfeed, useInches);
 
 	// Loop through depth passes
 	while (left > 0) {
@@ -1302,10 +1427,86 @@ function emitProfileRun(points, z, profile, useInches, feedXY) {
 	return output;
 }
 
+// Generate G-code for one depth pass of a profile cut.
+// Handles ramp-in, tab lift/lower markers, arc fitting, and start-lifted cleanup.
+function _generateProfilePass(augmentedPath, pass, z, tabData, toolDiameter, toolStep, safeHeight, profile, useInches, feedXY, feedZ) {
+	var { tabs, workpieceThickness, tabHeightMM, toolRadiusWorld } = tabData;
+	var output = '';
+	var currentlyLifted = false;
+	var firstMarkerPos = null;
+	var startedLifted = false;
+	var regularRun = [];
+
+	var passComment = formatComment('pass ' + pass, profile);
+	if (passComment) output += passComment + '\n';
+
+	var tabLift = getTabLiftAmount(z, tabs, workpieceThickness, tabHeightMM);
+
+	// Find the first tab marker so we know if it blocks the path start
+	for (var mIdx = 1; mIdx < augmentedPath.length; mIdx++) {
+		if (augmentedPath[mIdx].marker) { firstMarkerPos = augmentedPath[mIdx]; break; }
+	}
+	var distToFirstMarker = firstMarkerPos
+		? Math.hypot(firstMarkerPos.x - augmentedPath[0].x, firstMarkerPos.y - augmentedPath[0].y)
+		: Infinity;
+	var tabBlocksStart = distToFirstMarker <= 2 * toolRadiusWorld;
+
+	var targetZ = (tabBlocksStart && tabLift > 0) ? z + tabLift : z;
+	currentlyLifted = startedLifted = (tabBlocksStart && tabLift > 0);
+
+	output += generateRampIn(augmentedPath, toolDiameter, targetZ, toolStep, safeHeight, profile, useInches, feedXY, feedZ);
+
+	// Process remaining path points (skip j=0, which is the ramp-in start)
+	for (var j = 1; j < augmentedPath.length; j++) {
+		var pt = augmentedPath[j];
+		var p = toGcodeUnits(pt.x, pt.y, useInches);
+
+		if (pt.marker) {
+			// Flush accumulated regular points before tab transition
+			if (regularRun.length > 0) {
+				output += emitProfileRun(regularRun, z, profile, useInches, feedXY);
+				regularRun = [];
+			}
+			var lift = getTabLiftAmount(z, tabs, workpieceThickness, tabHeightMM);
+			if (pt.marker === 'lift') {
+				output += applyGcodeTemplate(profile.cutTemplate, { x: p.x, y: p.y, z: toGcodeUnitsZ(z, useInches),        f: feedXY }) + '\n';
+				output += applyGcodeTemplate(profile.cutTemplate, { x: p.x, y: p.y, z: toGcodeUnitsZ(z + lift, useInches), f: feedXY }) + '\n';
+				currentlyLifted = true;
+			} else if (pt.marker === 'lower') {
+				output += applyGcodeTemplate(profile.cutTemplate, { x: p.x, y: p.y, z: toGcodeUnitsZ(z + lift, useInches), f: feedXY }) + '\n';
+				output += applyGcodeTemplate(profile.cutTemplate, { x: p.x, y: p.y, z: toGcodeUnitsZ(z, useInches),        f: feedXY }) + '\n';
+				currentlyLifted = false;
+			}
+		} else if (!currentlyLifted) {
+			// Normal cut — accumulate for arc fitting
+			regularRun.push(pt);
+		} else {
+			// Lifted over tab — emit at lifted height
+			if (regularRun.length > 0) {
+				output += emitProfileRun(regularRun, z, profile, useInches, feedXY);
+				regularRun = [];
+			}
+			var lift = getTabLiftAmount(z, tabs, workpieceThickness, tabHeightMM);
+			output += applyGcodeTemplate(profile.cutTemplate, { x: p.x, y: p.y, z: toGcodeUnitsZ(z + lift, useInches), f: feedXY }) + '\n';
+		}
+	}
+
+	// Flush any remaining points
+	if (regularRun.length > 0) output += emitProfileRun(regularRun, z, profile, useInches, feedXY);
+
+	// If we started lifted (tab at path start), complete the cut at the end of the pass
+	if (startedLifted && firstMarkerPos) {
+		var mc = toGcodeUnits(firstMarkerPos.x, firstMarkerPos.y, useInches);
+		output += applyGcodeTemplate(profile.cutTemplate, { x: mc.x, y: mc.y, z: toGcodeUnitsZ(z, useInches), f: feedXY }) + '\n';
+	}
+
+	return output;
+}
+
 // HELPER FUNCTION: Process profile operations (inside, outside, center cuts)
 function _generateProfileOperationGcode(toolpath, profile, useInches, settings) {
 	var output = "";
-	var { feed, zfeed, depth, toolStep, radius, angle, woodSpecies, safeHeight, zbacklash } = settings;
+	var { feed, zfeed, depth, toolStep, radius, woodSpecies, safeHeight } = settings;
 	var paths = toolpath.paths;
 
 	for (var k = 0; k < paths.length; k++) {
@@ -1314,156 +1515,31 @@ function _generateProfileOperationGcode(toolpath, profile, useInches, settings) 
 		var comment = formatComment(toolpath.operation + ' ' + toolpath.id, profile);
 		if (comment) output += comment + '\n';
 
-		var z = 0;
-		var feedXY = useInches ? Math.round(feed / MM_PER_INCH * 100) / 100 : feed;
-		var feedZ = useInches ? Math.round(zfeed / MM_PER_INCH * 100) / 100 : zfeed;
-		var zCoordSafe = toGcodeUnitsZ(safeHeight, useInches);
+		var feedXY = convertFeedUnits(feed, useInches);
+		var feedZ = convertFeedUnits(zfeed, useInches);
+		output += applyGcodeTemplate(profile.rapidTemplate, { z: toGcodeUnitsZ(safeHeight, useInches), f: feedZ / 2 }) + '\n';
 
-		output += applyGcodeTemplate(profile.rapidTemplate, { z: zCoordSafe, f: feedZ / 2 }) + '\n';
+		// Collect tabs from the source SVG path
+		var svgPath = toolpath.svgId ? svgpaths.find(p => p.id === toolpath.svgId) : null;
+		var tabs = (svgPath && svgPath.creationProperties && svgPath.creationProperties.tabs)
+			? svgPath.creationProperties.tabs : [];
+		var toolRadiusWorld = radius * viewScale;
+		var tabLengthMM = svgPath && svgPath.creationProperties ? (svgPath.creationProperties.tabLength || 0) : 0;
+		var tabHeightMM  = svgPath && svgPath.creationProperties ? (svgPath.creationProperties.tabHeight  || 0) : 0;
+		var markers = tabs.length > 0 ? calculateTabMarkers(path, tabs, tabLengthMM, toolRadiusWorld, viewScale) : [];
+		var augmentedPath = markers.length > 0 ? augmentToolpathWithMarkers(path, markers) : path;
+
+		var tabData = { tabs, workpieceThickness: getOption("workpieceThickness"), tabHeightMM, toolRadiusWorld };
 
 		var left = depth;
 		var pass = 0;
-		var isFirstPass = true;
-
-		// Get tabs from source SVG path for tab avoidance
-		var svgPath = null;
-		var tabs = [];
-		var toolRadiusWorld = radius * viewScale;
-		var workpieceThickness = getOption("workpieceThickness");
-
-		if (toolpath.svgId) {
-			for (var spIdx = 0; spIdx < svgpaths.length; spIdx++) {
-				if (svgpaths[spIdx].id === toolpath.svgId) {
-					svgPath = svgpaths[spIdx];
-					break;
-				}
-			}
-		}
-
-		if (svgPath && svgPath.creationProperties && svgPath.creationProperties.tabs) {
-			tabs = svgPath.creationProperties.tabs;
-		}
-
-		// Pre-calculate tab markers
-		const tabLengthMM = svgPath && svgPath.creationProperties ? (svgPath.creationProperties.tabLength || 0) : 0;
-		const tabHeightMM = svgPath && svgPath.creationProperties ? (svgPath.creationProperties.tabHeight || 0) : 0;
-		const markers = (tabs.length > 0) ? calculateTabMarkers(path, tabs, tabLengthMM, toolRadiusWorld, viewScale) : [];
-		const augmentedPath = (markers.length > 0) ? augmentToolpathWithMarkers(path, markers) : path;
-
 		while (augmentedPath.length && left > 0) {
-			var currentlyLifted = false;
-			var firstMarkerPos = null;
-			var startedLifted = false;
-			var regularRun = []; // accumulate non-tab points for arc fitting
+			pass++;
+			left -= toolStep;
+			if (left < 0 || toolStep <= 0) left = 0;
+			var z = left - depth;
 
-			for (var j = 0; j < augmentedPath.length; j++) {
-				var pt = augmentedPath[j];
-				var p = toGcodeUnits(pt.x, pt.y, useInches);
-
-				if (j == 0) {
-					pass++;
-					left -= toolStep;
-					if (left < 0 || toolStep <= 0) left = 0;
-
-					z = left - depth;
-					var passComment = formatComment('pass ' + pass, profile);
-					if (passComment) output += passComment + '\n';
-
-					// Calculate tab lift amount
-					var tabLift = getTabLiftAmount(z, tabs, workpieceThickness, tabHeightMM);
-
-					// Find first marker in augmented path
-					let firstMarkerIndex = -1;
-					for (let mIdx = 1; mIdx < augmentedPath.length; mIdx++) {
-						if (augmentedPath[mIdx].marker) {
-							firstMarkerIndex = mIdx;
-							firstMarkerPos = augmentedPath[mIdx];
-							break;
-						}
-					}
-
-					// Determine if tab is blocking path start
-					let distToFirstMarker = Infinity;
-					if (firstMarkerPos) {
-						const pt0 = augmentedPath[0];
-						const dx = firstMarkerPos.x - pt0.x;
-						const dy = firstMarkerPos.y - pt0.y;
-						distToFirstMarker = Math.sqrt(dx * dx + dy * dy);
-					}
-
-					const tabBlocksStart = (distToFirstMarker <= 2 * toolRadiusWorld);
-
-					// Determine target plunge depth based on whether tab blocks start
-					var targetZ;
-					if (tabBlocksStart && tabLift > 0) {
-						targetZ = z + tabLift;
-						currentlyLifted = true;
-						startedLifted = true;
-					} else {
-						targetZ = z;
-						currentlyLifted = false;
-						startedLifted = false;
-					}
-
-					// Ramp-in: retract, move to offset point, plunge to previous depth, ramp to current depth
-					output += generateRampIn(augmentedPath, toolpath.tool.diameter, targetZ, toolStep, safeHeight, profile, useInches, feedXY, feedZ);
-					isFirstPass = false;
-				}
-				else {
-					// Process augmented path point with possible marker
-					if (pt.marker) {
-						// Flush accumulated regular points before tab transition
-						if (regularRun.length > 0) {
-							output += emitProfileRun(regularRun, z, profile, useInches, feedXY);
-							regularRun = [];
-						}
-						var tabLift = getTabLiftAmount(z, tabs, workpieceThickness, tabHeightMM);
-
-						if (pt.marker === 'lift') {
-							var zNormalCoord = toGcodeUnitsZ(z, useInches);
-							output += applyGcodeTemplate(profile.cutTemplate, { x: p.x, y: p.y, z: zNormalCoord, f: feedXY }) + '\n';
-							var zLiftedCoord = toGcodeUnitsZ(z + tabLift, useInches);
-							output += applyGcodeTemplate(profile.cutTemplate, { x: p.x, y: p.y, z: zLiftedCoord, f: feedXY }) + '\n';
-							currentlyLifted = true;
-						}
-						else if (pt.marker === 'lower') {
-							var zLiftedCoord = toGcodeUnitsZ(z + tabLift, useInches);
-							output += applyGcodeTemplate(profile.cutTemplate, { x: p.x, y: p.y, z: zLiftedCoord, f: feedXY }) + '\n';
-							var zNormalCoord = toGcodeUnitsZ(z, useInches);
-							output += applyGcodeTemplate(profile.cutTemplate, { x: p.x, y: p.y, z: zNormalCoord, f: feedXY }) + '\n';
-							currentlyLifted = false;
-						}
-					}
-					else {
-						// Regular path point — accumulate for arc fitting
-						if (!currentlyLifted) {
-							regularRun.push(pt);
-						} else {
-							// Lifted over tab — flush any accumulated run, then emit lifted point
-							if (regularRun.length > 0) {
-								output += emitProfileRun(regularRun, z, profile, useInches, feedXY);
-								regularRun = [];
-							}
-							var tabLift = getTabLiftAmount(z, tabs, workpieceThickness, tabHeightMM);
-							var zLiftedCoord = toGcodeUnitsZ(z + tabLift, useInches);
-							output += applyGcodeTemplate(profile.cutTemplate, { x: p.x, y: p.y, z: zLiftedCoord, f: feedXY }) + '\n';
-						}
-					}
-				}
-			}
-
-			// Flush any remaining accumulated regular points
-			if (regularRun.length > 0) {
-				output += emitProfileRun(regularRun, z, profile, useInches, feedXY);
-				regularRun = [];
-			}
-
-			// If we started lifted due to tab at path start, cut remaining material at end of pass
-			if (startedLifted && firstMarkerPos) {
-				var cleanupZCoord = toGcodeUnitsZ(z, useInches);
-				var markerCoord = toGcodeUnits(firstMarkerPos.x, firstMarkerPos.y, useInches);
-				output += applyGcodeTemplate(profile.cutTemplate, { x: markerCoord.x, y: markerCoord.y, z: cleanupZCoord, f: feedXY }) + '\n';
-			}
+			output += _generateProfilePass(augmentedPath, pass, z, tabData, toolpath.tool.diameter, toolStep, safeHeight, profile, useInches, feedXY, feedZ);
 		}
 	}
 
@@ -1549,6 +1625,25 @@ function toGcode() {
 	var lastToolId = null;
 	var safeHeight = getOption("safeHeight") + getOption("zbacklash");
 
+	var operationDispatch = {
+		// Standard operations keyed by toolpath.operation
+		'Pocket':       _generatePocketOperationGcode,
+		'Surfacing':    _generateSurfacingOperationGcode,
+		'HelicalDrill': _generateHelicalDrillOperationGcode,
+		'Drill':        _generateDrillOperationGcode,
+		'VCarve':       _generateVcarveOperationGcode,
+		'VCarve In':    _generateVcarveOperationGcode,
+		'VCarve Out':   _generateVcarveOperationGcode,
+		'3dProfile':    _generate3dProfileOperationGcode,
+		// Inlay sub-types all share operation='Inlay' so are keyed by name instead
+		'Inlay Socket':        _generatePocketOperationGcode,
+		'Inlay Plug':          _generatePocketOperationGcode,
+		'Inlay Plug Cutout':   _generatePocketOperationGcode,
+		'Inlay Socket VCarve': _generateVcarveOperationGcode,
+		'Inlay Plug VCarve':   _generateVcarveOperationGcode,
+		// Inlay *Profile and *Cutout variants fall through to _generateProfileOperationGcode
+	};
+
 	for (var i = 0; i < sortedToolpaths.length; i++) {
 		var toolpath = sortedToolpaths[i];
 		if (!toolpath.visible) continue;
@@ -1583,35 +1678,11 @@ function toGcode() {
 		if (toolComment) output += toolComment + '\n';
 
 		// 4. DISPATCH TO OPERATION-SPECIFIC G-CODE GENERATOR
-		// Inlay pocketing toolpaths (Socket, Plug) use the pocket generator for depth stepping;
-		// Inlay V-carve profiles use the V-carve generator (per-point variable Z depth);
-		// Inlay finishing profiles and cutouts use the profile generator.
-		var isInlayVcarve = (toolpath.operation === 'Inlay') && toolpath.name.includes('VCarve');
-		var isInlayPocket = (toolpath.operation === 'Inlay') &&
-			(toolpath.name === 'Inlay Socket' || toolpath.name === 'Inlay Plug');
-		if (isInlayVcarve) {
-			output += _generateVcarveOperationGcode(toolpath, profile, useInches, settings);
-		} else if (toolpath.operation === 'Pocket' || isInlayPocket) {
-			output += _generatePocketOperationGcode(toolpath, profile, useInches, settings);
-		} else if (toolpath.operation === 'Surfacing') {
-			output += _generateSurfacingOperationGcode(toolpath, profile, useInches, settings);
-		}
-		else if (toolpath.operation === 'HelicalDrill') {
-			output += _generateHelicalDrillOperationGcode(toolpath, profile, useInches, settings);
-		}
-		else if (toolpath.operation === 'Drill') {
-			output += _generateDrillOperationGcode(toolpath, profile, useInches, settings);
-		}
-		else if (toolpath.operation === 'VCarve' || toolpath.operation === 'VCarve In' || toolpath.operation === 'VCarve Out') {
-			output += _generateVcarveOperationGcode(toolpath, profile, useInches, settings);
-		}
-		else if (toolpath.operation === '3dProfile') {
-			output += _generate3dProfileOperationGcode(toolpath, profile, useInches, settings);
-		}
-		else {
-			// Profile operations (Inside, Outside, Center, etc.)
-			output += _generateProfileOperationGcode(toolpath, profile, useInches, settings);
-		}
+		// Name lookup first (catches inlay sub-types), then operation, then profile default.
+		var generator = operationDispatch[toolpath.name]
+		             || operationDispatch[toolpath.operation]
+		             || _generateProfileOperationGcode;
+		output += generator(toolpath, profile, useInches, settings);
 
 		// Retract to safe height after finishing operation
 		output += applyGcodeTemplate(profile.rapidTemplate, { z: safeHeight, f: settings.zfeed / 2 }) + '\n';

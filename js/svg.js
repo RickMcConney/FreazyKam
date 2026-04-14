@@ -90,63 +90,52 @@ function parseSvgPathElements(svgElement) {
 	return paths;
 }
 
-function parseSvgLineElements(svgElement) {
+// Shared loop: get all elements by tagName, build a Paper.js path via createPaperPath,
+// then collect results via newTransformFromPaperPath.
+function parseSvgShapeElements(svgElement, tagName, typeName, createPaperPath) {
 	var paths = [];
-	var lineElements = svgElement.getElementsByTagName('line');
-	for (var i = 0; i < lineElements.length; i++) {
-		var lineEl = lineElements[i];
-		var paperLine = new paper.Path();
-		paperLine.moveTo(parseFloat(lineEl.getAttribute('x1')), parseFloat(lineEl.getAttribute('y1')));
-		paperLine.lineTo(parseFloat(lineEl.getAttribute('x2')), parseFloat(lineEl.getAttribute('y2')));
-		paths = paths.concat(newTransformFromPaperPath(paperLine, "Line"));
+	var elements = svgElement.getElementsByTagName(tagName);
+	for (var i = 0; i < elements.length; i++) {
+		var paperPath = createPaperPath(elements[i]);
+		if (paperPath) paths = paths.concat(newTransformFromPaperPath(paperPath, typeName));
 	}
 	return paths;
+}
+
+function parseSvgLineElements(svgElement) {
+	return parseSvgShapeElements(svgElement, 'line', 'Line', function(el) {
+		var p = new paper.Path();
+		p.moveTo(parseFloat(el.getAttribute('x1')), parseFloat(el.getAttribute('y1')));
+		p.lineTo(parseFloat(el.getAttribute('x2')), parseFloat(el.getAttribute('y2')));
+		return p;
+	});
 }
 
 function parseSvgRectElements(svgElement) {
-	var paths = [];
-	var rectElements = svgElement.getElementsByTagName('rect');
-	for (var i = 0; i < rectElements.length; i++) {
-		var rectEl = rectElements[i];
-		var paperRect = new paper.Path.Rectangle(
-			parseFloat(rectEl.getAttribute('x') || 0), parseFloat(rectEl.getAttribute('y') || 0),
-			parseFloat(rectEl.getAttribute('width')), parseFloat(rectEl.getAttribute('height'))
+	return parseSvgShapeElements(svgElement, 'rect', 'Rect', function(el) {
+		return new paper.Path.Rectangle(
+			parseFloat(el.getAttribute('x') || 0), parseFloat(el.getAttribute('y') || 0),
+			parseFloat(el.getAttribute('width')), parseFloat(el.getAttribute('height'))
 		);
-		paths = paths.concat(newTransformFromPaperPath(paperRect, "Rect"));
-	}
-	return paths;
+	});
 }
 
 function parseSvgCircleElements(svgElement) {
-	var paths = [];
-	var circleElements = svgElement.getElementsByTagName('circle');
-	for (var i = 0; i < circleElements.length; i++) {
-		var circleEl = circleElements[i];
-		var paperCircle = new paper.Path.Circle(
-			parseFloat(circleEl.getAttribute('cx') || 0), parseFloat(circleEl.getAttribute('cy') || 0),
-			parseFloat(circleEl.getAttribute('r'))
+	return parseSvgShapeElements(svgElement, 'circle', 'Circle', function(el) {
+		return new paper.Path.Circle(
+			parseFloat(el.getAttribute('cx') || 0), parseFloat(el.getAttribute('cy') || 0),
+			parseFloat(el.getAttribute('r'))
 		);
-		paths = paths.concat(newTransformFromPaperPath(paperCircle, "Circle"));
-	}
-	return paths;
+	});
 }
 
 function parseSvgEllipseElements(svgElement) {
-	var paths = [];
-	var ellipseElements = svgElement.getElementsByTagName('ellipse');
-	for (var i = 0; i < ellipseElements.length; i++) {
-		var ellipseEl = ellipseElements[i];
-		var rawCx = parseFloat(ellipseEl.getAttribute('cx') || 0);
-		var rawCy = parseFloat(ellipseEl.getAttribute('cy') || 0);
-		var radiusX = parseFloat(ellipseEl.getAttribute('rx'));
-		var radiusY = parseFloat(ellipseEl.getAttribute('ry'));
-		var paperEllipse = new paper.Path.Ellipse({
-			center: new paper.Point(rawCx, rawCy),
-			radius: new paper.Size(radiusX, radiusY)
+	return parseSvgShapeElements(svgElement, 'ellipse', 'Ellipse', function(el) {
+		return new paper.Path.Ellipse({
+			center: new paper.Point(parseFloat(el.getAttribute('cx') || 0), parseFloat(el.getAttribute('cy') || 0)),
+			radius: new paper.Size(parseFloat(el.getAttribute('rx')), parseFloat(el.getAttribute('ry')))
 		});
-		paths = paths.concat(newTransformFromPaperPath(paperEllipse, "Ellipse"));
-	}
-	return paths;
+	});
 }
 
 function parseSvgTextElements(svgElement) {
@@ -334,7 +323,7 @@ function newTransformFromPaperPath(paperPath, name) {
 		}
 
 		// Close the path if it's closed and has segments
-		if (flattenedPath.closed && segments.length > 0 && segments[0] && segments[0].point) {
+		if (paperPath.closed && segments.length > 0 && segments[0] && segments[0].point) {
 			// Push a copy of the first point, not a reference to it
 			geom.push({ x: geom[0].x, y: geom[0].y });
 		}

@@ -89,7 +89,7 @@ class VoxelMaterialRemover {
    * @param {THREE.Vector3} endPos - End position of tool
    * @param {Object} toolInfo - Tool information object
    * @param {number} stepDistance - Distance between samples along the path in mm
-   * @returns {number} Total voxels removed in this operation
+   * @returns {number} Cumulative total voxels removed across all operations (not just this call)
    */
   removeAlongPath(voxelGrid, startPos, endPos, toolInfo, stepDistance = 1.0) {
     if (!voxelGrid || !toolInfo) {

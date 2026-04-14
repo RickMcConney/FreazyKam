@@ -29,10 +29,8 @@ class Pen extends Operation {
         // Check if we should close the current path
         if (this.drawingPoints.length >= 3) { // Need at least 3 points to form a meaningful closed path
             const firstPoint = this.drawingPoints[0];
-            const distance = Math.sqrt(
-                Math.pow(mouse.x - firstPoint.x, 2) +
-                Math.pow(mouse.y - firstPoint.y, 2)
-            );
+            const dx = mouse.x - firstPoint.x, dy = mouse.y - firstPoint.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
 
             if (distance <= this.closeDistance) {
                 // Close the current path
@@ -59,10 +57,8 @@ class Pen extends Operation {
         this.nearFirstPoint = false;
         if (this.drawingPoints.length >= 3) {
             const firstPoint = this.drawingPoints[0];
-            const distance = Math.sqrt(
-                Math.pow(mouse.x - firstPoint.x, 2) +
-                Math.pow(mouse.y - firstPoint.y, 2)
-            );
+            const dx = mouse.x - firstPoint.x, dy = mouse.y - firstPoint.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
             this.nearFirstPoint = distance <= this.closeDistance;
 
             // Update help step based on position

@@ -1400,161 +1400,69 @@ class Transform extends Select {
      * @param {Number} scaleX - Horizontal scale factor
      * @param {Number} scaleY - Vertical scale factor
      */
+    // Apply transformPt to tab position and both edge points, then call updateAngle.
+    _transformTabPoints(svgpath, transformPt, updateAngle) {
+        if (!svgpath.creationProperties || !svgpath.creationProperties.tabs) return;
+        svgpath.creationProperties.tabs.forEach(tab => {
+            transformPt(tab);
+            if (tab.edgeP1) transformPt(tab.edgeP1);
+            if (tab.edgeP2) transformPt(tab.edgeP2);
+            if (updateAngle) updateAngle(tab);
+        });
+    }
+
     transformTabsScale(svgpath, centerX, centerY, scaleX, scaleY) {
-        if (!svgpath.creationProperties || !svgpath.creationProperties.tabs) return;
-
-        svgpath.creationProperties.tabs.forEach(tab => {
-            // Scale tab position around center point
-            tab.x = centerX + (tab.x - centerX) * scaleX;
-            tab.y = centerY + (tab.y - centerY) * scaleY;
-
-            // Scale edge points
-            if (tab.edgeP1) {
-                tab.edgeP1.x = centerX + (tab.edgeP1.x - centerX) * scaleX;
-                tab.edgeP1.y = centerY + (tab.edgeP1.y - centerY) * scaleY;
+        this._transformTabPoints(svgpath,
+            pt => {
+                pt.x = centerX + (pt.x - centerX) * scaleX;
+                pt.y = centerY + (pt.y - centerY) * scaleY;
+            },
+            tab => {
+                if (tab.edgeP1 && tab.edgeP2)
+                    tab.angle = Math.atan2(tab.edgeP2.y - tab.edgeP1.y, tab.edgeP2.x - tab.edgeP1.x);
             }
-            if (tab.edgeP2) {
-                tab.edgeP2.x = centerX + (tab.edgeP2.x - centerX) * scaleX;
-                tab.edgeP2.y = centerY + (tab.edgeP2.y - centerY) * scaleY;
-            }
-
-            // Recalculate angle based on new edge points
-            if (tab.edgeP1 && tab.edgeP2) {
-                const dx = tab.edgeP2.x - tab.edgeP1.x;
-                const dy = tab.edgeP2.y - tab.edgeP1.y;
-                tab.angle = Math.atan2(dy, dx);
-            }
-        });
+        );
     }
 
-    /**
-     * Transform tabs during skew operation
-     * @param {Object} svgpath - Path object containing tabs
-     * @param {Number} cx - Center X for skew
-     * @param {Number} cy - Center Y for skew
-     * @param {Number} tanX - Tangent of horizontal skew angle
-     * @param {Number} tanY - Tangent of vertical skew angle
-     */
     transformTabsSkew(svgpath, cx, cy, tanX, tanY) {
-        if (!svgpath.creationProperties || !svgpath.creationProperties.tabs) return;
-
-        svgpath.creationProperties.tabs.forEach(tab => {
-            const dx = tab.x - cx;
-            const dy = tab.y - cy;
-            tab.x = cx + dx + dy * tanX;
-            tab.y = cy + dy + dx * tanY;
-
-            if (tab.edgeP1) {
-                const dx1 = tab.edgeP1.x - cx;
-                const dy1 = tab.edgeP1.y - cy;
-                tab.edgeP1.x = cx + dx1 + dy1 * tanX;
-                tab.edgeP1.y = cy + dy1 + dx1 * tanY;
+        this._transformTabPoints(svgpath,
+            pt => {
+                const dx = pt.x - cx, dy = pt.y - cy;
+                pt.x = cx + dx + dy * tanX;
+                pt.y = cy + dy + dx * tanY;
+            },
+            tab => {
+                if (tab.edgeP1 && tab.edgeP2)
+                    tab.angle = Math.atan2(tab.edgeP2.y - tab.edgeP1.y, tab.edgeP2.x - tab.edgeP1.x);
             }
-            if (tab.edgeP2) {
-                const dx2 = tab.edgeP2.x - cx;
-                const dy2 = tab.edgeP2.y - cy;
-                tab.edgeP2.x = cx + dx2 + dy2 * tanX;
-                tab.edgeP2.y = cy + dy2 + dx2 * tanY;
-            }
-
-            if (tab.edgeP1 && tab.edgeP2) {
-                const edx = tab.edgeP2.x - tab.edgeP1.x;
-                const edy = tab.edgeP2.y - tab.edgeP1.y;
-                tab.angle = Math.atan2(edy, edx);
-            }
-        });
+        );
     }
 
-    /**
-     * Transform tabs during rotation operation
-     * @param {Object} svgpath - Path object containing tabs
-     * @param {Number} pivotX - Pivot X for rotation
-     * @param {Number} pivotY - Pivot Y for rotation
-     * @param {Number} angleRad - Rotation angle in radians
-     */
     transformTabsRotate(svgpath, pivotX, pivotY, angleRad) {
-        if (!svgpath.creationProperties || !svgpath.creationProperties.tabs) return;
-
-        const cos = Math.cos(angleRad);
-        const sin = Math.sin(angleRad);
-
-        svgpath.creationProperties.tabs.forEach(tab => {
-            // Rotate tab position around pivot point
-            const dx = tab.x - pivotX;
-            const dy = tab.y - pivotY;
-            tab.x = pivotX + (dx * cos - dy * sin);
-            tab.y = pivotY + (dx * sin + dy * cos);
-
-            // Rotate edge points
-            if (tab.edgeP1) {
-                const dx1 = tab.edgeP1.x - pivotX;
-                const dy1 = tab.edgeP1.y - pivotY;
-                tab.edgeP1.x = pivotX + (dx1 * cos - dy1 * sin);
-                tab.edgeP1.y = pivotY + (dx1 * sin + dy1 * cos);
-            }
-            if (tab.edgeP2) {
-                const dx2 = tab.edgeP2.x - pivotX;
-                const dy2 = tab.edgeP2.y - pivotY;
-                tab.edgeP2.x = pivotX + (dx2 * cos - dy2 * sin);
-                tab.edgeP2.y = pivotY + (dx2 * sin + dy2 * cos);
-            }
-
-            // Rotate the angle
-            tab.angle += angleRad;
-        });
+        const cos = Math.cos(angleRad), sin = Math.sin(angleRad);
+        this._transformTabPoints(svgpath,
+            pt => {
+                const dx = pt.x - pivotX, dy = pt.y - pivotY;
+                pt.x = pivotX + (dx * cos - dy * sin);
+                pt.y = pivotY + (dx * sin + dy * cos);
+            },
+            tab => { tab.angle += angleRad; }
+        );
     }
 
-    /**
-     * Transform tabs during horizontal mirror operation
-     * @param {Object} svgpath - Path object containing tabs
-     * @param {Number} centerX - Center X for mirroring
-     */
     transformTabsMirrorX(svgpath, centerX) {
-        if (!svgpath.creationProperties || !svgpath.creationProperties.tabs) return;
-
         const cx = 2 * centerX;
-
-        svgpath.creationProperties.tabs.forEach(tab => {
-            // Mirror tab position horizontally
-            tab.x = cx - tab.x;
-
-            // Mirror edge points
-            if (tab.edgeP1) {
-                tab.edgeP1.x = cx - tab.edgeP1.x;
-            }
-            if (tab.edgeP2) {
-                tab.edgeP2.x = cx - tab.edgeP2.x;
-            }
-
-            // Flip the angle (mirror horizontally reverses X component)
-            tab.angle = Math.PI - tab.angle;
-        });
+        this._transformTabPoints(svgpath,
+            pt => { pt.x = cx - pt.x; },
+            tab => { tab.angle = Math.PI - tab.angle; }
+        );
     }
 
-    /**
-     * Transform tabs during vertical mirror operation
-     * @param {Object} svgpath - Path object containing tabs
-     * @param {Number} centerY - Center Y for mirroring
-     */
     transformTabsMirrorY(svgpath, centerY) {
-        if (!svgpath.creationProperties || !svgpath.creationProperties.tabs) return;
-
         const cy = 2 * centerY;
-
-        svgpath.creationProperties.tabs.forEach(tab => {
-            // Mirror tab position vertically
-            tab.y = cy - tab.y;
-
-            // Mirror edge points
-            if (tab.edgeP1) {
-                tab.edgeP1.y = cy - tab.edgeP1.y;
-            }
-            if (tab.edgeP2) {
-                tab.edgeP2.y = cy - tab.edgeP2.y;
-            }
-
-            // Flip the angle (mirror vertically reverses Y component)
-            tab.angle = -tab.angle;
-        });
+        this._transformTabPoints(svgpath,
+            pt => { pt.y = cy - pt.y; },
+            tab => { tab.angle = -tab.angle; }
+        );
     }
 }

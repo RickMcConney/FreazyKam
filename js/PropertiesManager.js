@@ -311,7 +311,11 @@ class PropertiesManager {
     }
 
     static _radioGridHTML(field, value) {
+        // cols must evenly divide 12 for valid Bootstrap grid classes (1,2,3,4,6,12)
         const cols = field.cols || 3;
+        if (![1, 2, 3, 4, 6, 12].includes(cols)) {
+            console.warn(`PropertiesManager: radio-grid cols="${cols}" does not divide 12 evenly; use 1,2,3,4,6, or 12`);
+        }
         const colClass = `col-${12 / cols}`;
         const cells = (field.options || []).map(opt => {
             const v = typeof opt === 'string' ? opt : opt.value;
@@ -325,18 +329,7 @@ class PropertiesManager {
             </div>`;
         }).join('\n');
 
-        return `<style>
-            .pm-radio-grid { max-width: 150px; margin: 0 auto; }
-            .pm-radio-cell {
-                aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
-                border: 1px solid #dee2e6; background-color: #f8f9fa; border-radius: 4px;
-                padding: 8px; min-height: 30px; cursor: pointer;
-            }
-            .pm-radio-cell:hover { background-color: #e9ecef; }
-            .pm-radio-cell:has(.form-check-input:checked) { background-color: #cfe2ff; border-color: #0d6efd; }
-            .pm-radio-cell .form-check-input { margin: 0; transform: scale(0.8); }
-        </style>
-        <div class="mb-3 pm-field">
+        return `<div class="mb-3 pm-field">
             <label class="form-label small"><strong>${field.label}:</strong></label>
             <div class="pm-radio-grid">
                 <div class="row g-1">${cells}</div>

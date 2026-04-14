@@ -166,10 +166,8 @@ class PathEdit extends Select {
                 this.syncFirstLast = false;
 
                 if (this.selectedPath.closed && n > 1) {
-                    // Check if first and last points are the same
-                    const firstLast = (path[0].x === path[n-1].x && path[0].y === path[n-1].y);
                     // Only sync if we're dragging the first or last point
-                    if (firstLast && (this.activeHandle === 0 || this.activeHandle === n-1)) {
+                    if (this.hasDuplicateEndpoint(path) && (this.activeHandle === 0 || this.activeHandle === n-1)) {
                         this.syncFirstLast = true;
                     }
                 }
@@ -330,6 +328,11 @@ class PathEdit extends Select {
                 }
             }
 
+            // Re-snap tabs to their stored edge positions on the (possibly changed) path
+            if (this.handleWasDragged && this.selectedPath) {
+                this._resnapTabsToPath(this.selectedPath);
+            }
+
             // Finished with handle
             this.activeHandle = null;
             this.syncFirstLast = false;
@@ -352,10 +355,7 @@ class PathEdit extends Select {
 
             // Check if last point is duplicate of first (closed path)
             const n = path.length;
-            const skipLastPoint = n > 1 &&
-                path[0].x === path[n - 1].x &&
-                path[0].y === path[n - 1].y;
-            const drawCount = skipLastPoint ? n - 1 : n;
+            const drawCount = this.hasDuplicateEndpoint(path) ? n - 1 : n;
 
             ctx.save();
             for (let i = 0; i < drawCount; i++) {
@@ -397,6 +397,11 @@ class PathEdit extends Select {
         }
     }
 
+    hasDuplicateEndpoint(path) {
+        const n = path.length;
+        return n > 1 && path[0].x === path[n - 1].x && path[0].y === path[n - 1].y;
+    }
+
     getHandleAtPoint(point) {
         const selectedPath = this.selectedPath;
         if (!selectedPath) return null;
@@ -404,10 +409,7 @@ class PathEdit extends Select {
         const path = selectedPath.path;
         const n = path.length;
         // Skip duplicate last point on closed paths
-        const skipLastPoint = n > 1 &&
-            path[0].x === path[n - 1].x &&
-            path[0].y === path[n - 1].y;
-        const checkCount = skipLastPoint ? n - 1 : n;
+        const checkCount = this.hasDuplicateEndpoint(path) ? n - 1 : n;
         let closestHandle = null;
         let closestDistance = this.handleSize * 2;
 
@@ -427,9 +429,27 @@ class PathEdit extends Select {
         return closestHandle;
     }
 
-    // Helper function: Calculate closest point on a line segment to a given point
-    closestPointOnSegment(point, segStart, segEnd) {
-        return closestPointOnSegment(point, segStart, segEnd);
+
+    // Re-snap all tabs on svgpath to the new path geometry using their stored
+    // edgeIndex and positionFraction, so tabs stay on the correct edge after
+    // vertex edits.
+    _resnapTabsToPath(svgpath) {
+        const tabs = svgpath.creationProperties && svgpath.creationProperties.tabs;
+        if (!tabs || !tabs.length) return;
+        const path = svgpath.path;
+        const n = path.length;
+        tabs.forEach(tab => {
+            const ei = tab.edgeIndex;
+            if (ei == null || ei >= n) return;
+            const p1 = path[ei];
+            const p2 = path[(ei + 1) % n];
+            const f = tab.positionFraction != null ? tab.positionFraction : 0.5;
+            tab.x = p1.x + f * (p2.x - p1.x);
+            tab.y = p1.y + f * (p2.y - p1.y);
+            tab.angle = Math.atan2(p2.y - p1.y, p2.x - p1.x);
+            tab.edgeP1 = { x: p1.x, y: p1.y };
+            tab.edgeP2 = { x: p2.x, y: p2.y };
+        });
     }
 
     // Helper function: Find the closest segment to the mouse cursor
@@ -450,7 +470,7 @@ class PathEdit extends Select {
             const segStart = path[i];
             const segEnd = path[(i + 1) % path.length];
 
-            const closestPt = this.closestPointOnSegment(point, segStart, segEnd);
+            const closestPt = closestPointOnSegment(point, segStart, segEnd);
             const dx = point.x - closestPt.x;
             const dy = point.y - closestPt.y;
             const distance = Math.sqrt(dx * dx + dy * dy);
@@ -517,10 +537,7 @@ class PathEdit extends Select {
 
         if (newFirstIndex <= 0 || newFirstIndex >= n) return;
 
-        // Check if path has duplicate endpoint (closed path)
-        const hasDuplicateEndpoint = n > 1 &&
-            path[0].x === path[n - 1].x &&
-            path[0].y === path[n - 1].y;
+        const hasDuplicateEndpoint = this.hasDuplicateEndpoint(path);
 
         // Add undo before modification
         addUndo(false, true, false);
@@ -820,9 +837,7 @@ class PathEdit extends Select {
         // Check if path has duplicate endpoint (closed path)
         const path = selectedPath.path;
         const n = path.length;
-        const hasDuplicateEndpoint = n > 1 &&
-            path[0].x === path[n - 1].x &&
-            path[0].y === path[n - 1].y;
+        const hasDuplicateEndpoint = this.hasDuplicateEndpoint(path);
 
         // Determine which points to apply radius to
         let pointsToProcess = [];
@@ -921,6 +936,42 @@ class PathEdit extends Select {
     }
 
     /**
+     * Compute shared corner geometry: adjacent point indices, neighbour points,
+     * edge unit vectors and lengths.  Returns null when the corner is degenerate
+     * (too few points or edges too short to process).
+     */
+    _getCornerGeometry(svgPath, pointIndex) {
+        const path = svgPath.path;
+        const n = path.length;
+        if (n < 3) return null;
+
+        const hasDuplicateEndpoint = this.hasDuplicateEndpoint(path);
+
+        let prevIndex = (pointIndex - 1 + n) % n;
+        const nextIndex = (pointIndex + 1) % n;
+        if (pointIndex === 0 && hasDuplicateEndpoint) prevIndex = n - 2;
+
+        const prev = path[prevIndex];
+        const current = path[pointIndex];
+        const next = path[nextIndex];
+
+        const v1 = { x: prev.x - current.x, y: prev.y - current.y };
+        const v2 = { x: next.x - current.x, y: next.y - current.y };
+        const len1 = Math.sqrt(v1.x * v1.x + v1.y * v1.y);
+        const len2 = Math.sqrt(v2.x * v2.x + v2.y * v2.y);
+        if (len1 < MIN_SEGMENT_LENGTH || len2 < MIN_SEGMENT_LENGTH) return null;
+
+        return {
+            path,
+            current,
+            u1: { x: v1.x / len1, y: v1.y / len1 },
+            u2: { x: v2.x / len2, y: v2.y / len2 },
+            len1,
+            len2
+        };
+    }
+
+    /**
      * Insert a dogbone corner at the specified point index.
      * A dogbone is a circular notch cut into the inside corner so a round
      * endmill can clear the material at a sharp inside corner.
@@ -929,30 +980,9 @@ class PathEdit extends Select {
      * the circle crosses the adjacent edges.
      */
     insertDogboneCorner(svgPath, pointIndex, radius) {
-        const path = svgPath.path;
-        const n = path.length;
-        if (n < 3) return false;
-
-        const hasDuplicateEndpoint = n > 1 &&
-            path[0].x === path[n - 1].x && path[0].y === path[n - 1].y;
-
-        let prevIndex = (pointIndex - 1 + n) % n;
-        let nextIndex = (pointIndex + 1) % n;
-        if (pointIndex === 0 && hasDuplicateEndpoint) prevIndex = n - 2;
-
-        const prev = path[prevIndex];
-        const current = path[pointIndex];
-        const next = path[nextIndex];
-
-        // Unit vectors along each edge away from the corner
-        const v1 = { x: prev.x - current.x, y: prev.y - current.y };
-        const v2 = { x: next.x - current.x, y: next.y - current.y };
-        const len1 = Math.sqrt(v1.x * v1.x + v1.y * v1.y);
-        const len2 = Math.sqrt(v2.x * v2.x + v2.y * v2.y);
-        if (len1 < MIN_SEGMENT_LENGTH || len2 < MIN_SEGMENT_LENGTH) return false;
-
-        const u1 = { x: v1.x / len1, y: v1.y / len1 };
-        const u2 = { x: v2.x / len2, y: v2.y / len2 };
+        const geom = this._getCornerGeometry(svgPath, pointIndex);
+        if (!geom) return false;
+        const { path, current, u1, u2, len1, len2 } = geom;
 
         // Bisector pointing into the corner interior
         const bisector = { x: u1.x + u2.x, y: u1.y + u2.y };
@@ -1024,32 +1054,12 @@ class PathEdit extends Select {
      * Insert a miter (chamfer) corner — replaces the sharp corner with a flat cut.
      */
     insertMiterCorner(svgPath, pointIndex, distance) {
-        const path = svgPath.path;
-        const n = path.length;
-        if (n < 3) return false;
-
-        const hasDuplicateEndpoint = n > 1 &&
-            path[0].x === path[n - 1].x && path[0].y === path[n - 1].y;
-
-        let prevIndex = (pointIndex - 1 + n) % n;
-        let nextIndex = (pointIndex + 1) % n;
-        if (pointIndex === 0 && hasDuplicateEndpoint) prevIndex = n - 2;
-
-        const prev = path[prevIndex];
-        const current = path[pointIndex];
-        const next = path[nextIndex];
-
-        const v1 = { x: prev.x - current.x, y: prev.y - current.y };
-        const v2 = { x: next.x - current.x, y: next.y - current.y };
-        const len1 = Math.sqrt(v1.x * v1.x + v1.y * v1.y);
-        const len2 = Math.sqrt(v2.x * v2.x + v2.y * v2.y);
-        if (len1 < MIN_SEGMENT_LENGTH || len2 < MIN_SEGMENT_LENGTH) return false;
+        const geom = this._getCornerGeometry(svgPath, pointIndex);
+        if (!geom) return false;
+        const { path, current, u1, u2, len1, len2 } = geom;
 
         // Clamp distance to not exceed segment lengths
         const d = Math.min(distance, len1 * MAX_TANGENT_RATIO, len2 * MAX_TANGENT_RATIO);
-
-        const u1 = { x: v1.x / len1, y: v1.y / len1 };
-        const u2 = { x: v2.x / len2, y: v2.y / len2 };
 
         // Two points: one on each edge at 'distance' from the corner
         const p1 = { x: current.x + u1.x * d, y: current.y + u1.y * d };
@@ -1150,36 +1160,9 @@ class PathEdit extends Select {
     }
 
     insertRadiusCorner(svgPath, pointIndex, radius, invert) {
-        const path = svgPath.path;
-        const n = path.length;
-
-        if (n < 3) return false;
-
-        const hasDuplicateEndpoint = n > 1 &&
-            path[0].x === path[n - 1].x &&
-            path[0].y === path[n - 1].y;
-
-        let prevIndex = (pointIndex - 1 + n) % n;
-        let nextIndex = (pointIndex + 1) % n;
-
-        if (pointIndex === 0 && hasDuplicateEndpoint) {
-            prevIndex = n - 2;
-        }
-
-        const prev = path[prevIndex];
-        const current = path[pointIndex];
-        const next = path[nextIndex];
-
-        const v1 = { x: prev.x - current.x, y: prev.y - current.y };
-        const v2 = { x: next.x - current.x, y: next.y - current.y };
-
-        const len1 = Math.sqrt(v1.x * v1.x + v1.y * v1.y);
-        const len2 = Math.sqrt(v2.x * v2.x + v2.y * v2.y);
-
-        if (len1 < MIN_SEGMENT_LENGTH || len2 < MIN_SEGMENT_LENGTH) return false;
-
-        const u1 = { x: v1.x / len1, y: v1.y / len1 };
-        const u2 = { x: v2.x / len2, y: v2.y / len2 };
+        const geom = this._getCornerGeometry(svgPath, pointIndex);
+        if (!geom) return false;
+        const { path, current, u1, u2, len1, len2 } = geom;
 
         const dotProduct = u1.x * u2.x + u1.y * u2.y;
         const angle = Math.acos(Math.max(-1, Math.min(1, dotProduct)));

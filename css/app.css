@@ -8,6 +8,17 @@
     */
 }
 
+/* PropertiesManager radio-grid layout */
+.pm-radio-grid { max-width: 150px; margin: 0 auto; }
+.pm-radio-cell {
+    aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
+    border: 1px solid #dee2e6; background-color: #f8f9fa; border-radius: 4px;
+    padding: 8px; min-height: 30px; cursor: pointer;
+}
+.pm-radio-cell:hover { background-color: #e9ecef; }
+.pm-radio-cell:has(.form-check-input:checked) { background-color: #cfe2ff; border-color: #0d6efd; }
+.pm-radio-cell .form-check-input { margin: 0; transform: scale(0.8); }
+
 /* ============================================================================
    COLOR PALETTE - CSS Variables
    ============================================================================

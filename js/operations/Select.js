@@ -443,22 +443,7 @@ class Select extends Operation {
     }
 
     translateSelected(dx, dy) {
-        let selected = this.selectedPaths();
-        selected.forEach(svgpath => {
-
-            let path = svgpath.path;
-            for (let i = 0; i < path.length; i++) {
-                let pt = path[i];
-                if (i != path.length - 1 || pt !== path[0]) {
-                    pt.x += dx;
-                    pt.y += dy;
-                }
-            }
-            svgpath.bbox = boundingBox(path);
-
-            // Translate tabs along with the path
-            this.translateTabs(svgpath, dx, dy);
-        });
+        this.selectedPaths().forEach(svgpath => this.translate(svgpath, dx, dy));
     }
 
     translate(svgpath, dx, dy) {

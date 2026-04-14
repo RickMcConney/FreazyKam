@@ -482,6 +482,19 @@ function convertPointsToScreen(...points) {
     });
 }
 
+// Interpolate a precomputed point at progress t (0–1) along its segment.
+// Returns a drawPoint with interpolated x, y, z and recalculated radius.
+function createDrawPoint(point, t) {
+    const x = point.startX + (point.x - point.startX) * t;
+    const y = point.startY + (point.y - point.startY) * t;
+    const z = point.startZ + (point.z - point.startZ) * t;
+    let radius = point.toolRadius;
+    if (point.tool && point.tool.angle && point.tool.angle > 0) {
+        radius = getToolCircleRadius(z, point.tool) * viewScale;
+    }
+    return { x, y, z, radius, moveType: point.moveType, frustumData: point.frustumData, isFrustum: point.isFrustum };
+}
+
 /**
  * Draw material removal from precomputed points
  * Draws dashed red lines for rapids, brown slots for cuts
@@ -519,43 +532,11 @@ function drawMaterialRemovalCircles() {
             continue;
         }
 
-        // For the currently animating segment, interpolate the endpoint based on progress
-        let drawPoint;
-        if (i === simulation2D.currentLineIndex && simulation2D.isRunning && simulation2D.currentLineProgress < 1.0) {
-            // Interpolate endpoint based on current progress (0 to 1)
-            const t = simulation2D.currentLineProgress;
-            const interpX = point.startX + (point.x - point.startX) * t;
-            const interpY = point.startY + (point.y - point.startY) * t;
-            const interpZ = point.startZ + (point.z - point.startZ) * t;
-
-            // Recalculate radius for interpolated Z (important for V-bits)
-            let interpRadius = point.toolRadius;
-            if (point.tool && point.tool.angle && point.tool.angle > 0) {
-                // V-bit: recalculate radius based on interpolated Z
-                interpRadius = getToolCircleRadius(interpZ, point.tool) * viewScale;
-            }
-
-            drawPoint = {
-                x: interpX,
-                y: interpY,
-                z: interpZ,
-                radius: interpRadius,
-                moveType: point.moveType,
-                frustumData: point.frustumData,
-                isFrustum: point.isFrustum
-            };
-        } else {
-            // Completed segment - use full endpoint
-            drawPoint = {
-                x: point.x,
-                y: point.y,
-                z: point.z,
-                radius: point.toolRadius,
-                moveType: point.moveType,
-                frustumData: point.frustumData,
-                isFrustum: point.isFrustum
-            };
-        }
+        // For the currently animating segment, interpolate; otherwise use full endpoint
+        const t = (i === simulation2D.currentLineIndex && simulation2D.isRunning && simulation2D.currentLineProgress < 1.0)
+            ? simulation2D.currentLineProgress
+            : 1.0;
+        const drawPoint = createDrawPoint(point, t);
 
         // If type changed, draw and reset segment
         if (currentSegmentType !== null && pointType !== currentSegmentType) {
@@ -603,22 +584,16 @@ function drawToolPositionCircle() {
     const point = simulation2D.precomputedPoints[idx];
     if (!point || point.moveType === NON_MOVEMENT) return;
 
-    // Calculate interpolated position
+    // Interpolate position and V-bit radius
     const t = simulation2D.currentLineProgress || 0;
-    const toolX = point.startX + (point.x - point.startX) * t;
-    const toolY = point.startY + (point.y - point.startY) * t;
-    const toolZ = point.startZ + (point.z - point.startZ) * t;
+    const { x: toolX, y: toolY, z: toolZ, radius: vbitRadius } = createDrawPoint(point, t);
 
-    // Calculate tool radius
+    // For rapids, use the full nominal tool diameter instead of depth-based radius
     let radius;
-    if (point.moveType === CUT && point.tool && point.tool.angle && point.tool.angle > 0) {
-        // V-bits: radius varies with depth during cuts
-        radius = getToolCircleRadius(toolZ, point.tool) * viewScale;
-    } else if (point.tool && point.tool.diameter) {
-        // Use full nominal tool diameter (important for rapids where depth-based radius would be zero)
+    if (point.moveType !== CUT && point.tool && point.tool.diameter) {
         radius = (point.tool.diameter / 2) * viewScale;
     } else {
-        radius = point.toolRadius;
+        radius = vbitRadius;
     }
 
     const screenRadius = Math.max(2, radius * zoomLevel);

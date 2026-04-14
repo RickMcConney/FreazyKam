@@ -2,6 +2,7 @@ class OperationManager {
   constructor() {
     this.operations = new Map();
     this.currentOperation = null;
+    this.canvas = document.getElementById('canvas');
   }
 
   registerOperation(operation) {
@@ -25,29 +26,22 @@ class OperationManager {
     if (this.currentOperation) {
       this.currentOperation.start();
     }
-    var canvas = document.getElementById('canvas');
-    if(name === 'Pan'|| name == 'Origin'){
-        canvas.style.cursor = "grab";
-    }
-    else if(name === 'Move'){
-        canvas.style.cursor = "move";
-    }
-    else if(name === 'Pen' || name == 'Drill'){
-        canvas.style.cursor = "crosshair";
-    }
-    else if(name === 'Text'){
-        canvas.style.cursor = "text";
-    }
-    else{
-        canvas.style.cursor = "default"
-    }
+    const CURSOR_MAP = {
+      Pan: 'grab', Origin: 'grab',
+      Move: 'move',
+      Pen: 'crosshair', Drill: 'crosshair',
+      Text: 'text'
+    };
+    this.canvas.style.cursor = CURSOR_MAP[name] || 'default';
   }
 
+  // eventName must be one of: 'Down', 'Move', 'Up'
+  // Maps to operation methods: onMouseDown, onMouseMove, onMouseUp
   handleMouseEvent(eventName, canvas, evt) {
     if (this.currentOperation) {
       const handler = this.currentOperation[`onMouse${eventName}`];
       if (handler) {
-        handler.call(this.currentOperation, canvas,evt);
+        handler.call(this.currentOperation, canvas, evt);
       }
     }
   }

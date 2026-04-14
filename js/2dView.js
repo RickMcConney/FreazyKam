@@ -7,10 +7,10 @@
 // Canvas Drawing Colors
 var lineColor = '#000000';              // SVG path stroke color (black)
 var selectColor = '#ff0000';            // Selected path color (red)
-var activeColor = '#ff00ff';        // Active elements (orange)
+var activeColor = '#ff00ff';        // Active elements (magenta)
 var highlightColor = '#00ff00';         // Highlighted elements (green)
 var toolColor = '#0000ff';              // Toolpath color (blue)
-var circleColor = '#0000ff';            // Circle/drill point color (blue)
+var circleColor = toolColor;            // Circle/drill point color (same as toolpath)
 var activeToolpathColor = '#ff00ff';    // Active toolpath being edited (magenta)
 var canvasBackgroundColor = '#eee';    // Canvas background color
 var pointFillColor = 'black';           // Point/marker fill color
@@ -26,7 +26,7 @@ var workpieceColor = '#F5DEB3';         // Workpiece surface color (wheat)
 var workpieceBorderColor = '#888888';   // Workpiece border (gray)
 
 // Debug and Visualization Colors
-var normLineColor = '#0000ff';          // Normal line visualization (blue)
+var normLineColor = toolColor;          // Normal line visualization (same blue as toolpaths)
 var debugCyanColor = '#00ffff';         // Debug cyan highlight
 
 // Simulation Colors
@@ -41,7 +41,7 @@ var simulationFillCut3 = 'rgba(101, 67, 33, 0.2)';           // Cutting move alt
 // Material/Wood Colors (used in bootstrap-layout.js)
 // Operation Tool Colors (used in PathEdit, Transform, Polygon, etc.)
 var handleActiveColor = '#ff0000';      // Active/dragged handle (red)
-var handleActiveStroke = '#ff0000';     // Active handle stroke (red)
+var handleActiveStroke = handleActiveColor; // Active handle stroke (same red)
 var handleHoverColor = '#ffff00';       // Hovered handle (yellow)
 var handleHoverStroke = '#ff8800';      // Hovered handle stroke (orange)
 var handleNormalColor = 'white';        // Normal handle (white)
@@ -78,13 +78,15 @@ window.addEventListener('resize', function () {
 });
 
 
+var ZOOM_STEP_FACTOR = 1.1; // Multiplier per scroll tick
+
 // Function to handle zooming in and out, centered on given screen coordinates
 function newZoom(delta, centerX, centerY) {
 	// centerX, centerY are screen coordinates where zoom is centered
 	// Compute world coordinate under mouse before zoom
 	var world = screenToWorld(centerX, centerY);
 	// Update zoom level multiplicatively
-	var zoomFactor = (delta > 0) ? 1.1 : 1 / 1.1;
+	var zoomFactor = (delta > 0) ? ZOOM_STEP_FACTOR : 1 / ZOOM_STEP_FACTOR;
 	var newZoom = Math.max(0.05, Math.min(50, zoomLevel * zoomFactor));
 	// Adjust pan so the world coordinate stays under the mouse
 	panX = centerX - world.x * newZoom;
@@ -266,21 +268,22 @@ function drawPath(path, color, lineWidth, isMultiSegment) {
 
 
 
+// Shared setup for grid and origin drawing
+function _getGridSetup() {
+	const width = getOption("workpieceWidth") * viewScale;
+	const length = getOption("workpieceLength") * viewScale;
+	const topLeft = worldToScreen(0, 0);
+	const bottomRight = worldToScreen(width, length);
+	const o = worldToScreen(origin.x, origin.y);
+	const gridSize = (typeof getOption !== 'undefined' && getOption("gridSize")) ? getOption("gridSize") : 10;
+	const grid = gridSize * viewScale * zoomLevel;
+	return { topLeft, bottomRight, o, grid, gridSize };
+}
+
 // New drawGrid using virtual coordinates
 function drawGrid() {
 	ctx.beginPath();
-	// Get workpiece dimensions
-	const width = getOption("workpieceWidth") * viewScale;
-	const length = getOption("workpieceLength") * viewScale;
-	// Workpiece bounds in world coordinates
-
-	var startX = 0;
-	var startY = 0;
-	var topLeft = worldToScreen(startX, startY);
-	var bottomRight = worldToScreen(width, length);
-	let o = worldToScreen(origin.x, origin.y);
-	let gridSize = (typeof getOption !== 'undefined' && getOption("gridSize")) ? getOption("gridSize") : 10;
-	let grid = gridSize * viewScale * zoomLevel;
+	const { topLeft, bottomRight, o, grid } = _getGridSetup();
 
 
 
@@ -313,18 +316,7 @@ function drawGrid() {
 
 function drawOrigin() {
 	ctx.beginPath();
-	// Get workpiece dimensions
-	const width = getOption("workpieceWidth") * viewScale;
-	const length = getOption("workpieceLength") * viewScale;
-	// Workpiece bounds in world coordinates
-
-	var startX = 0;
-	var startY = 0;
-	var topLeft = worldToScreen(startX, startY);
-	var bottomRight = worldToScreen(startX + width, startY + length);
-	let o = worldToScreen(origin.x, origin.y);
-	let gridSize = (typeof getOption !== 'undefined' && getOption("gridSize")) ? getOption("gridSize") : 10;
-	let grid = gridSize * viewScale * zoomLevel;
+	const { topLeft, bottomRight, o, gridSize } = _getGridSetup();
 
 	let offsetx = 0;
 	let offsety = 0;

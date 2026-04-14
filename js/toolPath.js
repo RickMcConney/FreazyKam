@@ -193,7 +193,7 @@ function newbitFits(point, r) {
 function bitFits(point, r) {
 	for (var j = 0; j < nearbypaths.length; j++) {
 		var path = nearbypaths[j].path;
-		var dist = isPointInCircle(point, path, r);
+		var dist = distToNearestSegment(point, path, r);
 		if (dist < r)
 			return false;
 	}
@@ -445,20 +445,16 @@ function pushAndActivateToolpath(paths, name, operation, svgId) {
 }
 
 function makeHole(pt) {
-	var used = withDrillProperties(function() {
+	function core() {
 		var radius = toolRadius();
 		var paths = [{ tpath: [{ x: pt.x, y: pt.y, r: radius }], path: [{ x: pt.x, y: pt.y, r: radius }] }];
 		pushAndActivateToolpath(paths, 'Drill', 'Drill', null);
-	});
-	if (used) return;
-
-	var radius = toolRadius();
-	var paths = [{ tpath: [{ x: pt.x, y: pt.y, r: radius }], path: [{ x: pt.x, y: pt.y, r: radius }] }];
-	pushAndActivateToolpath(paths, 'Drill', 'Drill', null);
+	}
+	if (!withDrillProperties(core)) core();
 }
 
 function makeHelicalHole(circle, svgId) {
-	var used = withDrillProperties(function() {
+	function core() {
 		var radius_tool = toolRadius();
 		if (circle.radius <= radius_tool) {
 			var circleDiaMM = (circle.radius * 2 / viewScale).toFixed(2);
@@ -469,19 +465,8 @@ function makeHelicalHole(circle, svgId) {
 		var helixPath = generateHelixPath(circle, window.currentTool.depth, window.currentTool.step, radius_tool);
 		var paths = [{ tpath: helixPath, path: helixPath }];
 		pushAndActivateToolpath(paths, 'Helical Drill', 'HelicalDrill', svgId);
-	});
-	if (used) return;
-
-	var radius_tool = toolRadius();
-	if (circle.radius <= radius_tool) {
-		var circleDiaMM = (circle.radius * 2 / viewScale).toFixed(2);
-		var toolDiaMM = (radius_tool * 2 / viewScale).toFixed(2);
-		notify('Circle diameter (' + circleDiaMM + 'mm) is smaller than tool diameter (' + toolDiaMM + 'mm). Use a smaller end mill.', 'error');
-		return;
 	}
-	var helixPath = generateHelixPath(circle, currentTool.depth, currentTool.step, radius_tool);
-	var paths = [{ tpath: helixPath, path: helixPath }];
-	pushAndActivateToolpath(paths, 'Helical Drill', 'HelicalDrill', svgId);
+	if (!withDrillProperties(core)) core();
 }
 
 /**
@@ -757,7 +742,6 @@ function findBestChainMatch(openChains, segmentPath, tolerance) {
 	const segEnd = segmentPath[segmentPath.length - 1];
 	let bestChain = null;
 	let bestDistance = Infinity;
-	let shouldReverse = false;
 
 	for (let chain of openChains) {
 		const last = chain.lastEndpoint;
@@ -765,16 +749,14 @@ function findBestChainMatch(openChains, segmentPath, tolerance) {
 		const distToEnd = Math.hypot(segEnd.x - last.x, segEnd.y - last.y);
 
 		const closestDist = Math.min(distToStart, distToEnd);
-		const reverse = distToEnd < distToStart;
 
 		if (closestDist < tolerance && closestDist < bestDistance) {
 			bestChain = chain;
 			bestDistance = closestDist;
-			shouldReverse = reverse;
 		}
 	}
 
-	return { bestChain, shouldReverse };
+	return { bestChain };
 }
 
 function extractConnectivityChains(infillGroups, stepover, angle = 0) {
@@ -805,18 +787,10 @@ function extractConnectivityChains(infillGroups, stepover, angle = 0) {
 				// Force continuity when both levels have single segments
 				appendSegmentToChain(openChains[0], segment.path);
 			} else {
-				const { bestChain, shouldReverse } = findBestChainMatch(openChains, segment.path, tolerance);
+				const { bestChain } = findBestChainMatch(openChains, segment.path, tolerance);
 
 				if (bestChain) {
-					if (shouldReverse) {
-						const reversed = reversePath(segment.path);
-						bestChain.segments.push(reversed);
-						bestChain.lastEndpoint = reversed[reversed.length - 1];
-					} else {
-						bestChain.segments.push(segment.path);
-						bestChain.lastEndpoint = segment.path[segment.path.length - 1];
-					}
-					bestChain.wasUpdated = true;
+					appendSegmentToChain(bestChain, segment.path);
 				} else {
 					openChains.push({
 						segments: [segment.path],

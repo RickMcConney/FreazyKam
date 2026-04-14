@@ -36,6 +36,8 @@ function screenToWorld(x, y) {
 
 var MM_PER_INCH = 25.4;
 
+function gcd(a, b) { return b ? gcd(b, a % b) : a; }
+
 // Convert decimal inches to nearest fraction
 // Returns {whole, numerator, denominator} or null if should show decimal
 function decimalToFraction(decimal, maxDenominator) {
@@ -74,7 +76,6 @@ function decimalToFraction(decimal, maxDenominator) {
 	}
 
 	// Simplify fraction
-	var gcd = function (a, b) { return b ? gcd(b, a % b) : a; };
 	var divisor = gcd(bestNumer, bestDenom);
 	bestNumer /= divisor;
 	bestDenom /= divisor;
@@ -194,10 +195,12 @@ function parseDimension(value) {
 	return totalInches * MM_PER_INCH;
 }
 
+// Maximum squared distance threshold for path highlighting; margin = sqrt of this
+var CLOSEST_PATH_THRESHOLD_SQ = 100;
+var CLOSEST_PATH_BBOX_MARGIN = 10; // sqrt(CLOSEST_PATH_THRESHOLD_SQ)
+
 function closestPath(pt, clear) {
 	var svgpath = null;
-	var maxDistSquared = 100; // Maximum distance threshold for highlighting
-	var bboxMargin = 10; // Margin to expand bounding boxes (sqrt of maxDistSquared)
 
 	// Clear all highlights first
 	for (var i = 0; i < svgpaths.length; i++) {
@@ -205,52 +208,41 @@ function closestPath(pt, clear) {
 			svgpaths[i].highlight = false;
 	}
 
-	// Find the minimum distance to each visible path
-	// Use expanded bounding box check for performance optimization
-	var minDistPerPath = [];
-	var visiblePaths = [];
+	// Single pass: track best candidate as we go
+	var overallMin = Infinity;
+	var bestPath = null;
 
 	for (var i = 0; i < svgpaths.length; i++) {
 		if (!svgpaths[i].visible) continue;
 
 		var bbox = svgpaths[i].bbox;
 
-		// Check if point is within expanded bounding box (bbox + margin)
-		// This optimization skips paths that are too far away
-		if (pt.x < bbox.minx - bboxMargin || pt.x > bbox.maxx + bboxMargin ||
-		    pt.y < bbox.miny - bboxMargin || pt.y > bbox.maxy + bboxMargin) {
-			continue; // Skip this path, it's too far away
+		// Skip paths whose expanded bbox doesn't contain pt
+		if (pt.x < bbox.minx - CLOSEST_PATH_BBOX_MARGIN || pt.x > bbox.maxx + CLOSEST_PATH_BBOX_MARGIN ||
+		    pt.y < bbox.miny - CLOSEST_PATH_BBOX_MARGIN || pt.y > bbox.maxy + CLOSEST_PATH_BBOX_MARGIN) {
+			continue;
 		}
 
-		visiblePaths.push(svgpaths[i]);
 		var path = svgpaths[i].path;
 		var minDistForThisPath = Infinity;
 
 		for (var j = 0; j < path.length; j++) {
 			var k = (j + 1) % path.length;
-			var start = path[j];
-			var end = path[k];
-			var dist = distToSegmentSquared(pt, start, end);
+			var dist = distToSegmentSquared(pt, path[j], path[k]);
 			if (dist < minDistForThisPath) {
 				minDistForThisPath = dist;
 			}
 		}
-		minDistPerPath.push(minDistForThisPath);
-	}
 
-	// Select the path with the smallest minimum distance (within threshold)
-	var overallMin = Infinity;
-	var selectedIndex = -1;
-	for (var i = 0; i < minDistPerPath.length; i++) {
-		if (minDistPerPath[i] < overallMin && minDistPerPath[i] < maxDistSquared) {
-			overallMin = minDistPerPath[i];
-			selectedIndex = i;
+		if (minDistForThisPath < overallMin && minDistForThisPath < CLOSEST_PATH_THRESHOLD_SQ) {
+			overallMin = minDistForThisPath;
+			bestPath = svgpaths[i];
 		}
 	}
 
-	if (selectedIndex >= 0) {
-		svgpath = visiblePaths[selectedIndex];
-		svgpath.highlight = true;
+	if (bestPath) {
+		bestPath.highlight = true;
+		svgpath = bestPath;
 		redraw();
 	}
 
@@ -258,7 +250,7 @@ function closestPath(pt, clear) {
 }
 
 function closestPoint(pt) {
-	var min = 10000;
+	var min = Infinity;
 	var cx;
 	var cy;
 
@@ -316,6 +308,10 @@ function boundingBoxPaths(paths) {
 	return outerBbox;
 }
 
+// Minimum bbox extent (world units) — keeps degenerate paths (single point, flat line)
+// hittable by giving them a small but non-zero area for hit testing.
+var BBOX_MIN_EXTENT = 2;
+
 function boundingBox(path) {
 	if (!path || path.length === 0) {
 		return { minx: 0, miny: 0, maxx: 0, maxy: 0 };
@@ -327,8 +323,8 @@ function boundingBox(path) {
 		if (bbox.maxx < path[i].x) bbox.maxx = path[i].x;
 		if (bbox.maxy < path[i].y) bbox.maxy = path[i].y;
 	}
-	if (bbox.maxx - bbox.minx < 2) { bbox.maxx++; bbox.minx--; }
-	if (bbox.maxy - bbox.miny < 2) { bbox.maxy++; bbox.miny--; }
+	if (bbox.maxx - bbox.minx < BBOX_MIN_EXTENT) { bbox.maxx++; bbox.minx--; }
+	if (bbox.maxy - bbox.miny < BBOX_MIN_EXTENT) { bbox.maxy++; bbox.miny--; }
 	return bbox;
 }
 
@@ -375,7 +371,7 @@ function distanceToClosestPath(pt, path, r) {
 }
 
 
-function isPointInCircle(pt, path, r) {
+function distToNearestSegment(pt, path, r) {
 
 	var rs = r * r;
 
@@ -412,11 +408,9 @@ function nearbyPaths(svgpath, radius) {
 	var paths = [];
 	for (var j = 0; j < svgpaths.length; j++) {
 		if (svgpaths[j].visible) {
-			var p1 = { x: svgpaths[j].bbox.minx, y: svgpaths[j].bbox.miny };
-			var p2 = { x: svgpaths[j].bbox.minx, y: svgpaths[j].bbox.maxy };
-			var p3 = { x: svgpaths[j].bbox.maxx, y: svgpaths[j].bbox.maxy };
-			var p4 = { x: svgpaths[j].bbox.maxx, y: svgpaths[j].bbox.miny };
-			if (pointInBoundingBox(p1, bbox) || pointInBoundingBox(p2, bbox) || pointInBoundingBox(p3, bbox) || pointInBoundingBox(p4, bbox))
+			var b = svgpaths[j].bbox;
+			// Check if the two bounding boxes overlap (any corner of b is inside bbox)
+			if (!(b.maxx < bbox.minx || b.minx > bbox.maxx || b.maxy < bbox.miny || b.miny > bbox.maxy))
 				paths.push(svgpaths[j]);
 		}
 	}
@@ -484,30 +478,23 @@ function pointInPolygon(point, path) {
 	return inside;
 }
 
+// Fractional offsets [fx, fy] for each named origin position (width * fx, length * fy)
+var ORIGIN_POSITION_OFFSETS = {
+	'top-left':      [0,   0  ],
+	'top-center':    [0.5, 0  ],
+	'top-right':     [1,   0  ],
+	'middle-left':   [0,   0.5],
+	'middle-center': [0.5, 0.5],
+	'middle-right':  [1,   0.5],
+	'bottom-left':   [0,   1  ],
+	'bottom-center': [0.5, 1  ],
+	'bottom-right':  [1,   1  ]
+};
+
 // Calculate origin coordinates based on position and workpiece dimensions
 function calculateOriginFromPosition(position, width, length) {
-	switch (position) {
-		case 'top-left':
-			return { x: 0, y: 0 };
-		case 'top-center':
-			return { x: width / 2, y: 0 };
-		case 'top-right':
-			return { x: width, y: 0 };
-		case 'middle-left':
-			return { x: 0, y: length / 2 };
-		case 'middle-center':
-			return { x: width / 2, y: length / 2 };
-		case 'middle-right':
-			return { x: width, y: length / 2 };
-		case 'bottom-left':
-			return { x: 0, y: length };
-		case 'bottom-center':
-			return { x: width / 2, y: length };
-		case 'bottom-right':
-			return { x: width, y: length };
-		default:
-			return { x: width / 2, y: length / 2 };
-	}
+	var off = ORIGIN_POSITION_OFFSETS[position] || ORIGIN_POSITION_OFFSETS['middle-center'];
+	return { x: width * off[0], y: length * off[1] };
 }
 
 /**
@@ -653,7 +640,12 @@ function applyTransformHistory(svgpath) {
 	svgpath.bbox = boundingBox(svgpath.path);
 }
 
+function reversePath(path) {
+	return path.slice().reverse();
+}
+
 // Helper function: Calculate distance between two points
 function distance(p1, p2) {
-	return Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2));
+	const dx = p2.x - p1.x, dy = p2.y - p1.y;
+	return Math.sqrt(dx * dx + dy * dy);
 }

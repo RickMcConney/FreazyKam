@@ -1,3 +1,20 @@
+/**
+ * vcarve.js — V-carve toolpath graph utilities
+ *
+ * Graph structure used by dijkstraToTarget():
+ *   - Nodes are string keys representing positions along V-carve bisector paths
+ *     (typically formatted as "pathIndex_pointIndex").
+ *   - Edges connect adjacent bisector points within a path and between overlapping
+ *     paths where the V-bit circles are tangent or overlapping.
+ *   - Edge weight is the Euclidean distance between the two bisector points,
+ *     so Dijkstra finds the shortest physical travel distance through the material.
+ *
+ * Typical call sequence (from toolPath.js):
+ *   1. Build graph object: graph[nodeKey] = [{node, weight}, ...]
+ *   2. Call dijkstraToTarget(graph, startNode, endNode) to get the ordered
+ *      sequence of bisector nodes the tool should follow.
+ *   3. Map node keys back to {x, y, r} points to generate the toolpath.
+ */
 class PriorityQueue {
     constructor() {
         this.values = [];

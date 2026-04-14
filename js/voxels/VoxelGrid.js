@@ -37,6 +37,8 @@ class VoxelGrid {
 
     // Per-voxel height tracking
     this.voxelTopZ = new Float32Array(this.maxVoxels);  // Z position of each voxel's top surface
+    this.voxelWorldX = new Float32Array(this.maxVoxels); // Cached X world position (never changes)
+    this.voxelWorldY = new Float32Array(this.maxVoxels); // Cached Y world position (never changes)
     this.voxelHeightChanged = new Set();  // Track which voxels have been cut for color updates
 
     // Single Three.js mesh for rendering
@@ -106,6 +108,15 @@ class VoxelGrid {
    * Creates a single InstancedMesh with 2D X-Y layout
    * All voxels initialized with topZ = 0 (material surface)
    */
+  // Return the world-space center position for voxel (x, y).
+  _voxelWorldPos(x, y) {
+    return {
+      x: this.originOffset.x - this.workpieceWidth  / 2 + x * this.voxelSize + this.voxelSize / 2,
+      y: this.originOffset.y - this.workpieceLength / 2 + y * this.voxelSize + this.voxelSize / 2,
+      z: this.originOffset.z - this.workpieceThickness / 2
+    };
+  }
+
   initializeGrid() {
     // Create geometry (single unified geometry)
     const geometry = this.createGeometry();
@@ -136,14 +147,13 @@ class VoxelGrid {
         const index = y + x * this.gridLength;
 
         // Calculate world position (centered in each voxel cell)
-        const worldX = this.originOffset.x - this.workpieceWidth / 2 + x * this.voxelSize + this.voxelSize / 2;
-        const worldY = this.originOffset.y - this.workpieceLength / 2 + y * this.voxelSize + this.voxelSize / 2;
+        const wp = this._voxelWorldPos(x, y);
 
-        // Voxel Z position: center between top (0) and bottom (-thickness)
-        // Z = (topZ + bottomZ) / 2 = (0 + (-thickness)) / 2 = -thickness/2
-        const worldZ = this.originOffset.z - this.workpieceThickness / 2;
+        // Cache X/Y — these never change after init
+        this.voxelWorldX[index] = wp.x;
+        this.voxelWorldY[index] = wp.y;
 
-        dummy.position.set(worldX, worldY, worldZ);
+        dummy.position.set(wp.x, wp.y, wp.z);
         dummy.scale.set(1, 1, 1);  // Full height initially
         dummy.updateMatrix();
 
@@ -359,8 +369,7 @@ class VoxelGrid {
     const originalHeight = 0 - bottomZ;  // 0 to bottom (negative value)
 
     for (const index of voxelIndices) {
-      const coords = this.indexToCoords(index);
-      if (!coords) continue;
+      if (index < 0 || index >= this.maxVoxels) continue;
 
       const topZ = this.voxelTopZ[index];
 
@@ -371,11 +380,8 @@ class VoxelGrid {
       const currentHeight = topZ - bottomZ;
       const scaleZ = Math.max(0, currentHeight / originalHeight);
 
-      // OPTIMIZATION: Only recalculate Z values, X and Y never change
-      const worldX = this.originOffset.x - this.workpieceWidth / 2 + coords.x * this.voxelSize + this.voxelSize / 2;
-      const worldY = this.originOffset.y - this.workpieceLength / 2 + coords.y * this.voxelSize + this.voxelSize / 2;
-
-      dummy.position.set(worldX, worldY, worldZ);
+      // Use cached X/Y — they never change after initializeGrid()
+      dummy.position.set(this.voxelWorldX[index], this.voxelWorldY[index], worldZ);
       dummy.scale.set(1, 1, scaleZ);
       dummy.updateMatrix();
 
@@ -452,11 +458,9 @@ class VoxelGrid {
       for (let y = 0; y < this.gridLength; y++) {
         const index = y + x * this.gridLength;
 
-        const worldX = this.originOffset.x - this.workpieceWidth / 2 + x * this.voxelSize + this.voxelSize / 2;
-        const worldY = this.originOffset.y - this.workpieceLength / 2 + y * this.voxelSize + this.voxelSize / 2;
-        const worldZ = this.originOffset.z - this.workpieceThickness / 2;
+        const wp = this._voxelWorldPos(x, y);
 
-        dummy.position.set(worldX, worldY, worldZ);
+        dummy.position.set(wp.x, wp.y, wp.z);
         dummy.scale.set(1, 1, 1);  // Full height
         dummy.updateMatrix();
 

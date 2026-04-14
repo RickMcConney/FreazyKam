@@ -166,14 +166,10 @@ class Text extends Operation {
                     var steps = 10;
                     for (var i = startIndex; i <= steps; i++) {
                         var t = i / steps;
-                        var tx = Math.pow(1 - t, 3) * lastX +
-                            3 * Math.pow(1 - t, 2) * t * cmd.x1 +
-                            3 * (1 - t) * Math.pow(t, 2) * cmd.x2 +
-                            Math.pow(t, 3) * cmd.x;
-                        var ty = Math.pow(1 - t, 3) * lastY +
-                            3 * Math.pow(1 - t, 2) * t * cmd.y1 +
-                            3 * (1 - t) * Math.pow(t, 2) * cmd.y2 +
-                            Math.pow(t, 3) * cmd.y;
+                        var mt = 1 - t, mt2 = mt * mt, mt3 = mt2 * mt;
+                        var t2 = t * t, t3 = t2 * t;
+                        var tx = mt3 * lastX + 3 * mt2 * t * cmd.x1 + 3 * mt * t2 * cmd.x2 + t3 * cmd.x;
+                        var ty = mt3 * lastY + 3 * mt2 * t * cmd.y1 + 3 * mt * t2 * cmd.y2 + t3 * cmd.y;
                         currentPathData.push({ x: tx, y: ty });
                     }
                     lastX = cmd.x;
@@ -185,12 +181,9 @@ class Text extends Operation {
                     var steps = 10;
                     for (var i = startIndex; i <= steps; i++) {
                         var t = i / steps;
-                        var tx = Math.pow(1 - t, 2) * lastX +
-                            2 * (1 - t) * t * cmd.x1 +
-                            Math.pow(t, 2) * cmd.x;
-                        var ty = Math.pow(1 - t, 2) * lastY +
-                            2 * (1 - t) * t * cmd.y1 +
-                            Math.pow(t, 2) * cmd.y;
+                        var mt = 1 - t, mt2 = mt * mt, t2 = t * t;
+                        var tx = mt2 * lastX + 2 * mt * t * cmd.x1 + t2 * cmd.x;
+                        var ty = mt2 * lastY + 2 * mt * t * cmd.y1 + t2 * cmd.y;
                         currentPathData.push({ x: tx, y: ty });
                     }
                     lastX = cmd.x;
@@ -309,13 +302,15 @@ class Text extends Operation {
 
     }
 
-    createTextPath(font, text, x, y, sizeInMM, fontname, textGroupId) {
-        // Calculate proper font size based on capital letter height
-        const referenceChar = font.charToGlyph('H');
-        const referenceBBox = referenceChar.getBoundingBox();
+    // Compute scaled font size so capital 'H' matches sizeInMM in world units.
+    _computeFontSize(font, sizeInMM) {
+        const referenceBBox = font.charToGlyph('H').getBoundingBox();
         const referenceHeight = referenceBBox.y2 - referenceBBox.y1;
-        const scaleFactor = font.unitsPerEm / referenceHeight;
-        let fontSize = sizeInMM * viewScale * scaleFactor;
+        return sizeInMM * viewScale * (font.unitsPerEm / referenceHeight);
+    }
+
+    createTextPath(font, text, x, y, sizeInMM, fontname, textGroupId) {
+        let fontSize = this._computeFontSize(font, sizeInMM);
 
         // Center the text horizontally on the click position
         const chars = text.split('');
@@ -432,12 +427,7 @@ class Text extends Operation {
             }
         });
 
-        // Calculate proper font size based on capital letter height
-        const referenceChar = font.charToGlyph('H');
-        const referenceBBox = referenceChar.getBoundingBox();
-        const referenceHeight = referenceBBox.y2 - referenceBBox.y1;
-        const scaleFactor = font.unitsPerEm / referenceHeight;
-        let fontSizeScaled = sizeInMM * viewScale * scaleFactor;
+        let fontSizeScaled = this._computeFontSize(font, sizeInMM);
         let pathIdCounter = 0; // Track which original ID to reuse
 
         // Center the text horizontally on the original click position

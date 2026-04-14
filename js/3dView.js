@@ -113,6 +113,17 @@ const CONFIG = {
 };
 
 // ============ HELPER FUNCTIONS ============
+
+// Return the wood color for the given species as a THREE.js hex integer.
+// Falls back to a default brown if the species is not in the database.
+function getWoodColor(species) {
+  const DEFAULT = 0x8B7355;
+  if (typeof woodSpeciesDatabase === 'undefined') return DEFAULT;
+  const entry = woodSpeciesDatabase[species];
+  if (!entry || !entry.color) return DEFAULT;
+  return parseInt(entry.color.replace('#', ''), 16);
+}
+
 function getWorkpieceDimensions() {
   // Helper to consolidate duplicate dimension fetching
   return {
@@ -195,12 +206,7 @@ function refreshToolpath() {
 
   // Get wood species color
   const woodSpecies = (typeof getOption === 'function') ? getOption('woodSpecies') : 'Pine';
-  let woodColor = 0x8B7355;  // Default wood color (brown)
-  if (typeof woodSpeciesDatabase !== 'undefined' && woodSpeciesDatabase[woodSpecies]) {
-    const colorHex = woodSpeciesDatabase[woodSpecies].color;
-    // Remove '#' and parse as hexadecimal with radix 16
-    woodColor = parseInt(colorHex.replace('#', ''), 16);
-  }
+  const woodColor = getWoodColor(woodSpecies);
 
   // Remove old workpiece
   scene.remove(workpieceManager.mesh);
@@ -309,12 +315,7 @@ function initThree() {
 
   // Get wood species color for initial workpiece
   const woodSpecies = (typeof getOption === 'function') ? getOption('woodSpecies') : 'Pine';
-  let woodColor = 0x8B7355;  // Default wood color (brown)
-  if (typeof woodSpeciesDatabase !== 'undefined' && woodSpeciesDatabase[woodSpecies]) {
-    const colorHex = woodSpeciesDatabase[woodSpecies].color;
-    // Remove '#' and parse as hexadecimal with radix 16
-    woodColor = parseInt(colorHex.replace('#', ''), 16);
-  }
+  const woodColor = getWoodColor(woodSpecies);
 
   // Initialize workpiece manager with workpiece positioned correctly and wood color
   workpieceManager = new WorkpieceManager(scene, workpieceWidth, workpieceLength, workpieceThickness, originPosition, woodColor);
@@ -707,13 +708,7 @@ function updateWorkpiece3D(width, length, thickness, originPosition, woodSpecies
   }
 
   // Get wood color from species database
-  let woodColor = 0x8B7355;  // Default wood color (brown)
-  if (typeof woodSpeciesDatabase !== 'undefined' && woodSpeciesDatabase[woodSpecies]) {
-    const colorHex = woodSpeciesDatabase[woodSpecies].color;
-    // Convert CSS hex color (e.g., '#F5DEB3') to THREE.js hex (e.g., 0xF5DEB3)
-    // Remove '#' and parse as hexadecimal with radix 16
-    woodColor = parseInt(colorHex.replace('#', ''), 16);
-  }
+  const woodColor = getWoodColor(woodSpecies);
 
   // Remove old workpiece
   scene.remove(workpieceManager.mesh);
@@ -947,8 +942,8 @@ function animate() {
     // Update 3D display during animation
     updateSimulation3DDisplays();
 
-    // If animation has completed, update UI to re-enable play button
-    if (toolpathAnimation.currentGcodeLineNumber >= toolpathAnimation.totalGcodeLines && !toolpathAnimation.isPlaying) {
+    // If animation has completed this frame, update UI to re-enable play button
+    if (!toolpathAnimation.isPlaying) {
       updateSimulation3DUI();
     }
   }
@@ -988,26 +983,6 @@ function animate() {
     }
     */
   }
-}
-
-function onWindowResize() {
-  // Mark that we're resizing to pause animation loop
-  isResizing = true;
-
-  // Clear any existing timeout
-  if (resizeTimeoutId) {
-    clearTimeout(resizeTimeoutId);
-  }
-
-  // Detect when resize ends and resume animation
-  resizeTimeoutId = setTimeout(() => {
-    // Wait for browser to complete layout recalculation before reading dimensions
-    requestAnimationFrame(() => {
-      doResize(0);
-      isResizing = false;
-    });
-  }, 200);
-
 }
 
   function doResize() {
@@ -1724,13 +1699,11 @@ class ToolpathAnimation {
    */
   createWorkpieceOutlineBox(width, length, thickness, gridWidth, gridLength, gridOrigin) {
     // Get workpiece color
-    let woodColor = 0x8B6914;  // Default wood color
+    let woodColor;
     if (typeof getOption === 'function') {
-      const woodSpecies = getOption('woodSpecies');
-      const colorHex = woodSpeciesDatabase[woodSpecies]?.color || '#8B6914';
-      woodColor = parseInt(colorHex.replace('#', ''), 16);
-    } else if (this.workpieceManager?.woodColor) {
-      woodColor = this.workpieceManager.woodColor;
+      woodColor = getWoodColor(getOption('woodSpecies'));
+    } else {
+      woodColor = this.workpieceManager?.woodColor ?? 0x8B6914;
     }
 
     // Calculate workpiece boundaries (accounting for origin position)
@@ -1856,66 +1829,6 @@ class ToolpathAnimation {
     this.workpieceOutlineBox.position.x = -boundsOffset.x;
     this.workpieceOutlineBox.position.y = boundsOffset.y;
     this.workpieceOutlineBox.position.z = 0;
-  }
-
-  createToolVisual(radius) {
-    // Remove old tool visual if it exists
-    if (this.toolVisual) {
-      this.scene.remove(this.toolVisual);
-    }
-
-    // Create a group to hold the tool components
-    this.toolVisual = new THREE.Group();
-
-    // Add a sphere at the tool tip (cutting point)
-    const sphereGeometry = new THREE.SphereGeometry(radius * 1.5, 12, 12);
-    const toolMaterial = new THREE.MeshPhongMaterial({
-      color: 0xff0000,  // Red for the tool
-      emissive: 0xff0000,
-      emissiveIntensity: 0.7,
-      transparent: true,
-      opacity: 0.8,
-      depthTest: false,  // Always render on top
-      depthWrite: false
-    });
-    const sphere = new THREE.Mesh(sphereGeometry, toolMaterial);
-    // Sphere at the tip (Z = 0 in the group coordinate system)
-    sphere.position.z = 0;
-    this.toolVisual.add(sphere);
-
-    // Add a small white cube marker at the exact tip position for debugging
-    const debugCubeGeometry = new THREE.BoxGeometry(2, 2, 2);
-    const debugMaterial = new THREE.MeshPhongMaterial({
-      color: 0xffffff,  // White for visibility
-      emissive: 0xffffff,
-      emissiveIntensity: 0.5,
-      depthTest: false,  // Always render on top
-      depthWrite: false
-    });
-    const debugCube = new THREE.Mesh(debugCubeGeometry, debugMaterial);
-    debugCube.position.z = 0;  // Same position as sphere tip
-    this.toolVisual.add(debugCube);
-
-    // Create a cylinder to represent the tool shaft (extending upward along Z axis from the sphere)
-    const toolHeight = 80;  // Extended height for visibility (should exceed max cut depth)
-    const cylinderGeometry = new THREE.CylinderGeometry(radius, radius, toolHeight, 16);
-    const cylinder = new THREE.Mesh(cylinderGeometry, toolMaterial);
-    // Rotate cylinder 90 degrees to align with Z axis (default is Y axis)
-    cylinder.rotation.x = Math.PI / 2;
-    // Position cylinder so it extends upward from the sphere tip
-    cylinder.position.z = toolHeight / 2;  // Extend upward from the sphere
-    this.toolVisual.add(cylinder);
-
-    // Add to scene
-    this.toolVisual.renderOrder = 1000;  // Render on top of everything
-    this.scene.add(this.toolVisual);
-  }
-
-  updateToolPosition(x, y, z) {
-    if (this.toolVisual) {
-      // Use raw coordinates - the parent group handles the offset
-      this.toolVisual.position.set(x, y, z);
-    }
   }
 
   loadFromGcode(gcode) {
@@ -2403,42 +2316,6 @@ class ToolpathAnimation {
   }
 
   /**
-   * Convert G-code line number to elapsed time
-   * @param {number} lineNumber - Target G-code line number
-   * @returns {number} - Elapsed time in seconds for that line (finds closest movement at or before line)
-   */
-  getTimeFromLineNumber(lineNumber) {
-    // Find the movement with the closest line number at or before the target
-    let bestTime = 0;
-    for (const move of this.movementTiming) {
-      const moveLineNum = move.gcodeLineNumber || 0;
-      if (moveLineNum <= lineNumber) {
-        bestTime = move.cumulativeTime;
-      } else {
-        break;
-      }
-    }
-    return bestTime;
-  }
-
-  /**
-   * Convert elapsed time to G-code line number
-   * @param {number} elapsedTime - Time in seconds
-   * @returns {number} - G-code line number at that time
-   */
-  getLineNumberFromTime(elapsedTime) {
-    let lineNumber = 0;
-    for (const move of this.movementTiming) {
-      if (move.cumulativeTime <= elapsedTime) {
-        lineNumber = move.gcodeLineNumber || 0;
-      } else {
-        break;
-      }
-    }
-    return lineNumber;
-  }
-
-  /**
    * Seek animation to a specific G-code line number
    * Handles backward seeking (reset voxels, replay from start) and forward seeking (incremental replay)
    * Called by viewer clicks, slider changes, or programmatically
@@ -2494,8 +2371,6 @@ class ToolpathAnimation {
       this.voxelGrid.updateVoxelColors();
       this.voxelGrid.updateInstanceMatrices();
     }
-
-    //this.updateWorkpiece();
   }
 
   setProgress(lineNumber, skipViewerUpdate) {
@@ -2564,8 +2439,6 @@ class ToolpathAnimation {
       this.voxelGrid.updateVoxelColors();
       this.voxelGrid.updateInstanceMatrices();
     }
-
-    //this.updateWorkpiece();
   }
 
   _replayFromMovementIndexToIndex(startIndex, endIndex) {
@@ -2597,198 +2470,6 @@ class ToolpathAnimation {
         }
       }
     }
-  }
-
-  _replayFromCurrentToNew(oldElapsedTime, newElapsedTime) {
-    // Legacy method - kept for backwards compatibility
-    // Simple approach: for each movement in the time range, look up which tool
-    // should be used based on the G-code line number using our lookup table
-    let movementsProcessed = 0;
-
-    for (let i = 0; i < this.movementTiming.length; i++) {
-      const move = this.movementTiming[i];
-      const moveStartTime = i > 0 ? this.movementTiming[i - 1].cumulativeTime : 0;
-      const moveEndTime = move.cumulativeTime;
-      const moveLineNum = move.gcodeLineNumber || 0;
-
-      // Skip moves that end before our replay range
-      if (moveEndTime < oldElapsedTime) {
-        continue;
-      }
-
-      // Stop if move starts at or after our replay range
-      if (moveStartTime >= newElapsedTime) {
-        this.currentProgressIndex = i;
-        // Look up the tool for this line number
-        this.currentToolInfo = this.getToolForLine(moveLineNum) || this.currentToolInfo;
-        break;
-      }
-
-      // Look up which tool should be used for this line number
-      const toolForThisLine = this.getToolForLine(moveLineNum);
-
-      if (!toolForThisLine) {
-        continue;  // Skip if no tool is assigned for this line
-      }
-
-      // This move is (at least partially) in our replay range [oldElapsedTime, newElapsedTime]
-      const prevMove = i > 0 ? this.movementTiming[i - 1] : null;
-
-      if (move.isG1 && prevMove) {  // Only process cutting moves
-        movementsProcessed++;
-
-        // Convert tool type name to lowercase format for voxel removal
-        // Create tool info from G-code (source of truth)
-        // VoxelMaterialRemover will normalize the type name automatically
-        const toolInfoForRemoval = {
-          diameter: toolForThisLine.diameter,
-          type: toolForThisLine.type || 'End Mill',  // Use G-code tool type directly
-          angle: toolForThisLine.angle || 90
-        };
-
-        // Determine the actual start and end points for this move segment
-        let segmentStartTime = Math.max(moveStartTime, oldElapsedTime);
-        let segmentEndTime = Math.min(moveEndTime, newElapsedTime);
-
-        // Calculate interpolation factors for partial moves
-        let startInterp = (segmentStartTime - moveStartTime) / (moveEndTime - moveStartTime);
-        let endInterp = (segmentEndTime - moveStartTime) / (moveEndTime - moveStartTime);
-
-        // Clamp to [0, 1]
-        startInterp = Math.max(0, Math.min(1, startInterp));
-        endInterp = Math.max(0, Math.min(1, endInterp));
-
-        if (startInterp === 0 && endInterp === 1) {
-          // Full move - remove material using the tool assigned to this line number
-          try {
-            this.voxelMaterialRemover.removeAlongPath(
-              this.voxelGrid,
-              { x: prevMove.x, y: prevMove.y, z: prevMove.z },
-              { x: move.x, y: move.y, z: move.z },
-              toolInfoForRemoval
-            );
-          } catch (error) {
-            console.error('Error removing voxel along path:', error);
-          }
-        } else {
-          // Partial move - interpolate and remove using the tool assigned to this line
-          const startPos = this._interpolatePosition(move, startInterp);
-          const endPos = this._interpolatePosition(move, endInterp);
-
-          try {
-            this.voxelMaterialRemover.removeAlongPath(
-              this.voxelGrid,
-              startPos,
-              endPos,
-              toolInfoForRemoval
-            );
-          } catch (error) {
-            console.error('Error removing voxel along partial path:', error);
-          }
-        }
-      }
-
-      this.currentProgressIndex = i;
-      this.currentToolInfo = toolForThisLine;
-    }
-  }
-
-  _interpolatePosition(move, t) {
-    t = Math.max(0, Math.min(1, t));
-    const prevMove = this.movementTiming[this.currentProgressIndex - 1];
-
-    if (prevMove) {
-      return {
-        x: prevMove.x + (move.x - prevMove.x) * t,
-        y: prevMove.y + (move.y - prevMove.y) * t,
-        z: prevMove.z + (move.z - prevMove.z) * t
-      };
-    } else {
-      return { x: move.x, y: move.y, z: move.z };
-    }
-  }
-
-
-
-  getProgress() {
-    // Return normalized progress (0-1) for UI display
-    if (this.totalAnimationTime > 0) {
-      return this.elapsedTime / this.totalAnimationTime;
-    }
-    return 0;
-  }
-
-  /**
-   * Analyze removed voxel positions - call this from browser console after animation completes
-   * Usage: toolpathAnimation.analyzeRemovalPattern()
-   */
-  analyzeRemovalPattern() {
-    if (this.voxelGrid) {
-      this.voxelGrid.analyzeRemovedPositions();
-    } else {
-      console.log('Voxel grid not initialized');
-    }
-  }
-
-  /**
-   * Diagnostic function: Show all voxel grid positions and their world coordinates
-   * Usage from browser console: toolpathAnimation.logAllVoxelMappings()
-   */
-  logAllVoxelMappings() {
-    if (!this.voxelGrid) {
-      console.log('Voxel grid not initialized');
-      return;
-    }
-
-    const vg = this.voxelGrid;
-    console.log('\n=== COMPLETE VOXEL MAPPING ===');
-    console.log('Workpiece: width=' + vg.workpieceWidth + ', length=' + vg.workpieceLength + ', thickness=' + vg.workpieceThickness);
-    console.log('Voxel size: ' + vg.voxelSize);
-    console.log('Grid dimensions: ' + vg.gridWidth + ' × ' + vg.gridLength + ' × ' + vg.gridHeight + ' = ' + vg.maxVoxels + ' voxels\n');
-
-    console.log('Grid Coordinates → World Coordinates (voxel center):');
-    for (let index = 0; index < vg.maxVoxels; index++) {
-      const coords = vg.indexToCoords(index);
-      const worldPos = vg.getVoxelWorldPosition(index);
-      console.log(`Voxel ${index.toString().padStart(2)}: grid(${coords.x},${coords.y},${coords.z}) → world(${worldPos.x.toFixed(1)}, ${worldPos.y.toFixed(1)}, ${worldPos.z.toFixed(1)})`);
-    }
-  }
-
-
-  /**
-   * Test function: Remove a single voxel by index
-   * Usage from browser console: toolpathAnimation.testRemoveVoxelByIndex(0)
-   * This helps verify which voxel visually corresponds to which index
-   * @param {number} index - Voxel index to remove (0-9 for 10-voxel grid)
-   */
-  testRemoveVoxelByIndex(index) {
-    if (!this.voxelGrid) {
-      console.log('Voxel grid not initialized');
-      return;
-    }
-
-    if (index < 0 || index >= this.voxelGrid.maxVoxels) {
-      console.log('Invalid voxel index. Valid range: 0-' + (this.voxelGrid.maxVoxels - 1));
-      return;
-    }
-
-    console.log('\n=== REMOVE VOXEL BY INDEX ===');
-    console.log('Removing voxel index:', index);
-
-    const coords = this.voxelGrid.indexToCoords(index);
-    const worldPos = this.voxelGrid.getVoxelWorldPosition(index);
-
-    console.log('Grid coordinates:', coords);
-    console.log('World position:', {
-      x: worldPos.x.toFixed(1),
-      y: worldPos.y.toFixed(1),
-      z: worldPos.z.toFixed(1)
-    });
-
-    // Remove the voxel
-    this.voxelGrid.removeVoxel(index);
-
-    console.log('✓ Voxel removed! Check the 3D view to see which voxel disappeared.');
   }
 
   update() {
