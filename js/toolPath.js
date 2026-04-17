@@ -1210,6 +1210,8 @@ function computeWithMedialAxis(outside, name) {
 		return areaB - areaA;
 	});
 
+	// Phase 1: hole detection in area-sorted order, but defer carving.
+	var letters = [];
 	for (var i = 0; i < selected.length; i++) {
 		if (selected[i].hole) continue;
 		var holes = []
@@ -1224,7 +1226,50 @@ function computeWithMedialAxis(outside, name) {
 				}
 			}
 		}
-		medialAxis(name, path, holes, selected[i].id, holeSvgIds);
+		var bbox = boundingBox(path);
+		letters.push({
+			path: path,
+			holes: holes,
+			id: selected[i].id,
+			holeSvgIds: holeSvgIds,
+			cx: (bbox.minx + bbox.maxx) / 2,
+			cy: (bbox.miny + bbox.maxy) / 2
+		});
+	}
+
+	// Phase 2: reorder by nearest-neighbor tour starting from the top-left letter,
+	// so toolpaths carve in a spatially coherent order and travel moves stay short.
+	// O(n^2) over letters, which is small.
+	var ordered = [];
+	if (letters.length > 0) {
+		var startIdx = 0;
+		var bestScore = Infinity;
+		for (var k = 0; k < letters.length; k++) {
+			// Prefer top-left: minimize (cx + cy) using canvas coords where smaller y is higher.
+			var score = letters[k].cx + letters[k].cy;
+			if (score < bestScore) { bestScore = score; startIdx = k; }
+		}
+		var remaining = letters.slice();
+		var current = remaining.splice(startIdx, 1)[0];
+		ordered.push(current);
+		while (remaining.length > 0) {
+			var nearest = 0;
+			var nearestDist = Infinity;
+			for (var m = 0; m < remaining.length; m++) {
+				var dx = remaining[m].cx - current.cx;
+				var dy = remaining[m].cy - current.cy;
+				var d = dx * dx + dy * dy;
+				if (d < nearestDist) { nearestDist = d; nearest = m; }
+			}
+			current = remaining.splice(nearest, 1)[0];
+			ordered.push(current);
+		}
+	}
+
+	// Phase 3: carve in the ordered sequence.
+	for (var n = 0; n < ordered.length; n++) {
+		var L = ordered[n];
+		medialAxis(name, L.path, L.holes, L.id, L.holeSvgIds);
 	}
 
 }

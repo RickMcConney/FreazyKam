@@ -81,29 +81,27 @@ class PriorityQueue {
     }
 }
 
-// Function to reconstruct the path by backtracking from the target
+// Function to reconstruct the path by backtracking from the target.
+// predecessors is a Map<nodeId, nodeId>; nodes not in the map terminate the chain.
 function reconstructPath(predecessors, startNode, targetNode) {
     const path = [];
     let current = targetNode;
-    while (current !== null) {
+    while (current !== undefined && current !== null) {
         path.unshift(current);
         if (current === startNode) break;
-        current = predecessors[current];
+        current = predecessors.get(current);
     }
     return path;
 }
 
 function dijkstraToTarget(graph, startNode, targetNode) {
-    const distances = {};
-    const predecessors = {};
+    // Sparse data: Map<nodeId, number/nodeId>. Nodes not in map are implicitly
+    // at distance Infinity. Avoids O(V) init scan of every vertex in the graph.
+    const distances = new Map();
+    const predecessors = new Map();
     const pq = new PriorityQueue();
 
-    // Initialize distances and predecessors
-    for (const vertex in graph) {
-        distances[vertex] = Infinity;
-        predecessors[vertex] = null;
-    }
-    distances[startNode] = 0;
+    distances.set(startNode, 0);
     pq.enqueue(startNode, 0);
 
     while (pq.values.length) {
@@ -112,26 +110,62 @@ function dijkstraToTarget(graph, startNode, targetNode) {
         // Stop the algorithm as soon as the target is reached
         if (currentVertex === targetNode) {
             const shortestPath = reconstructPath(predecessors, startNode, targetNode);
-            const totalDistance = distances[targetNode];
+            const totalDistance = distances.get(targetNode);
             return { path: shortestPath, distance: totalDistance };
         }
 
-        if (currentDistance > distances[currentVertex]) continue;
+        if (currentDistance > distances.get(currentVertex)) continue;
 
         for (const neighbor of graph[currentVertex]) {
             const { node, weight } = neighbor;
             const newDistance = currentDistance + weight;
-            if (newDistance < distances[node]) {
-                distances[node] = newDistance;
-                predecessors[node] = currentVertex;
+            const existing = distances.get(node);
+            if (existing === undefined || newDistance < existing) {
+                distances.set(node, newDistance);
+                predecessors.set(node, currentVertex);
                 pq.enqueue(node, newDistance);
             }
         }
     }
 
-    // If the loop finishes, the target is unreachable
     return { path: null, distance: Infinity };
 }
+
+// Single Dijkstra that stops as soon as any node in targetSet is popped.
+// Replaces N separate Dijkstra calls when searching for the nearest of many targets.
+function dijkstraToAnyTarget(graph, startNode, targetSet) {
+    const distances = new Map();
+    const predecessors = new Map();
+    const pq = new PriorityQueue();
+
+    distances.set(startNode, 0);
+    pq.enqueue(startNode, 0);
+
+    while (pq.values.length) {
+        const { val: currentVertex, priority: currentDistance } = pq.dequeue();
+
+        if (targetSet.has(currentVertex)) {
+            const shortestPath = reconstructPath(predecessors, startNode, currentVertex);
+            return { path: shortestPath, distance: distances.get(currentVertex), targetId: currentVertex };
+        }
+
+        if (currentDistance > distances.get(currentVertex)) continue;
+
+        for (const neighbor of graph[currentVertex]) {
+            const { node, weight } = neighbor;
+            const newDistance = currentDistance + weight;
+            const existing = distances.get(node);
+            if (existing === undefined || newDistance < existing) {
+                distances.set(node, newDistance);
+                predecessors.set(node, currentVertex);
+                pq.enqueue(node, newDistance);
+            }
+        }
+    }
+
+    return { path: null, distance: Infinity, targetId: null };
+}
+
 
 
 function findTopLeftNode(nodeMap) {
@@ -160,21 +194,19 @@ function findTargetNodes(startKey, nodeMap) {
 }
 
 function findClosestTarget(startKey, nodeMap, graph) {
-    let min = Infinity;
-    let target = null;
-    let path = null;
     const targetNodes = findTargetNodes(startKey, nodeMap);
+    if (targetNodes.length === 0) return { target: null, path: null };
+
+    const targetSet = new Set();
     for (const p of targetNodes) {
-        if (p) {
-            let result = dijkstraToTarget(graph, startKey, p.id);
-            if (result.distance < min) {
-                min = result.distance;
-                target = p;
-                path = result.path;
-            }
-        }
+        if (p) targetSet.add(p.id);
     }
-    return { target, path };
+    if (targetSet.size === 0) return { target: null, path: null };
+
+    const result = dijkstraToAnyTarget(graph, startKey, targetSet);
+    if (!result.path) return { target: null, path: null };
+
+    return { target: nodeMap.get(result.targetId), path: result.path };
 }
 
 function findClosestUnvisitedNode(startKey, nodeMap) {
@@ -320,7 +352,6 @@ function getCachedDistance(node1, node2) {
 }
 
 function findBestPath(jspolySegments) {
-    const startTime = performance.now();
     if (!jspolySegments || jspolySegments.length === 0) {
         return { toolpath: [], travelDistance: 0 };
     }
@@ -383,73 +414,61 @@ function findPossiblePath(nodeMap, graph, startNode) {
         result = findClosestTarget(node.id, nodeMap, graph);
     }
 
-    // Second pass: traverse any untraversed edges (completes loops)
-    let untraversed = [];
+    // Second pass: traverse any untraversed edges (completes loops).
+    // Uses a single multi-target Dijkstra per walk to find the graph-nearest
+    // untraversed-edge endpoint, and opportunistically covers any untraversed
+    // edges encountered along the walk.
+    const untraversedEdges = new Map(); // ek -> {from, to}
     nodeMap.forEach((n, key) => {
         n.connections.forEach(connId => {
             const ek = makeEdgeKey(key, connId);
-            if (!traversedEdges.has(ek)) {
-                untraversed.push({ from: key, to: connId, ek: ek });
+            if (!traversedEdges.has(ek) && !untraversedEdges.has(ek)) {
+                untraversedEdges.set(ek, { from: key, to: connId });
             }
         });
     });
-    // Deduplicate (each edge appears twice in connections)
-    const seen = new Set();
-    untraversed = untraversed.filter(e => {
-        if (seen.has(e.ek)) return false;
-        seen.add(e.ek);
-        return true;
-    });
 
-    while (untraversed.length > 0) {
-        // Find the untraversed edge closest to current position
-        let bestIdx = 0;
-        let bestDist = Infinity;
-        for (let i = 0; i < untraversed.length; i++) {
-            const n1 = nodeMap.get(untraversed[i].from);
-            const n2 = nodeMap.get(untraversed[i].to);
-            const dx1 = node.x - n1.x, dy1 = node.y - n1.y;
-            const dx2 = node.x - n2.x, dy2 = node.y - n2.y;
-            const d = Math.min(Math.sqrt(dx1*dx1+dy1*dy1), Math.sqrt(dx2*dx2+dy2*dy2));
-            if (d < bestDist) {
-                bestDist = d;
-                bestIdx = i;
+    while (untraversedEdges.size > 0) {
+        // Build set of endpoint IDs of remaining untraversed edges
+        const endpointSet = new Set();
+        for (const { from, to } of untraversedEdges.values()) {
+            endpointSet.add(from);
+            endpointSet.add(to);
+        }
+
+        // Walk to the graph-nearest endpoint if not already at one
+        if (!endpointSet.has(node.id)) {
+            const navResult = dijkstraToAnyTarget(graph, node.id, endpointSet);
+            if (!navResult.path || navResult.path.length < 2) break;
+            for (let i = 1; i < navResult.path.length; i++) {
+                const nextNode = nodeMap.get(navResult.path[i]);
+                const ek = makeEdgeKey(navResult.path[i - 1], navResult.path[i]);
+                toolPath.push({ x: nextNode.x, y: nextNode.y, r: nextNode.r });
+                traversedEdges.add(ek);
+                untraversedEdges.delete(ek); // cover edges we crossed en route
+                travel += getCachedDistance(node, nextNode);
+                node = nextNode;
             }
         }
 
-        const edge = untraversed[bestIdx];
-        untraversed.splice(bestIdx, 1);
-        if (traversedEdges.has(edge.ek)) continue;
-
-        // Navigate to the closer endpoint using Dijkstra
-        const n1 = nodeMap.get(edge.from);
-        const n2 = nodeMap.get(edge.to);
-        const edx1 = node.x - n1.x, edy1 = node.y - n1.y;
-        const edx2 = node.x - n2.x, edy2 = node.y - n2.y;
-        const d1 = edx1*edx1 + edy1*edy1, d2 = edx2*edx2 + edy2*edy2;
-        const nearKey = d1 <= d2 ? edge.from : edge.to;
-        const farKey = d1 <= d2 ? edge.to : edge.from;
-
-        // Walk to the near endpoint if not already there
-        if (node.id !== nearKey) {
-            const navResult = dijkstraToTarget(graph, node.id, nearKey);
-            if (navResult.path && navResult.path.length > 1) {
-                for (let i = 1; i < navResult.path.length; i++) {
-                    const nextNode = nodeMap.get(navResult.path[i]);
-                    toolPath.push({ x: nextNode.x, y: nextNode.y, r: nextNode.r });
-                    traversedEdges.add(makeEdgeKey(navResult.path[i - 1], navResult.path[i]));
-                    travel += getCachedDistance(node, nextNode);
-                    node = nextNode;
-                }
+        // At an untraversed-edge endpoint — traverse one of its untraversed edges
+        let advanced = false;
+        for (const connId of node.connections) {
+            const ek = makeEdgeKey(node.id, connId);
+            if (untraversedEdges.has(ek)) {
+                const farNode = nodeMap.get(connId);
+                toolPath.push({ x: farNode.x, y: farNode.y, r: farNode.r });
+                traversedEdges.add(ek);
+                untraversedEdges.delete(ek);
+                travel += getCachedDistance(node, farNode);
+                node = farNode;
+                advanced = true;
+                break;
             }
         }
-
-        // Traverse the untraversed edge
-        const farNode = nodeMap.get(farKey);
-        toolPath.push({ x: farNode.x, y: farNode.y, r: farNode.r });
-        traversedEdges.add(edge.ek);
-        travel += getCachedDistance(node, farNode);
-        node = farNode;
+        // If this endpoint's untraversed edges all got covered en route,
+        // loop again to build a fresh endpointSet and pick another.
+        if (!advanced) continue;
     }
 
     // Return to start if needed and possible

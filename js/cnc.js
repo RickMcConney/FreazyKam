@@ -1145,26 +1145,33 @@ function generatePocketPaths(outerPath, islandPaths, pocketRadius, stepover, ang
 		let infillPaths = generateRasterInfill(machinedOuter, machinedIslands, islandPaths, switchLevel, stepover, pocketRadius, angle);
 		// Raster infill is innermost, then inner contours, then outer boundary last.
 		let result = [...infillPaths, ...innerContours, ...outerContours];
-		return eliminateUnnecessaryRetracts(result, machinedIslands, islandPaths);
+		return eliminateUnnecessaryRetracts(result, machinedIslands, islandPaths, machinedOuter, outerPath);
 	}
 
 	// Pure contour mode (no raster needed for small/narrow pockets)
 	// Inner contours first (inside-to-outside), then outermost boundary last.
 	let result = [...innerContours, ...outerContours];
-	return eliminateUnnecessaryRetracts(result, machinedIslands, islandPaths);
+	return eliminateUnnecessaryRetracts(result, machinedIslands, islandPaths, machinedOuter, outerPath);
 }
 
 /**
  * Mark consecutive paths as passStart:false when the travel between them
- * doesn't cross any island, allowing direct feed instead of retract/plunge.
+ * stays inside the pocket and doesn't cross any island, allowing direct feed
+ * instead of retract/plunge. A travel that exits the outer boundary (e.g.
+ * across the gap between the upper legs of an H-shaped pocket) must retract.
  */
-function eliminateUnnecessaryRetracts(paths, machinedIslands, originalIslands) {
+function eliminateUnnecessaryRetracts(paths, machinedIslands, originalIslands, machinedOuter, originalOuter) {
 	if (paths.length <= 1) return paths;
 
-	// Combine all island obstacles for intersection testing
-	let obstacles = [];
-	if (machinedIslands) obstacles.push(...machinedIslands);
-	if (originalIslands) obstacles.push(...originalIslands);
+	// Island obstacles: travel that crosses any of these must retract
+	let islandObstacles = [];
+	if (machinedIslands) islandObstacles.push(...machinedIslands);
+	if (originalIslands) islandObstacles.push(...originalIslands);
+
+	// Outer boundaries: travel that exits any of these is leaving the pocket
+	let outerBoundaries = [];
+	if (machinedOuter) outerBoundaries.push(machinedOuter);
+	if (originalOuter) outerBoundaries.push(originalOuter);
 
 	for (let i = 1; i < paths.length; i++) {
 		if (!paths[i].passStart) continue;
@@ -1175,16 +1182,25 @@ function eliminateUnnecessaryRetracts(paths, machinedIslands, originalIslands) {
 		let endPt = prevPath[prevPath.length - 1];
 		let startPt = currPath[0];
 
-		// Check if travel crosses any island
-		let crosses = false;
-		for (let island of obstacles) {
+		// Travel crosses an island → unsafe
+		let unsafe = false;
+		for (let island of islandObstacles) {
 			if (lineIntersectsPath(endPt, startPt, island) > 0) {
-				crosses = true;
+				unsafe = true;
 				break;
 			}
 		}
+		// Travel exits the pocket outer boundary → unsafe
+		if (!unsafe) {
+			for (let outer of outerBoundaries) {
+				if (lineIntersectsPath(endPt, startPt, outer) > 0) {
+					unsafe = true;
+					break;
+				}
+			}
+		}
 
-		if (!crosses) {
+		if (!unsafe) {
 			paths[i] = { ...paths[i], passStart: false };
 		}
 	}
