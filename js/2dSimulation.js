@@ -397,7 +397,7 @@ function getToolCircleRadius(depth, tool) {
     const angle = tool.angle || 0;
 
     if (isNaN(diameter) || isNaN(angle) || isNaN(depth)) {
-        console.warn('Invalid tool/depth values:', { diameter, angle, depth, tool });
+        notify('Simulation: invalid tool or depth values — check tool settings.', 'warning');
         return 0;
     }
 
@@ -406,7 +406,7 @@ function getToolCircleRadius(depth, tool) {
         // Validate angle is in valid range
         let vBitAngle = angle;
         if (vBitAngle <= 0 || vBitAngle >= 180 || isNaN(vBitAngle)) {
-            console.warn('Invalid V-bit angle:', vBitAngle, '- clamping to valid range (0, 180)');
+            notify('Simulation: V-bit angle ' + vBitAngle + '° is out of range — clamping to (0°, 180°).', 'warning');
             vBitAngle = Math.max(0.1, Math.min(179.9, vBitAngle));
         }
 

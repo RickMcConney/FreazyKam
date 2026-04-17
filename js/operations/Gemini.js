@@ -80,7 +80,6 @@ function applyGemini() {
 
             // If a match is found, return the first one. Otherwise, return null.
             var svgText =  match ? match[0] : null;
-            console.log("Generated Text:", svgText);
             try {
                     parseSvgContent(svgText,"Gemini");
                     

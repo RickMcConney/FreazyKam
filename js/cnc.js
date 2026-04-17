@@ -101,34 +101,27 @@ document.addEventListener('keydown', function (evt) {
 	}
 });
 
+function clonePath(path) {
+	const newPath = structuredClone(path);
+	newPath.id = 'S' + svgpathId++;
+	if (!newPath.name.includes(' copy'))
+		newPath.name += ' copy';
+	const offset = (getOption("gridSize") || 10) * viewScale;
+	newPath.path = newPath.path.map(pt => ({ x: pt.x + offset, y: pt.y + offset }));
+	newPath.bbox = boundingBox(newPath.path);
+	return newPath;
+}
+
 function doPaste() {
-	let paths = selectMgr.selectedPaths();
-
-	if (paths.length === 0) {
-		notify('Select a path to Paste');
-		return;
-	}
-	else {
-		selectMgr.unselectAll();
-		addUndo(false, true, false);
-		for (let i = 0; i < paths.length; i++) {
-			let path = paths[i];
-			let newPath = JSON.parse(JSON.stringify(path));
-			newPath.id = 'S' + svgpathId;
-			if(newPath.name.indexOf(' copy') == -1)
-				newPath.name = newPath.name + ' copy';
-			let gridOffset = (getOption("gridSize") || 10) * viewScale;
-			newPath.path = newPath.path.map(pt => ({
-                x: pt.x + gridOffset,
-                y: pt.y + gridOffset
-            }));
-            newPath.bbox = boundingBox(newPath.path);
-			svgpaths.push(newPath);
-			addSvgPath(newPath.id, newPath.name);
-			svgpathId++;
-			selectMgr.selectPath(newPath);
-		}
-
+	const paths = selectMgr.selectedPaths();
+	if (paths.length === 0) { notify('Select a path to Paste'); return; }
+	selectMgr.unselectAll();
+	addUndo(false, true, false);
+	for (const path of paths) {
+		const newPath = clonePath(path);
+		svgpaths.push(newPath);
+		addSvgPath(newPath.id, newPath.name);
+		selectMgr.selectPath(newPath);
 	}
 	doMove();
 	redraw();
@@ -247,11 +240,11 @@ function pushToStack(stack, item) {
 	stack.push(item);
 }
 
-function saveCurrentState() {
+function scopedSnapshot(entry) {
 	return JSON.stringify({
-		toolpaths: toolpaths,
-		svgpaths: svgpaths,
-		origin: origin,
+		toolpaths: entry.toolpaths !== null ? toolpaths : null,
+		svgpaths: entry.svgpaths !== null ? svgpaths : null,
+		origin: entry.origin !== null ? origin : null,
 		selectedIds: selectMgr.selectedPaths().map(p => p.id)
 	});
 }
@@ -299,32 +292,27 @@ function restoreSvgpaths(projectSvgpaths, selectedIds) {
 	}
 }
 
-function clearPathEditCache() {
-	var editOp = cncController && cncController.operationManager && cncController.operationManager.getOperation('Edit');
-	if (editOp) {
-		editOp.originalPathBeforeRadius = null;
-		editOp.originalPathBeforeRadiusId = null;
-	}
-}
-
 function restoreProject(project) {
 	if (project.origin) origin = project.origin;
 	if (project.toolpaths) restoreToolpaths(project.toolpaths);
 	if (project.svgpaths) restoreSvgpaths(project.svgpaths, project.selectedIds);
-	clearPathEditCache();
+	var editOp = cncController && cncController.operationManager && cncController.operationManager.getOperation('Edit');
+	if (editOp) { editOp.originalPathBeforeRadius = null; editOp.originalPathBeforeRadiusId = null; }
 	onPathsChanged(null);
 }
 
 function doUndo() {
 	if (undoList.length == 0) return;
-	pushToStack(redoList, saveCurrentState());
-	restoreProject(JSON.parse(undoList.pop()));
+	const entry = JSON.parse(undoList.pop());
+	pushToStack(redoList, scopedSnapshot(entry));
+	restoreProject(entry);
 }
 
 function doRedo() {
 	if (redoList.length == 0) return;
-	pushToStack(undoList, saveCurrentState());
-	restoreProject(JSON.parse(redoList.pop()));
+	const entry = JSON.parse(redoList.pop());
+	pushToStack(undoList, scopedSnapshot(entry));
+	restoreProject(entry);
 }
 
 /**
@@ -540,19 +528,11 @@ function doSelect(id) {
 
 function doProfile() {
 	if (currentTool.inside == "inside")
-		doInside();
+		doProfileCut(false);
 	else if (currentTool.inside == "outside")
-		doOutside();
+		doProfileCut(true);
 	else
 		doCenter();
-}
-
-function doOutside() {
-	doProfileCut(true);
-}
-
-function doInside() {
-	doProfileCut(false);
 }
 
 function doProfileCut(outside) {

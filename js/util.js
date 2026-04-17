@@ -199,16 +199,7 @@ function parseDimension(value) {
 var CLOSEST_PATH_THRESHOLD_SQ = 100;
 var CLOSEST_PATH_BBOX_MARGIN = 10; // sqrt(CLOSEST_PATH_THRESHOLD_SQ)
 
-function closestPath(pt, clear) {
-	var svgpath = null;
-
-	// Clear all highlights first
-	for (var i = 0; i < svgpaths.length; i++) {
-		if (clear)
-			svgpaths[i].highlight = false;
-	}
-
-	// Single pass: track best candidate as we go
+function findClosestPath(pt) {
 	var overallMin = Infinity;
 	var bestPath = null;
 
@@ -216,37 +207,37 @@ function closestPath(pt, clear) {
 		if (!svgpaths[i].visible) continue;
 
 		var bbox = svgpaths[i].bbox;
-
-		// Skip paths whose expanded bbox doesn't contain pt
 		if (pt.x < bbox.minx - CLOSEST_PATH_BBOX_MARGIN || pt.x > bbox.maxx + CLOSEST_PATH_BBOX_MARGIN ||
 		    pt.y < bbox.miny - CLOSEST_PATH_BBOX_MARGIN || pt.y > bbox.maxy + CLOSEST_PATH_BBOX_MARGIN) {
 			continue;
 		}
 
 		var path = svgpaths[i].path;
-		var minDistForThisPath = Infinity;
-
+		var minDist = Infinity;
 		for (var j = 0; j < path.length; j++) {
-			var k = (j + 1) % path.length;
-			var dist = distToSegmentSquared(pt, path[j], path[k]);
-			if (dist < minDistForThisPath) {
-				minDistForThisPath = dist;
-			}
+			var d = distToSegmentSquared(pt, path[j], path[(j + 1) % path.length]);
+			if (d < minDist) minDist = d;
 		}
 
-		if (minDistForThisPath < overallMin && minDistForThisPath < CLOSEST_PATH_THRESHOLD_SQ) {
-			overallMin = minDistForThisPath;
+		if (minDist < overallMin && minDist < CLOSEST_PATH_THRESHOLD_SQ) {
+			overallMin = minDist;
 			bestPath = svgpaths[i];
 		}
 	}
 
-	if (bestPath) {
-		bestPath.highlight = true;
-		svgpath = bestPath;
+	return bestPath;
+}
+
+function closestPath(pt, clear) {
+	if (clear) {
+		for (var i = 0; i < svgpaths.length; i++) svgpaths[i].highlight = false;
+	}
+	var found = findClosestPath(pt);
+	if (found) {
+		found.highlight = true;
 		redraw();
 	}
-
-	return svgpath;
+	return found;
 }
 
 function closestPoint(pt) {
@@ -259,7 +250,6 @@ function closestPoint(pt) {
 
 	for (var i = 0; i < svgpaths.length; i++) {
 		if (!svgpaths[i].visible) continue;
-		svgpaths[i].highlight = false;
 		var bbox = svgpaths[i].bbox;
 		if (pointInBoundingBox(pt, bbox)) {
 			possiblePath.push(svgpaths[i].path);

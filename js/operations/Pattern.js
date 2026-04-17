@@ -40,7 +40,7 @@ class PatternOpp extends Select {
             return;
         }
 
-        var patternType = document.getElementById('pm-type').value;
+        var patternType = this.properties.type;
 
         var sourcePaths;
         var isReapply = this.currentPath && this.currentPath.creationTool === 'Pattern' && this.currentPath.creationProperties.sourceIds;
@@ -305,8 +305,7 @@ class PatternOpp extends Select {
     }
 
     onPropertiesChanged(data) {
-        // Determine current type from DOM
-        const type = document.getElementById('pm-type')?.value ?? this.properties.type;
+        const type = data.type ?? this.properties.type;
 
         // Toggle section visibility
         const linearEl   = document.getElementById('linear-properties');

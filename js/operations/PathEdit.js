@@ -67,20 +67,8 @@ class PathEdit extends Select {
         return selectMgr.lastSelected();
     }
 
-    // Setter for selectedPath - kept for compatibility but value is ignored
-    // Selection is managed through selectMgr
-    set selectedPath(value) {
-        // No-op: selection is managed through selectMgr
-    }
-
     // Helper to update properties panel and refresh icons
     updatePropertiesPanel() {
-        // Save current form values before rebuilding
-        const oldRadiusInput = document.getElementById('pm-radius');
-        if (oldRadiusInput) this.lastRadiusValue = oldRadiusInput.value;
-        const oldCornerSelect = document.getElementById('pm-cornerStyle');
-        if (oldCornerSelect) this.lastCornerStyle = oldCornerSelect.value;
-
         const form = document.getElementById('tool-properties-form');
         if (form) {
             form.innerHTML = this.getPropertiesHTML();
@@ -503,7 +491,7 @@ class PathEdit extends Select {
 
         // Check if we have enough points to delete one
         if (path.length <= minPoints) {
-            console.log(`Cannot delete point: minimum ${minPoints} points required for ${this.selectedPath.closed ? 'closed' : 'open'} path`);
+            notify(`Cannot delete point: minimum ${minPoints} points required`);
             return;
         }
 
@@ -637,18 +625,15 @@ class PathEdit extends Select {
     }
 
     onPropertiesChanged(data) {
-        // Save corner style and radius so they persist across panel rebuilds
-        const cornerStyleSelect = document.getElementById('pm-cornerStyle');
-        if (cornerStyleSelect) this.lastCornerStyle = cornerStyleSelect.value;
-        const radiusInput = document.getElementById('pm-radius');
-        if (radiusInput) this.lastRadiusValue = radiusInput.value;
+        if (data.cornerStyle !== undefined) this.lastCornerStyle = data.cornerStyle;
+        if (data.radius !== undefined) this.lastRadiusValue = data.radius;
     }
 
     applySmoothingToPath() {
         const selectedPath = this.selectedPath;
 
         if (!selectedPath || !selectedPath.path) {
-            console.log('No path selected for smoothing');
+            notify('No path selected for smoothing');
             return;
         }
 
@@ -795,30 +780,17 @@ class PathEdit extends Select {
     applyRadiusCorner() {
         const selectedPath = this.selectedPath;
         if (!selectedPath) {
-            console.log('No path selected for radius corner');
+            notify('No path selected for radius corner');
             return;
         }
 
-        const radiusInput = document.getElementById('pm-radius');
-        const cornerStyleSelect = document.getElementById('pm-cornerStyle');
-
-        if (!radiusInput) {
-            console.log('Radius input not found');
-            return;
-        }
-
-        // Get radius using parseDimension (supports mm, inches, and fractions)
-        const radiusMM = parseDimension(radiusInput.value);
+        const radiusMM = parseDimension(this.lastRadiusValue);
         if (isNaN(radiusMM) || radiusMM <= 0) {
-            console.log('Invalid value. Please enter a valid value (e.g., "5mm", "1/4in", "0.25")');
+            notify('Invalid value. Please enter a valid value (e.g., "5mm", "1/4in", "0.25")');
             return;
         }
 
-        // Store the entered values for next time
-        this.lastRadiusValue = radiusInput.value;
-        const cornerStyle = cornerStyleSelect ? cornerStyleSelect.value : 'outer';
-        this.lastCornerStyle = cornerStyle;
-        const invert = cornerStyle === 'inner';
+        const invert = this.lastCornerStyle === 'inner';
 
         const radiusWorld = radiusMM * viewScale;
 
@@ -872,7 +844,7 @@ class PathEdit extends Select {
                 selectedPath,
                 pointIndex,
                 radiusWorld,
-                cornerStyle
+                this.lastCornerStyle
             );
             if (success) {
                 successCount++;
@@ -912,7 +884,7 @@ class PathEdit extends Select {
 
         // Show result
         if (failCount > 0) {
-            console.log(`Applied radius to ${successCount} points, ${failCount} failed`);
+            notify(`Applied radius to ${successCount} points, ${failCount} failed`);
         }
 
         redraw();

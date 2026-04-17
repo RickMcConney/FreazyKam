@@ -105,15 +105,16 @@ class GcodeView {
 
         // Viewport - scrollable container
         this._viewport = document.createElement('div');
-        this._viewport.style.cssText = 'overflow-y:auto; height:100%; position:relative;';
+        this._viewport.className = 'gcode-viewport';
 
         // Content - sized to full virtual height for correct scrollbar
         this._content = document.createElement('div');
-        this._content.style.cssText = `height:${this.lineTexts.length * this.lineHeight}px; position:relative;`;
+        this._content.className = 'gcode-content';
+        this._content.style.height = `${this.lineTexts.length * this.lineHeight}px`;
 
         // Lines container - holds only the visible line elements
         this._linesContainer = document.createElement('div');
-        this._linesContainer.style.cssText = 'position:absolute; left:0; right:0;';
+        this._linesContainer.className = 'gcode-lines-container';
 
         this._content.appendChild(this._linesContainer);
         this._viewport.appendChild(this._content);
@@ -167,7 +168,9 @@ class GcodeView {
             if (i === this.currentLineNumber) {
                 div.className += ' active-gcode-line';
             }
-            div.style.cssText = `position:absolute; top:${i * this.lineHeight}px; left:0; right:0; height:${this.lineHeight}px; line-height:${this.lineHeight}px; cursor:pointer; overflow:hidden; white-space:nowrap;`;
+            div.style.top = `${i * this.lineHeight}px`;
+            div.style.height = `${this.lineHeight}px`;
+            div.style.lineHeight = `${this.lineHeight}px`;
 
             const lineNum = document.createElement('span');
             lineNum.className = 'gcode-line-number';

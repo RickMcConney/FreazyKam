@@ -722,8 +722,10 @@ function appendSegmentToChain(chain, segmentPath) {
 	const segEnd = segmentPath[segmentPath.length - 1];
 	const last = chain.lastEndpoint;
 
-	const distToStart = Math.hypot(segStart.x - last.x, segStart.y - last.y);
-	const distToEnd = Math.hypot(segEnd.x - last.x, segEnd.y - last.y);
+	const dsx = segStart.x - last.x, dsy = segStart.y - last.y;
+	const dex = segEnd.x - last.x, dey = segEnd.y - last.y;
+	const distToStart = Math.sqrt(dsx*dsx + dsy*dsy);
+	const distToEnd = Math.sqrt(dex*dex + dey*dey);
 
 	if (distToEnd < distToStart) {
 		const reversed = reversePath(segmentPath);
@@ -745,8 +747,10 @@ function findBestChainMatch(openChains, segmentPath, tolerance) {
 
 	for (let chain of openChains) {
 		const last = chain.lastEndpoint;
-		const distToStart = Math.hypot(segStart.x - last.x, segStart.y - last.y);
-		const distToEnd = Math.hypot(segEnd.x - last.x, segEnd.y - last.y);
+		const csx = segStart.x - last.x, csy = segStart.y - last.y;
+		const cex = segEnd.x - last.x, cey = segEnd.y - last.y;
+		const distToStart = Math.sqrt(csx*csx + csy*csy);
+		const distToEnd = Math.sqrt(cex*cex + cey*cey);
 
 		const closestDist = Math.min(distToStart, distToEnd);
 
@@ -1019,8 +1023,10 @@ function pruneNoisyBranches(segments, path, holes, maxRadius) {
 				var segLen = Math.sqrt(dx * dx + dy * dy);
 
 				// Distance from leaf to each endpoint of this segment
-				var d1 = Math.hypot(leaf.x - p1.x, leaf.y - p1.y);
-				var d2 = Math.hypot(leaf.x - p2.x, leaf.y - p2.y);
+				var lp1x = leaf.x-p1.x, lp1y = leaf.y-p1.y;
+				var lp2x = leaf.x-p2.x, lp2y = leaf.y-p2.y;
+				var d1 = Math.sqrt(lp1x*lp1x + lp1y*lp1y);
+				var d2 = Math.sqrt(lp2x*lp2x + lp2y*lp2y);
 				var dMin = Math.min(d1, d2);
 
 				if (dMin < bestDist) {
@@ -1034,8 +1040,10 @@ function pruneNoisyBranches(segments, path, holes, maxRadius) {
 					var prevVert = outline[(closestIdx - 1 + nVerts) % nVerts];
 					var currVert = outline[closestIdx];
 					var nextVert = outline[(closestIdx + 1) % nVerts];
-					var len1 = Math.hypot(currVert.x - prevVert.x, currVert.y - prevVert.y);
-					var len2 = Math.hypot(nextVert.x - currVert.x, nextVert.y - currVert.y);
+					var l1x = currVert.x-prevVert.x, l1y = currVert.y-prevVert.y;
+					var l2x = nextVert.x-currVert.x, l2y = nextVert.y-currVert.y;
+					var len1 = Math.sqrt(l1x*l1x + l1y*l1y);
+					var len2 = Math.sqrt(l2x*l2x + l2y*l2y);
 					bestSegLen = Math.max(len1, len2);
 				}
 			}

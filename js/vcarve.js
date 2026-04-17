@@ -139,10 +139,8 @@ function findTopLeftNode(nodeMap) {
     let start = null;
 
     nodeMap.forEach(p => {
-        if (Math.hypot(p.x, p.y) < min) {
-            min = Math.hypot(p.x, p.y);
-            start = p;
-        }
+        const d = Math.sqrt(p.x * p.x + p.y * p.y);
+        if (d < min) { min = d; start = p; }
     });
 
     return start;
@@ -186,7 +184,8 @@ function findClosestUnvisitedNode(startKey, nodeMap) {
 
     nodeMap.forEach(p => {
         if (!p.visited && p.id !== startKey) {
-            const dist = Math.hypot(p.x - startNode.x, p.y - startNode.y);
+            const dx = p.x - startNode.x, dy = p.y - startNode.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
             if (dist < min) {
                 min = dist;
                 target = p;
@@ -235,7 +234,8 @@ function parseJSPolySegmentsToGraph(segments) {
             node0.connections.add(p1Key);
             node1.connections.add(p0Key);
 
-            const distance = Math.hypot(node0.x - node1.x, node0.y - node1.y);
+            const dx0 = node0.x - node1.x, dy0 = node0.y - node1.y;
+            const distance = Math.sqrt(dx0 * dx0 + dy0 * dy0);
 
             graph[p0Key].push({ node: p1Key, weight: distance });
             graph[p1Key].push({ node: p0Key, weight: distance });
@@ -286,7 +286,8 @@ function findStartNodes(nodeMap) {
             let closestNode = null;
 
             startNodes.forEach(node => {
-                const dist = Math.hypot(node.x - corner.x, node.y - corner.y);
+                const cdx = node.x - corner.x, cdy = node.y - corner.y;
+                const dist = Math.sqrt(cdx * cdx + cdy * cdy);
                 if (dist < minDist) {
                     minDist = dist;
                     closestNode = node;
@@ -306,11 +307,16 @@ function findStartNodes(nodeMap) {
 const distanceCache = new Map();
 
 function getCachedDistance(node1, node2) {
-    const key = [node1.id, node2.id].sort().join('→');
-    if (!distanceCache.has(key)) {
-        distanceCache.set(key, Math.hypot(node1.x - node2.x, node1.y - node2.y));
+    const [a, b] = node1.id < node2.id ? [node1, node2] : [node2, node1];
+    let inner = distanceCache.get(a.id);
+    if (!inner) { inner = new Map(); distanceCache.set(a.id, inner); }
+    let d = inner.get(b.id);
+    if (d === undefined) {
+        const dx = a.x - b.x, dy = a.y - b.y;
+        d = Math.sqrt(dx * dx + dy * dy);
+        inner.set(b.id, d);
     }
-    return distanceCache.get(key);
+    return d;
 }
 
 function findBestPath(jspolySegments) {
@@ -335,11 +341,6 @@ function findBestPath(jspolySegments) {
         }
     }
 
-    const endTime = performance.now();
-    console.log(`Original path length: ${jspolySegments.length} points`);
-    console.log(`Path finding completed in ${(endTime - startTime).toFixed(2)}ms`);
-    console.log(`Final path length: ${bestPath.length} points`);
-    console.log(`Travel distance: ${bestCost.toFixed(2)}`);
     return { toolpath: bestPath, travelDistance: bestCost };
 
 }
@@ -407,9 +408,9 @@ function findPossiblePath(nodeMap, graph, startNode) {
         for (let i = 0; i < untraversed.length; i++) {
             const n1 = nodeMap.get(untraversed[i].from);
             const n2 = nodeMap.get(untraversed[i].to);
-            const d1 = Math.hypot(node.x - n1.x, node.y - n1.y);
-            const d2 = Math.hypot(node.x - n2.x, node.y - n2.y);
-            const d = Math.min(d1, d2);
+            const dx1 = node.x - n1.x, dy1 = node.y - n1.y;
+            const dx2 = node.x - n2.x, dy2 = node.y - n2.y;
+            const d = Math.min(Math.sqrt(dx1*dx1+dy1*dy1), Math.sqrt(dx2*dx2+dy2*dy2));
             if (d < bestDist) {
                 bestDist = d;
                 bestIdx = i;
@@ -423,8 +424,9 @@ function findPossiblePath(nodeMap, graph, startNode) {
         // Navigate to the closer endpoint using Dijkstra
         const n1 = nodeMap.get(edge.from);
         const n2 = nodeMap.get(edge.to);
-        const d1 = Math.hypot(node.x - n1.x, node.y - n1.y);
-        const d2 = Math.hypot(node.x - n2.x, node.y - n2.y);
+        const edx1 = node.x - n1.x, edy1 = node.y - n1.y;
+        const edx2 = node.x - n2.x, edy2 = node.y - n2.y;
+        const d1 = edx1*edx1 + edy1*edy1, d2 = edx2*edx2 + edy2*edy2;
         const nearKey = d1 <= d2 ? edge.from : edge.to;
         const farKey = d1 <= d2 ? edge.to : edge.from;
 
@@ -454,7 +456,7 @@ function findPossiblePath(nodeMap, graph, startNode) {
     if (startNode.id !== node.id && node.connections.has(startNode.id)) {
         const dx = startNode.x - node.x;
         const dy = startNode.y - node.y;
-        travel += Math.hypot(dx, dy);
+        travel += Math.sqrt(dx * dx + dy * dy);
         toolPath.push({ x: startNode.x, y: startNode.y, r: startNode.r });
     }
 

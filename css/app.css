@@ -530,10 +530,17 @@ html, body {
     margin: 0;
 }
 
+.gcode-viewport { overflow-y: auto; height: 100%; position: relative; }
+.gcode-content  { position: relative; }
+.gcode-lines-container { position: absolute; left: 0; right: 0; }
+
 .gcode-line {
+    position: absolute; left: 0; right: 0;
     padding: 2px 8px;
     border-left: 3px solid transparent;
     user-select: text;
+    overflow: hidden; white-space: nowrap;
+    cursor: pointer;
     transition: background-color 0.1s ease-in-out;
 }
 

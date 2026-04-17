@@ -4,7 +4,7 @@
  */
 
 // Version number based on latest commit date
-var APP_VERSION = "Ver 2026-04-14";
+var APP_VERSION = "Ver 2026-04-16";
 
 var mode = "Select";
 var options = [];
@@ -2214,7 +2214,6 @@ function autoCloseToolProperties(reason) {
     const isOperationEditorOpen = operationPropertiesEditor && operationPropertiesEditor.style.display !== 'none' && operationPropertiesEditor.style.display !== '';
 
     if (isToolEditorOpen || isOperationEditorOpen) {
-        console.log('Auto-closing tool properties: ' + reason);
         showToolsList();
     }
 }

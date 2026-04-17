@@ -57,6 +57,10 @@ var penFirstPointColor = '#00AA00';     // Pen tool first point (green)
 var canvas = document.getElementById('canvas');
 var ctx = canvas.getContext('2d');
 
+var staticCanvas = null;
+var staticCtx = null;
+var staticDirty = true;
+
 // Mousewheel zoom (standard 'wheel' event works across all browsers including Safari)
 canvas.addEventListener('wheel', function (evt) {
 	var rect = canvas.getBoundingClientRect();
@@ -165,24 +169,33 @@ function drawNorms(norms) {
 }
 
 
-function drawSvgPath(svgpath, color, lineWidth) {
+function drawPolyline(path, color, lineWidth, isMultiSegment) {
 	ctx.beginPath();
 	ctx.lineCap = 'round';
 	ctx.lineJoin = 'round';
-	var path = svgpath.path;
-	for (var j = 0; j < path.length; j++) {
-		var pt = worldToScreen(path[j].x, path[j].y);
-		if (j == 0) {
+	if (isMultiSegment) {
+		for (let i = 0; i < path.length; i += 2) {
+			var pt = worldToScreen(path[i].x, path[i].y);
 			ctx.moveTo(pt.x, pt.y);
-		} else {
-			ctx.lineTo(pt.x, pt.y);
+			if (i + 1 < path.length) {
+				var pt2 = worldToScreen(path[i + 1].x, path[i + 1].y);
+				ctx.lineTo(pt2.x, pt2.y);
+			}
+		}
+	} else {
+		for (var j = 0; j < path.length; j++) {
+			var pt = worldToScreen(path[j].x, path[j].y);
+			if (j == 0) ctx.moveTo(pt.x, pt.y);
+			else ctx.lineTo(pt.x, pt.y);
 		}
 	}
 	ctx.lineWidth = lineWidth;
 	ctx.strokeStyle = color;
 	ctx.stroke();
+}
 
-	// Draw tabs if they exist on this path
+function drawSvgPath(svgpath, color, lineWidth) {
+	drawPolyline(svgpath.path, color, lineWidth, false);
 	if (svgpath.creationProperties && svgpath.creationProperties.tabs && svgpath.creationProperties.tabs.length > 0) {
 		drawPathTabs(svgpath);
 	}
@@ -227,44 +240,6 @@ function drawPathTabs(svgpath) {
 	ctx.restore();
 }
 
-/**
- * DEBUG VISUALIZATION: Draw tab bounding boxes on the canvas
- * Shows exactly what the tab detection algorithm sees
- */
-function drawPath(path, color, lineWidth, isMultiSegment) {
-	ctx.beginPath();
-	ctx.lineCap = 'round';
-	ctx.lineJoin = 'round';
-
-	if (isMultiSegment) {
-		// Pair-based iteration for multi-segment paths (infill lines with gaps)
-		// Treats path as pairs of points (segment start, segment end)
-		// moveTo(p1), lineTo(p2), moveTo(p3), lineTo(p4)...
-		// Gaps between segments appear automatically
-		for (let i = 0; i < path.length; i += 2) {
-			var pt = worldToScreen(path[i].x, path[i].y);
-			ctx.moveTo(pt.x, pt.y);
-			if (i + 1 < path.length) {
-				var pt2 = worldToScreen(path[i + 1].x, path[i + 1].y);
-				ctx.lineTo(pt2.x, pt2.y);
-			}
-		}
-	} else {
-		// Sequential iteration for regular paths (contours, profiles, etc.)
-		for (var j = 0; j < path.length; j++) {
-			var pt = worldToScreen(path[j].x, path[j].y);
-			if (j == 0) {
-				ctx.moveTo(pt.x, pt.y);
-			} else {
-				ctx.lineTo(pt.x, pt.y);
-			}
-		}
-	}
-
-	ctx.lineWidth = lineWidth;
-	ctx.strokeStyle = color;
-	ctx.stroke();
-}
 
 
 
@@ -400,32 +375,55 @@ function drawOrigin() {
 
 // Core rendering function (does actual drawing)
 function redrawCore() {
-
-	clear();
-
-	if (getOption("showWorkpiece"))
-		drawWorkpiece();
-	// Hide grid during simulation or when paused/seeking for clearer visualization
-	if (getOption("showGrid") && !(typeof simulation2D !== 'undefined' && (simulation2D.isRunning || simulation2D.isPaused)))
-		drawGrid();
-	if (getOption("showOrigin"))
-		drawOrigin();
-	drawToolPaths();
-	drawSvgPaths();
-	if (typeof window.drawSTLHeightMap === 'function') window.drawSTLHeightMap(ctx);
-
-	// Draw material removal circles for 2D simulation
-	// Draw if precomputed points exist and simulation has been set up
-	if (typeof simulation2D !== 'undefined' && simulation2D.precomputedPoints && simulation2D.precomputedPoints.length > 0) {
-		drawMaterialRemovalCircles();
+	// Recreate static canvas if it doesn't exist or canvas was resized
+	if (!staticCanvas || staticCanvas.width !== canvas.width || staticCanvas.height !== canvas.height) {
+		staticCanvas = document.createElement('canvas');
+		staticCanvas.width = canvas.width;
+		staticCanvas.height = canvas.height;
+		staticCtx = staticCanvas.getContext('2d');
+		staticDirty = true;
 	}
 
-	cncController.draw();
+	if (staticDirty) {
+		// Render static layer (paths, grid, workpiece) to offscreen canvas
+		staticCtx.globalAlpha = 1;
+		staticCtx.beginPath();
+		staticCtx.rect(0, 0, staticCanvas.width, staticCanvas.height);
+		staticCtx.fillStyle = canvasBackgroundColor;
+		staticCtx.fill();
 
+		var mainCtx = ctx;
+		ctx = staticCtx;
+
+		if (getOption("showWorkpiece"))
+			drawWorkpiece();
+		if (getOption("showGrid") && !(typeof simulation2D !== 'undefined' && (simulation2D.isRunning || simulation2D.isPaused)))
+			drawGrid();
+		if (getOption("showOrigin"))
+			drawOrigin();
+		drawToolPaths();
+		drawSvgPaths();
+		if (typeof window.drawSTLHeightMap === 'function') window.drawSTLHeightMap(ctx);
+		if (typeof simulation2D !== 'undefined' && simulation2D.precomputedPoints && simulation2D.precomputedPoints.length > 0)
+			drawMaterialRemovalCircles();
+
+		ctx = mainCtx;
+		staticDirty = false;
+	}
+
+	// Blit static layer then draw dynamic operation overlay
+	ctx.drawImage(staticCanvas, 0, 0);
+	cncController.draw();
 }
 
-// Batching wrapper - queues redraw for next RAF frame
+// Full redraw — marks static layer dirty and queues a frame
 function redraw() {
+	staticDirty = true;
+	setDirty();
+}
+
+// Overlay-only redraw — skips static re-render (use when only the operation overlay changed)
+function redrawOverlay() {
 	setDirty();
 }
 
@@ -551,7 +549,7 @@ function drawToolPaths() {
 				else if (tpath) {
 					// Normal path drawing
 					var isMultiSegment = paths[p].isMultiSegment || false;
-				drawPath(tpath, color, lineWidth, isMultiSegment);
+				drawPolyline(tpath, color, lineWidth, isMultiSegment);
 				}
 			}
 		}

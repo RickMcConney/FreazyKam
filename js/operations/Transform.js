@@ -178,9 +178,7 @@ class Transform extends Select {
 
         if (isVisible) {
             // Re-trigger the properties panel display for the Move tool
-            if (typeof showToolPropertiesEditor === 'function') {
-                showToolPropertiesEditor('Move');
-            }
+            showToolPropertiesEditor('Move');
         }
     }
     stop() {
@@ -542,7 +540,7 @@ class Transform extends Select {
                 this.recoverTotalsFromHistory();
             }
 
-            if (wasTransforming && typeof onPathsChanged === 'function') {
+            if (wasTransforming) {
                 onPathsChanged(selectMgr.selectedPaths().map(p => p.id));
             }
 
@@ -738,9 +736,7 @@ class Transform extends Select {
         });
 
         // Regenerate any toolpaths linked to mirrored paths
-        if (typeof regenerateToolpathsForPaths === 'function') {
-            regenerateToolpathsForPaths(selected.map(p => p.id));
-        }
+        regenerateToolpathsForPaths(selected.map(p => p.id));
     }
 
     /**
@@ -776,9 +772,7 @@ class Transform extends Select {
         });
 
         // Regenerate any toolpaths linked to mirrored paths
-        if (typeof regenerateToolpathsForPaths === 'function') {
-            regenerateToolpathsForPaths(selected.map(p => p.id));
-        }
+        regenerateToolpathsForPaths(selected.map(p => p.id));
     }
 
     draw(ctx) {
@@ -1182,7 +1176,7 @@ class Transform extends Select {
         this.properties = { ...this.properties, ...data };
 
         // Check if in inch mode for unit conversion
-        const useInches = typeof getOption === 'function' && getOption('Inches');
+        const useInches = getOption('Inches');
 
         // Apply property changes to transform values
         // Use parseDimension to handle fractional inch input

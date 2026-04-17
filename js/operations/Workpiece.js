@@ -47,9 +47,7 @@ class Workpiece extends Operation {
 
         // Build dynamic species options
         const speciesField = { ...this.fields.woodSpecies };
-        if (typeof woodSpeciesDatabase !== 'undefined') {
-            speciesField.options = Object.keys(woodSpeciesDatabase).map(s => ({ value: s, label: s }));
-        }
+        speciesField.options = Object.keys(woodSpeciesDatabase).map(s => ({ value: s, label: s }));
 
         const fh = (field, value) => PropertiesManager.fieldHTML(field, value);
 
@@ -132,13 +130,8 @@ class Workpiece extends Operation {
             setOption("workpieceThickness", newValue);
 
             // Recalculate tool depths and steps that are percentage-based
-            if (typeof recalculateToolPercentages === 'function') {
-                recalculateToolPercentages();
-                // Refresh tool table to show updated values and warnings
-                if (typeof renderToolsTable === 'function') {
-                    renderToolsTable();
-                }
-            }
+            recalculateToolPercentages();
+            renderToolsTable();
         }
 
         if ('gridSize' in data) {
@@ -177,31 +170,25 @@ class Workpiece extends Operation {
         // Update origin position if dimensions or origin position changed
         if (dimensionChanged || originChanged) {
             // Use the values from options (already parsed and saved above)
-            const width = getOption("workpieceWidth") * (typeof viewScale !== 'undefined' ? viewScale : 10);
-            const length = getOption("workpieceLength") * (typeof viewScale !== 'undefined' ? viewScale : 10);
+            const width = getOption("workpieceWidth") * viewScale;
+            const length = getOption("workpieceLength") * viewScale;
             const position = getOption("originPosition") || 'middle-center';
 
             const newOrigin = calculateOriginFromPosition(position, width, length);
 
 
-            if (typeof origin !== 'undefined') {
-                origin.x = newOrigin.x;
-                origin.y = newOrigin.y;
-
-            } else {
-                console.log('Warning: origin object is undefined');
-            }
+            origin.x = newOrigin.x;
+            origin.y = newOrigin.y;
         }
 
         // If dimensions changed, re-center the workpiece view
-        if (dimensionChanged && typeof centerWorkpiece === 'function') {
+        if (dimensionChanged) {
             centerWorkpiece();
         }
 
         // Regenerate surfacing toolpaths when anything that affects their geometry changes.
         // This runs after all setOption calls so getOption returns the new values.
-        if ((dimensionChanged || originChanged || 'woodSpecies' in data) &&
-                typeof toolpaths !== 'undefined' && typeof doSurfacing === 'function') {
+        if (dimensionChanged || originChanged || 'woodSpecies' in data) {
             const surfacingPaths = toolpaths.filter(tp => tp.operation === 'Surfacing');
             if (surfacingPaths.length > 0) {
                 const originalTool = window.currentTool;
@@ -220,9 +207,7 @@ class Workpiece extends Operation {
 
     onPropertiesChanged(data) {
         // Force immediate canvas redraw when workpiece properties change
-        if (typeof redraw === 'function') {
-            redraw();
-        }
+        redraw();
 
         // Update 3D grid if gridSize changed - parse the new value and pass it
         if ('gridSize' in data && typeof window.updateGridSize3D === 'function') {
@@ -257,13 +242,7 @@ class Workpiece extends Operation {
         }
 
         // Force a second redraw on next frame to ensure all updates are visible
-        if (typeof requestAnimationFrame !== 'undefined') {
-            requestAnimationFrame(() => {
-                if (typeof redraw === 'function') {
-                    redraw();
-                }
-            });
-        }
+        requestAnimationFrame(() => redraw());
 
     }
 

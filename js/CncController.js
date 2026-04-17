@@ -2,6 +2,8 @@
 
 // Import other operations...
 
+const TOUCH_TAP_JITTER_SQ = 100; // 10px radius squared — screen pixels
+
 class CncController {
   constructor() {
     this.operationManager = new OperationManager();
@@ -162,7 +164,7 @@ class CncController {
       if (!this.touchMoved && this.touchStartPos) {
         const dx = mouseEvt.offsetX - this.touchStartPos.x;
         const dy = mouseEvt.offsetY - this.touchStartPos.y;
-        if (dx * dx + dy * dy < 100) {  // 10px screen threshold
+        if (dx * dx + dy * dy < TOUCH_TAP_JITTER_SQ) {  // 10px screen threshold
           evt.preventDefault();
           return;  // Ignore jitter — don't send Move until real drag
         }
@@ -195,12 +197,7 @@ class CncController {
       }
     });
 
-    // Cleanup RAF on page unload
-    window.addEventListener('beforeunload', () => {
-      if (this.renderFrameId) {
-        cancelAnimationFrame(this.renderFrameId);
-      }
-    });
+    window.addEventListener('beforeunload', () => this.pauseRenderLoop());
 
     // Start the RAF render loop
     this.startRenderLoop();
@@ -293,6 +290,7 @@ function setDirty() {
 // Immediate redraw (for special cases like simulation)
 function redrawImmediate() {
   if (typeof redrawCore === 'function') {
+    staticDirty = true;
     redrawCore();
   }
 }

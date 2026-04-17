@@ -972,7 +972,6 @@ function animate() {
       const avgUpdate = (window.timingStats.updateTotal / window.timingStats.count).toFixed(2);
       const avgRender = (window.timingStats.renderTotal / window.timingStats.count).toFixed(2);
 
-      console.log(`[Frame Profile] Frames: ${profileFrameCount}, FPS: ${fps}, Update: ${avgUpdate}ms, Render: ${avgRender}ms`);
 
       // Reset for next 300 frames
       profileFrameCount = 0;
@@ -1006,7 +1005,6 @@ function animate() {
  * Called when switching away from 3D view tab
  */
 function cleanup3DView() {
-  console.log('Cleaning up 3D view resources...');
 
   // Stop animation loop
   if (animationFrameId !== null) {
@@ -1151,7 +1149,6 @@ function cleanup3DView() {
   profileFrameCount = 0;
   profileStartTime = performance.now();
 
-  console.log('3D view cleanup complete');
 }
 
 // Export cleanup function globally for use by bootstrap-layout.js
@@ -1561,7 +1558,6 @@ class ToolpathAnimation {
         this.lastVoxelConfig.voxelSize !== currentConfig.voxelSize;
 
       if (!configChanged && this.voxelGrid) {
-        console.log('Voxel grid dimensions unchanged, reusing existing grid');
         return;  // Dimensions haven't changed, keep using existing voxel grid
       }
 
@@ -1624,7 +1620,6 @@ class ToolpathAnimation {
             numberOfVoxels = clippedWidth*clippedLength/(this.voxelSize*this.voxelSize);
 
         }
-        console.log(`Voxel size adjusted to ${this.voxelSize}mm to keep total voxels under ${CONFIG.MAX_VOXELS} (total voxels: ${numberOfVoxels})`);
 
         // Round clipped bounds UP to clean voxel boundaries to ensure all in-bounds toolpath is captured
         const toolpathWidthMM = Math.ceil((clippedMaxX - clippedMinX) / this.voxelSize) * this.voxelSize;

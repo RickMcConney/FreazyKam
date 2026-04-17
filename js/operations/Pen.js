@@ -90,7 +90,7 @@ class Pen extends Operation {
                     closing: false
                 }
             }
-            redraw(); // Trigger redraw to show preview line and green circle
+            redrawOverlay(); // preview line only changes the operation overlay
         }
     }
     onMouseUp(canvas, evt) {

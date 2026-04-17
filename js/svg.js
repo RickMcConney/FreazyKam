@@ -238,7 +238,7 @@ function importParsedPaths(paths, name) {
 function parseSvgContent(data, name) {
 	try {
 		if (!initPaperJS()) {
-			console.warn('Paper.js initialization failed, falling back to old parser');
+			console.error('Paper.js initialization failed — SVG import aborted');
 			return null;
 		}
 
@@ -275,7 +275,7 @@ function parseSvgContent(data, name) {
 
 		return paths;
 	} catch (error) {
-		console.error('Error parsing SVG with Paper.js:', error);
+		console.error('parseSvgContent: unexpected error — ', error);
 		return null;
 	}
 }

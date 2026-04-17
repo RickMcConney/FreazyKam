@@ -47,7 +47,7 @@ function calculateFeedRate(tool, woodSpecies, operation) {
 		return tool ? tool.feed : DEFAULT_FEED_MM_MIN;
 	}
 
-	if (tool.step == undefined) tool.step = tool.depth || 1;
+	const stepDepth = tool.step != undefined ? tool.step : (tool.depth || 1);
 	// Get chip load for this material and tool
 	const chipLoad = getChipLoad(woodSpecies, tool.diameter, tool.bit);
 
@@ -61,7 +61,7 @@ function calculateFeedRate(tool, woodSpecies, operation) {
 	// Adjust for depth of cut (deeper cuts need slower feeds)
 	// Conservative approach: reduce feed by up to 50% for deep cuts
 	const maxRecommendedDepth = tool.diameter; // Rule of thumb: max depth = tool diameter
-	const depthRatio = Math.min(1.0, tool.step / maxRecommendedDepth);
+	const depthRatio = Math.min(1.0, stepDepth / maxRecommendedDepth);
 	const depthFactor = Math.max(0.5, 1.0 - (depthRatio * 0.5));
 	feedRate *= depthFactor;
 
@@ -83,12 +83,9 @@ function calculateFeedRate(tool, woodSpecies, operation) {
 	const engagementFactor = Math.max(0.5, 1.0 - (radialEngagement * 0.5));
 	feedRate *= engagementFactor;
 
-	// Apply wood species fine-tuning multiplier if available
-	if (typeof woodSpeciesDatabase !== 'undefined') {
-		const speciesData = woodSpeciesDatabase[woodSpecies];
-		if (speciesData && speciesData.feedMultiplier) {
-			feedRate *= speciesData.feedMultiplier;
-		}
+	const speciesData = woodSpeciesDatabase[woodSpecies];
+	if (speciesData && speciesData.feedMultiplier) {
+		feedRate *= speciesData.feedMultiplier;
 	}
 
 	// Get user-configured limits from options
@@ -136,7 +133,7 @@ function calculateZFeedRate(tool, woodSpecies, operation) {
 	// Get user-configured limits from options
 	// Z feed max is typically lower than XY feed max
 	const minFeed = getOption('minFeedRate') || 50;
-	const maxFeed = Math.min(500, getOption('maxFeedRate') || 500);
+	const maxFeed = getOption('maxFeedRate') || 500;
 
 	// Ensure reasonable bounds
 	return Math.max(minFeed, Math.min(maxFeed, Math.round(zFeedRate)));
@@ -211,6 +208,23 @@ function convertFeedUnits(feed, useInches) {
 // - Axis inversion: "G0 -X Y -Z" negates X and Z values
 // - Axis swapping: "G0 Y X Z" swaps X and Y coordinates
 // - Spindle speed: "M3 S" outputs spindle speed when params.s is provided
+function processAxisParam(output, axisChar, match, value, inverted, fmt) {
+	if (!match) return output;
+	if (value !== undefined && value !== null) {
+		if (inverted) value = -value;
+		return output.replace(new RegExp('-?' + axisChar + '\\b'), axisChar + fmt(value));
+	}
+	return output.replace(new RegExp('-?' + axisChar + '\\b'), '').trim();
+}
+
+function processSimpleParam(output, paramChar, value, fmt) {
+	const re = new RegExp('\\b' + paramChar + '\\b', 'g');
+	if (value !== undefined && value !== null) {
+		return output.replace(re, paramChar + fmt(value));
+	}
+	return output.replace(re, '').trim();
+}
+
 function applyGcodeTemplate(template, params) {
 	if (!template) return '';
 
@@ -261,71 +275,13 @@ function applyGcodeTemplate(template, params) {
 		}
 	});
 
-	// Process X parameter with potential swapping and inversion
-	if (xMatch) {
-		var xValue = params[axisMap['X'] || 'x'];
-		if (xValue !== undefined && xValue !== null) {
-			if (inversions['X']) xValue = -xValue;
-			output = output.replace(/-?X\b/, 'X' + fmt(xValue));
-		} else {
-			// Remove X if not provided
-			output = output.replace(/-?X\b/, '').trim();
-		}
-	}
-
-	// Process Y parameter with potential swapping and inversion
-	if (yMatch) {
-		var yValue = params[axisMap['Y'] || 'y'];
-		if (yValue !== undefined && yValue !== null) {
-			if (inversions['Y']) yValue = -yValue;
-			output = output.replace(/-?Y\b/, 'Y' + fmt(yValue));
-		} else {
-			// Remove Y if not provided
-			output = output.replace(/-?Y\b/, '').trim();
-		}
-	}
-
-	// Process Z parameter with potential swapping and inversion
-	if (zMatch) {
-		var zValue = params[axisMap['Z'] || 'z'];
-		if (zValue !== undefined && zValue !== null) {
-			if (inversions['Z']) zValue = -zValue;
-			output = output.replace(/-?Z\b/, 'Z' + fmt(zValue));
-		} else {
-			// Remove Z if not provided
-			output = output.replace(/-?Z\b/, '').trim();
-		}
-	}
-
-	// Process F parameter
-	if (params.f !== undefined && params.f !== null) {
-		output = output.replace(/\bF\b/g, 'F' + fmt(params.f));
-	} else {
-		// Remove F if not provided
-		output = output.replace(/\bF\b/g, '').trim();
-	}
-
-	// Process I parameter (arc center X offset)
-	if (params.i !== undefined && params.i !== null) {
-		output = output.replace(/\bI\b/g, 'I' + fmt(params.i));
-	} else {
-		output = output.replace(/\bI\b/g, '').trim();
-	}
-
-	// Process J parameter (arc center Y offset)
-	if (params.j !== undefined && params.j !== null) {
-		output = output.replace(/\bJ\b/g, 'J' + fmt(params.j));
-	} else {
-		output = output.replace(/\bJ\b/g, '').trim();
-	}
-
-	// Process S parameter (spindle speed)
-	if (params.s !== undefined && params.s !== null) {
-		output = output.replace(/\bS\b/g, 'S' + fmt(params.s));
-	} else {
-		// Remove S if not provided
-		output = output.replace(/\bS\b/g, '').trim();
-	}
+	output = processAxisParam(output, 'X', xMatch, params[axisMap['X'] || 'x'], inversions['X'], fmt);
+	output = processAxisParam(output, 'Y', yMatch, params[axisMap['Y'] || 'y'], inversions['Y'], fmt);
+	output = processAxisParam(output, 'Z', zMatch, params[axisMap['Z'] || 'z'], inversions['Z'], fmt);
+	output = processSimpleParam(output, 'F', params.f, fmt);
+	output = processSimpleParam(output, 'I', params.i, fmt);
+	output = processSimpleParam(output, 'J', params.j, fmt);
+	output = processSimpleParam(output, 'S', params.s, fmt);
 
 	// Clean up multiple spaces
 	output = output.replace(/\s+/g, ' ').trim();

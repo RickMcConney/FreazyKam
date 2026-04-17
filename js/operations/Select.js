@@ -48,9 +48,6 @@ class Select extends Operation {
      */
     selectPath(path) {
         if (Select.selected.has(path)) {
-
-            console.warn(`Duplicate selectPath() call for path: ${path.id}`, new Error().stack);
-
             return;  // Path already selected, don't add again
         }
         Select.selected.add(path);
@@ -185,26 +182,20 @@ class Select extends Operation {
      * @param {Object} svgpath - The path to check against
      * @returns {Boolean} True if point is near an edge
      */
-    isNearEdge(pt, svgpath) {
-        const maxDistSquared = 100;
-        const path = svgpath.path;
+    _minSegDistSq(pt, path) {
+        let min = Infinity;
         for (let j = 0; j < path.length; j++) {
-            const k = (j + 1) % path.length;
-            if (distToSegmentSquared(pt, path[j], path[k]) < maxDistSquared) {
-                return true;
-            }
+            const d = distToSegmentSquared(pt, path[j], path[(j + 1) % path.length]);
+            if (d < min) min = d;
         }
-        return false;
+        return min;
     }
 
-    /**
-     * Find a path whose edge is near the given point
-     * Uses distance-to-edge test so the mouse must be close to a path segment
-     * @param {Object} pt - Point {x, y}
-     * @returns {Object|null} The nearest path if within threshold, null otherwise
-     */
+    isNearEdge(pt, svgpath) {
+        return this._minSegDistSq(pt, svgpath.path) < 100;
+    }
+
     pointInPath(pt) {
-        const maxDistSquared = 100; // Same threshold as closestPath
         const bboxMargin = 10;
         let bestPath = null;
         let bestDist = Infinity;
@@ -212,22 +203,14 @@ class Select extends Operation {
         for (let i = 0; i < svgpaths.length; i++) {
             if (!svgpaths[i].visible) continue;
             const bbox = svgpaths[i].bbox;
-            // Quick bounding box reject with margin
             if (pt.x < bbox.minx - bboxMargin || pt.x > bbox.maxx + bboxMargin ||
                 pt.y < bbox.miny - bboxMargin || pt.y > bbox.maxy + bboxMargin) {
                 continue;
             }
-            const path = svgpaths[i].path;
-            for (let j = 0; j < path.length; j++) {
-                const k = (j + 1) % path.length;
-                const dist = distToSegmentSquared(pt, path[j], path[k]);
-                if (dist < bestDist) {
-                    bestDist = dist;
-                    bestPath = svgpaths[i];
-                }
-            }
+            const dist = this._minSegDistSq(pt, svgpaths[i].path);
+            if (dist < bestDist) { bestDist = dist; bestPath = svgpaths[i]; }
         }
-        return bestDist < maxDistSquared ? bestPath : null;
+        return bestDist < 100 ? bestPath : null;
     }
 
     updateSelectBox(mouse, evt, canvas) {

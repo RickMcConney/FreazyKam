@@ -33,6 +33,7 @@ class TabEditor extends Select {
                 this.properties = JSON.parse(stored);
             } catch (e) {
                 console.error('Failed to parse saved tab properties:', e);
+                notify('Tab editor settings could not be loaded (data may be corrupt). Defaults will be used.', 'warning');
             }
         }
 

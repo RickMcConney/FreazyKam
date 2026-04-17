@@ -136,8 +136,6 @@ class VoxelGrid {
     this.mesh.castShadow = true;
     this.mesh.receiveShadow = true;
 
-    // Create dummy object for transforms
-    const dummy = new THREE.Object3D();
     const materialColor = new THREE.Color(this.workpieceColor);
 
     // Position all voxels in the 2D grid
@@ -153,11 +151,6 @@ class VoxelGrid {
         this.voxelWorldX[index] = wp.x;
         this.voxelWorldY[index] = wp.y;
 
-        dummy.position.set(wp.x, wp.y, wp.z);
-        dummy.scale.set(1, 1, 1);  // Full height initially
-        dummy.updateMatrix();
-
-        this.mesh.setMatrixAt(index, dummy.matrix);
         // Initialize all instance colors to material color (uncut state)
         this.mesh.setColorAt(index, materialColor);
 
@@ -166,6 +159,21 @@ class VoxelGrid {
       }
     }
 
+    this._seedMatrices();
+  }
+
+  _seedMatrices() {
+    const dummy = new THREE.Object3D();
+    for (let x = 0; x < this.gridWidth; x++) {
+      for (let y = 0; y < this.gridLength; y++) {
+        const index = y + x * this.gridLength;
+        const wp = this._voxelWorldPos(x, y);
+        dummy.position.set(wp.x, wp.y, wp.z);
+        dummy.scale.set(1, 1, 1);
+        dummy.updateMatrix();
+        this.mesh.setMatrixAt(index, dummy.matrix);
+      }
+    }
     this.mesh.instanceMatrix.needsUpdate = true;
   }
 
@@ -452,23 +460,7 @@ class VoxelGrid {
     this.voxelHeightChanged.clear();
 
     // Reset all voxel matrices to full height
-    const dummy = new THREE.Object3D();
-
-    for (let x = 0; x < this.gridWidth; x++) {
-      for (let y = 0; y < this.gridLength; y++) {
-        const index = y + x * this.gridLength;
-
-        const wp = this._voxelWorldPos(x, y);
-
-        dummy.position.set(wp.x, wp.y, wp.z);
-        dummy.scale.set(1, 1, 1);  // Full height
-        dummy.updateMatrix();
-
-        this.mesh.setMatrixAt(index, dummy.matrix);
-      }
-    }
-
-    this.mesh.instanceMatrix.needsUpdate = true;
+    this._seedMatrices();
 
     // Reset voxel colors to material color
     this.resetVoxelColors();
