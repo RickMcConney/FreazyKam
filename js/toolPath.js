@@ -844,10 +844,23 @@ function optimizeChainOrder(chains) {
 	const optimized = [];
 	const remaining = chains.slice();
 
-	// Start with first chain
-	let current = remaining.shift();
+	// Seed: chain whose nearest endpoint (start or end) is closest to the G-code origin
+	const ox = (typeof origin !== 'undefined') ? origin.x : 0;
+	const oy = (typeof origin !== 'undefined') ? origin.y : 0;
+	let seedIdx = 0, seedDist = Infinity, seedReverse = false;
+	for (let s = 0; s < remaining.length; s++) {
+		const tp = remaining[s].tpath;
+		const sp = tp[0], ep = tp[tp.length - 1];
+		const ds = (sp.x - ox) ** 2 + (sp.y - oy) ** 2;
+		const de = (ep.x - ox) ** 2 + (ep.y - oy) ** 2;
+		if (ds < seedDist) { seedDist = ds; seedIdx = s; seedReverse = false; }
+		if (de < seedDist) { seedDist = de; seedIdx = s; seedReverse = true; }
+	}
+	let current = remaining.splice(seedIdx, 1)[0];
+	if (seedReverse) current = { ...current, tpath: reversePath(current.tpath) };
 	optimized.push(current);
-	let currentEnd = getPathEndPoint(current.tpath);
+	let tp0 = current.tpath;
+	let currentEnd = tp0[tp0.length - 1];
 
 	// Nearest neighbor: repeatedly find closest uncut chain
 	while (remaining.length > 0) {
@@ -857,9 +870,9 @@ function optimizeChainOrder(chains) {
 
 		// Find nearest chain endpoint
 		for (let i = 0; i < remaining.length; i++) {
-			const chainPath = remaining[i].tpath;
-			const chainStart = getPathStartPoint(chainPath);
-			const chainEnd = getPathEndPoint(chainPath);
+			const tp = remaining[i].tpath;
+			const chainStart = tp[0];
+			const chainEnd   = tp[tp.length - 1];
 
 			// Distance to start of this chain
 			const distToStart = distance(currentEnd, chainStart);
@@ -886,10 +899,134 @@ function optimizeChainOrder(chains) {
 		}
 
 		optimized.push(current);
-		currentEnd = getPathEndPoint(current.tpath);
+		const tp = current.tpath;
+		currentEnd = tp[tp.length - 1];
 	}
 
 	return optimized;
+}
+
+/**
+ * Full pocket path optimizer. Runs after eliminateUnnecessaryRetracts has set passStart flags.
+ *
+ * Strategy:
+ *   1. Group consecutive passStart:false paths into super-chains (they share direct feeds
+ *      and must stay together and in order).
+ *   2. Run nearest-neighbor ordering over super-chains.
+ *      - Single open path (isContour:false): may be reversed for a shorter approach.
+ *      - Single closed contour (isContour:true, first==last): may be rotated to the nearest
+ *        vertex for a shorter approach.
+ *      - Multi-path chains: treated as rigid units (internal order was already optimised and
+ *        reversing could invalidate the direct-feed safety checks).
+ *   3. Flatten back to individual paths, keeping passStart flags consistent.
+ */
+function optimizePocketPaths(paths) {
+	if (paths.length <= 1) return paths;
+
+	// --- 1. Build super-chains ---
+	const chains = [];
+	let i = 0;
+	while (i < paths.length) {
+		const chain = [paths[i]];
+		while (i + 1 < paths.length && paths[i + 1].passStart === false) {
+			i++;
+			chain.push(paths[i]);
+		}
+		chains.push(chain);
+		i++;
+	}
+	if (chains.length <= 1) return paths;
+
+	function chainStartPt(c) { return c[0].tpath[0]; }
+	function chainEndPt(c)   { const tp = c[c.length - 1].tpath; return tp[tp.length - 1]; }
+	function dist2(a, b)     { return (a.x - b.x) ** 2 + (a.y - b.y) ** 2; }
+
+	function isSingleOpenPath(c) {
+		return c.length === 1 && !c[0].isContour;
+	}
+	function isSingleClosedContour(c) {
+		if (c.length !== 1 || !c[0].isContour) return false;
+		const tp = c[0].tpath;
+		const fp = tp[0], lp = tp[tp.length - 1];
+		return (fp.x - lp.x) ** 2 + (fp.y - lp.y) ** 2 < 1e-6;
+	}
+
+	// --- 2. Nearest-neighbour ordering ---
+	const remaining = chains.slice();
+	const ordered   = [];
+
+	// Seed: chain whose start is nearest to the origin
+	let seedIdx = 0, seedDist = Infinity;
+	for (let i = 0; i < remaining.length; i++) {
+		const s = chainStartPt(remaining[i]);
+		const d = s.x * s.x + s.y * s.y;
+		if (d < seedDist) { seedDist = d; seedIdx = i; }
+	}
+	let current = remaining.splice(seedIdx, 1)[0];
+	ordered.push({ chain: current, action: 'none', rotIdx: 0 });
+	let curEnd = chainEndPt(current);
+
+	while (remaining.length > 0) {
+		let nearIdx = 0, nearDist = Infinity, nearAction = 'none', nearRot = 0;
+
+		for (let i = 0; i < remaining.length; i++) {
+			const c = remaining[i];
+
+			// Approach from the start (normal)
+			const d = dist2(curEnd, chainStartPt(c));
+			if (d < nearDist) { nearDist = d; nearIdx = i; nearAction = 'none'; }
+
+			// Approach from the end (reverse a single open path)
+			if (isSingleOpenPath(c)) {
+				const dr = dist2(curEnd, chainEndPt(c));
+				if (dr < nearDist) { nearDist = dr; nearIdx = i; nearAction = 'reverse'; }
+			}
+
+			// Approach any vertex (rotate a single closed contour)
+			if (isSingleClosedContour(c)) {
+				const tp = c[0].tpath;
+				const core = tp.slice(0, tp.length - 1); // drop duplicate closing pt
+				for (let j = 1; j < core.length; j++) {
+					const dr = dist2(curEnd, core[j]);
+					if (dr < nearDist) { nearDist = dr; nearIdx = i; nearAction = 'rotate'; nearRot = j; }
+				}
+			}
+		}
+
+		const chain = remaining.splice(nearIdx, 1)[0];
+		ordered.push({ chain, action: nearAction, rotIdx: nearRot });
+
+		// Advance curEnd based on the action that will be applied
+		if (nearAction === 'reverse') {
+			curEnd = chainStartPt(chain); // reversed: original start becomes new end
+		} else if (nearAction === 'rotate') {
+			curEnd = chain[0].tpath[nearRot]; // rotated: new start == new end (closed)
+		} else {
+			curEnd = chainEndPt(chain);
+		}
+	}
+
+	// --- 3. Flatten with actions applied ---
+	const result = [];
+	for (const { chain, action, rotIdx } of ordered) {
+		let finalChain = chain;
+
+		if (action === 'reverse') {
+			finalChain = [{ ...chain[0], tpath: reversePath(chain[0].tpath) }];
+		} else if (action === 'rotate' && rotIdx > 0) {
+			const tp   = chain[0].tpath;
+			const core = tp.slice(0, tp.length - 1);
+			const rotated = core.slice(rotIdx).concat(core.slice(0, rotIdx));
+			rotated.push(rotated[0]);
+			finalChain = [{ ...chain[0], tpath: rotated }];
+		}
+
+		for (let j = 0; j < finalChain.length; j++) {
+			// First path of each chain keeps its passStart; rest are direct feeds.
+			result.push(j === 0 ? finalChain[j] : { ...finalChain[j], passStart: false });
+		}
+	}
+	return result;
 }
 
 /**
@@ -904,14 +1041,21 @@ function optimizePathListOrder(paths) {
 	const optimized = [];
 	const remaining = paths.slice();
 
-	// Start with the path closest to origin (0,0) to give a deterministic start
-	let bestIdx = 0;
-	let bestDist = Infinity;
+	// Seed: path closest to the G-code origin (not the canvas corner)
+	const ox = (typeof origin !== 'undefined') ? origin.x : 0;
+	const oy = (typeof origin !== 'undefined') ? origin.y : 0;
+	let bestIdx = 0, bestDist = Infinity;
 	for (let i = 0; i < remaining.length; i++) {
 		let p = remaining[i].tpath;
 		if (!p || p.length === 0) continue;
-		let d = p[0].x * p[0].x + p[0].y * p[0].y;
-		if (d < bestDist) { bestDist = d; bestIdx = i; }
+		// For closed contours check all vertices; for others check both endpoints
+		const fp = p[0], lp = p[p.length - 1];
+		const isClosed = (fp.x - lp.x) ** 2 + (fp.y - lp.y) ** 2 < 1e-6;
+		const pts = isClosed ? p.slice(0, p.length - 1) : [fp, lp];
+		for (const pt of pts) {
+			const d = (pt.x - ox) ** 2 + (pt.y - oy) ** 2;
+			if (d < bestDist) { bestDist = d; bestIdx = i; }
+		}
 	}
 	let current = remaining.splice(bestIdx, 1)[0];
 	optimized.push(current);

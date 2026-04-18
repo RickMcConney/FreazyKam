@@ -1082,6 +1082,42 @@ function computeAdaptiveSwitchLevel(allContours, contourLevels, totalLevels, mac
 	return totalLevels; // default: all contours, no raster
 }
 
+// Rotate the start of each closed contour path to the vertex nearest to the end
+// of the preceding path, minimising the travel before each retract.
+// A path is only rotated when:
+//   - it requires a retract to reach (passStart !== false), AND
+//   - its successor also requires a retract (next passStart !== false), so the
+//     current path's endpoint is not the entry point of a direct-feed chain.
+function rotateContoursToNearestEntry(paths) {
+	let prevEnd = null;
+	for (let i = 0; i < paths.length; i++) {
+		const obj = paths[i];
+		const tp  = obj.tpath;
+		if (!tp || tp.length < 4) { if (tp) prevEnd = tp[tp.length - 1]; continue; }
+
+		if (obj.isContour && prevEnd) {
+			const fp = tp[0], lp = tp[tp.length - 1];
+			if ((fp.x - lp.x) ** 2 + (fp.y - lp.y) ** 2 < 1e-6) {
+				const core = tp.slice(0, tp.length - 1);
+				let bestIdx = 0, bestDist = Infinity;
+				for (let j = 0; j < core.length; j++) {
+					const d = (prevEnd.x - core[j].x) ** 2 + (prevEnd.y - core[j].y) ** 2;
+					if (d < bestDist) { bestDist = d; bestIdx = j; }
+				}
+				if (bestIdx > 0) {
+					const rotated = core.slice(bestIdx).concat(core.slice(0, bestIdx));
+					rotated.push(rotated[0]);
+					paths[i] = { ...obj, tpath: rotated };
+					prevEnd = rotated[rotated.length - 1];
+					continue;
+				}
+			}
+		}
+		prevEnd = tp[tp.length - 1];
+	}
+	return paths;
+}
+
 function generatePocketPaths(outerPath, islandPaths, pocketRadius, stepover, angle, direction, finishingRadius, strategy) {
 	if (!strategy) strategy = 'adaptive';
 
@@ -1150,7 +1186,7 @@ function generatePocketPaths(outerPath, islandPaths, pocketRadius, stepover, ang
 	}
 
 	// Build ordered contour lists: inner levels and outermost level separately.
-	// Optimize path order within each level but keep level ordering strict (inside-to-outside).
+	// Optimize within each level, preserve inside-to-outside level ordering.
 	let innerContours = [];
 	let outerContours = contoursByLevel[startLevel] ? optimizePathListOrder(contoursByLevel[startLevel]) : [];
 	for (let lvl = switchLevel - 1; lvl > startLevel; lvl--) {
@@ -1164,13 +1200,13 @@ function generatePocketPaths(outerPath, islandPaths, pocketRadius, stepover, ang
 		let infillPaths = generateRasterInfill(machinedOuter, machinedIslands, islandPaths, switchLevel, stepover, pocketRadius, angle);
 		// Raster infill is innermost, then inner contours, then outer boundary last.
 		let result = [...infillPaths, ...innerContours, ...outerContours];
-		return eliminateUnnecessaryRetracts(result, machinedIslands, islandPaths, machinedOuter, outerPath);
+		return rotateContoursToNearestEntry(eliminateUnnecessaryRetracts(result, machinedIslands, islandPaths, machinedOuter, outerPath));
 	}
 
 	// Pure contour mode (no raster needed for small/narrow pockets)
 	// Inner contours first (inside-to-outside), then outermost boundary last.
 	let result = [...innerContours, ...outerContours];
-	return eliminateUnnecessaryRetracts(result, machinedIslands, islandPaths, machinedOuter, outerPath);
+	return rotateContoursToNearestEntry(eliminateUnnecessaryRetracts(result, machinedIslands, islandPaths, machinedOuter, outerPath));
 }
 
 /**
@@ -1235,6 +1271,7 @@ function eliminateUnnecessaryRetracts(paths, machinedIslands, originalIslands, m
 function optimizeGroupOrder(groups) {
 	if (groups.length === 0) return [];
 	if (groups.length === 1) return groups[0];
+	//if(true) return groups.flat(); // disable group ordering for now — can cause more harm than good on some shapes
 	// Build index with start point of each group
 	let remaining = groups.map((g, i) => {
 		let p = g[0].tpath[0];
@@ -1802,7 +1839,7 @@ function generateInlayFemalePaths(outerPath, islandPaths, pocketRadius, finishRa
 	if (profileOffset.length > 0) {
 		let profileContour = profileOffset[0].slice();
 		if (direction == "climb") profileContour = reversePath(profileContour);
-		shapeProfPaths.push({ tpath: profileContour, isContour: true });
+		shapeProfPaths.push({ tpath: profileContour, isContour: true, passStart: true });
 	}
 	// Profile around islands (outside offset)
 	for (let island of roundedIslands) {
@@ -1810,10 +1847,10 @@ function generateInlayFemalePaths(outerPath, islandPaths, pocketRadius, finishRa
 		if (islandProfileOffset.length > 0) {
 			let islandContour = islandProfileOffset[0].slice();
 			if (direction != "climb") islandContour = reversePath(islandContour);
-			shapeProfPaths.push({ tpath: islandContour, isContour: true });
+			shapeProfPaths.push({ tpath: islandContour, isContour: true, passStart: true });
 		}
 	}
-	if (shapeProfPaths.length > 0) profileGroups.push(shapeProfPaths);
+	if (shapeProfPaths.length > 0) profileGroups.push(rotateContoursToNearestEntry(shapeProfPaths));
 }
 
 // Generate male plug pocket, profile, and cutout paths for all shapes together
@@ -1839,7 +1876,9 @@ function generateInlayMalePaths(inputPaths, depths, clearance, pocketingTool, po
 	// Pocket inside each odd-depth shape, with its direct even-depth children as sub-islands
 	pocketOddDepthIslands(clearancePaths, inputPaths, pocketRadius, stepover, angle, direction, finishRadius, pocketPaths, null);
 
-	if (pocketPaths.length > 0) pocketGroups.push(pocketPaths);
+	// Re-order across island boundaries: each island's paths are already optimized
+	// internally, but the transitions between outer hull and each island need ordering.
+	if (pocketPaths.length > 0) pocketGroups.push(optimizePocketPaths(pocketPaths));
 
 	// Generate finishing profiles
 	let shapeProfPaths = [];
@@ -1853,10 +1892,10 @@ function generateInlayMalePaths(inputPaths, depths, clearance, pocketingTool, po
 			} else {
 				if (direction == "climb") profileContour = reversePath(profileContour);
 			}
-			shapeProfPaths.push({ tpath: profileContour, isContour: true });
+			shapeProfPaths.push({ tpath: profileContour, isContour: true, passStart: true });
 		}
 	}
-	if (shapeProfPaths.length > 0) profileGroups.push(shapeProfPaths);
+	if (shapeProfPaths.length > 0) profileGroups.push(rotateContoursToNearestEntry(shapeProfPaths));
 
 	// Optional: cut out around the convex hull boundary
 	appendCutOutGroup(cutOut, outerBoundary, pocketRadius, direction, pocketingTool, cutOutGroups);

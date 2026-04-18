@@ -516,11 +516,6 @@ function fitArcsToPath(points, toleranceMM) {
 			continue;
 		}
 
-		// Emit any skipped straight-line points before the arc starts
-		for (var sk = i; sk < arcStart; sk++) {
-			segments.push({ type: 'line', x: points[sk].x, y: points[sk].y });
-		}
-
 		// Extend the arc as far as possible
 		while (arcEnd + 1 < points.length) {
 			var nextPt = points[arcEnd + 1];
@@ -585,6 +580,11 @@ function fitArcsToPath(points, toleranceMM) {
 			continue;
 		}
 
+		// Arc passes all checks — now emit skipped straight-line points before the arc starts
+		for (var sk = i; sk < arcStart; sk++) {
+			segments.push({ type: 'line', x: points[sk].x, y: points[sk].y });
+		}
+
 		// We have an arc from points[arcStart] to points[arcEnd]
 		var arcPoints = points.slice(arcStart, arcEnd + 1);
 		var cw = isArcClockwise(arcPoints, circle.cx, circle.cy);
@@ -627,7 +627,7 @@ function fitArcsToPath(points, toleranceMM) {
 			});
 		}
 
-		i = arcEnd;
+		i = arcEnd + 1;
 	}
 
 	return segments;
