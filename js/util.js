@@ -212,6 +212,17 @@ function findClosestPath(pt) {
 			continue;
 		}
 
+		// Image paths are selectable by clicking anywhere inside their bounding box
+		if (svgpaths[i].type === 'image') {
+			if (pt.x >= bbox.minx && pt.x <= bbox.maxx && pt.y >= bbox.miny && pt.y <= bbox.maxy) {
+				if (1 < overallMin) {
+					overallMin = 1;
+					bestPath = svgpaths[i];
+				}
+			}
+			continue;
+		}
+
 		var path = svgpaths[i].path;
 		var minDist = Infinity;
 		for (var j = 0; j < path.length; j++) {

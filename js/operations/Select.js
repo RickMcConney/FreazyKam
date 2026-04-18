@@ -192,6 +192,10 @@ class Select extends Operation {
     }
 
     isNearEdge(pt, svgpath) {
+        if (svgpath.type === 'image') {
+            const b = svgpath.bbox;
+            return pt.x >= b.minx && pt.x <= b.maxx && pt.y >= b.miny && pt.y <= b.maxy;
+        }
         return this._minSegDistSq(pt, svgpath.path) < 100;
     }
 
@@ -205,6 +209,12 @@ class Select extends Operation {
             const bbox = svgpaths[i].bbox;
             if (pt.x < bbox.minx - bboxMargin || pt.x > bbox.maxx + bboxMargin ||
                 pt.y < bbox.miny - bboxMargin || pt.y > bbox.maxy + bboxMargin) {
+                continue;
+            }
+            if (svgpaths[i].type === 'image') {
+                if (pt.x >= bbox.minx && pt.x <= bbox.maxx && pt.y >= bbox.miny && pt.y <= bbox.maxy) {
+                    if (1 < bestDist) { bestDist = 1; bestPath = svgpaths[i]; }
+                }
                 continue;
             }
             const dist = this._minSegDistSq(pt, svgpaths[i].path);

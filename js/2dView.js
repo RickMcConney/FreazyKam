@@ -464,16 +464,71 @@ function fillCircles(circles, color) {
 
 }
 
+function drawReferenceImage(path, borderColor) {
+	if (!path.imageData || path.path.length < 4) return;
+
+	// Cache the HTMLImageElement as non-enumerable so JSON.stringify skips it
+	if (!path._imageEl || !path._imageEl.tagName) {
+		var img = new Image();
+		img.onload = function() { redraw(); };
+		img.src = path.imageData;
+		Object.defineProperty(path, '_imageEl', { value: img, writable: true, enumerable: false, configurable: true });
+	}
+	if (!path._imageEl.complete || path._imageEl.naturalWidth === 0) return;
+
+	var c = path.path;
+	var tl = worldToScreen(c[0].x, c[0].y);
+	var tr = worldToScreen(c[1].x, c[1].y);
+	var bl = worldToScreen(c[3].x, c[3].y);
+	var W = path.imageNaturalWidth;
+	var H = path.imageNaturalHeight;
+
+	ctx.save();
+	ctx.setTransform(
+		(tr.x - tl.x) / W,
+		(tr.y - tl.y) / W,
+		(bl.x - tl.x) / H,
+		(bl.y - tl.y) / H,
+		tl.x,
+		tl.y
+	);
+	ctx.globalAlpha = 0.5;
+	ctx.drawImage(path._imageEl, 0, 0);
+	ctx.restore();
+
+	// Draw bounding box border
+	ctx.save();
+	ctx.beginPath();
+	var p0 = worldToScreen(c[0].x, c[0].y);
+	var p1 = worldToScreen(c[1].x, c[1].y);
+	var p2 = worldToScreen(c[2].x, c[2].y);
+	var p3 = worldToScreen(c[3].x, c[3].y);
+	ctx.moveTo(p0.x, p0.y);
+	ctx.lineTo(p1.x, p1.y);
+	ctx.lineTo(p2.x, p2.y);
+	ctx.lineTo(p3.x, p3.y);
+	ctx.closePath();
+	ctx.strokeStyle = borderColor;
+	ctx.lineWidth = 1;
+	ctx.setLineDash([5, 5]);
+	ctx.stroke();
+	ctx.setLineDash([]);
+	ctx.restore();
+}
+
 function drawSvgPaths() {
 	for (var i = 0; i < svgpaths.length; i++) {
 		if (svgpaths[i].visible) {
 			let path = svgpaths[i];
 			if (!selectMgr.isSelected(path))
 			{
-				if (path.highlight)
+				if (path.type === 'image') {
+					drawReferenceImage(path, path.highlight ? highlightColor : lineColor);
+				} else if (path.highlight) {
 					drawSvgPath(path, highlightColor, 3);
-				else 	
+				} else {
 					drawSvgPath(path, lineColor, 0.5);
+				}
 			}
 		}
 	}
@@ -482,11 +537,15 @@ function drawSvgPaths() {
 	for(let i = 0;i<selectedPaths.length;i++)
 	{
 		let path = selectedPaths[i];
+		let color = (i == selectedPaths.length - 1) ? activeColor : selectColor;
 
-		if(i == selectedPaths.length-1)
+		if (path.type === 'image') {
+			drawReferenceImage(path, color);
+		} else if(i == selectedPaths.length-1) {
 			drawSvgPath(path, activeColor, 3);
-		else
-			drawSvgPath(path, selectColor, 3);		
+		} else {
+			drawSvgPath(path, selectColor, 3);
+		}
 	}
 }
 

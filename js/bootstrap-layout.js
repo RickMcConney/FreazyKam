@@ -4,7 +4,7 @@
  */
 
 // Version number based on latest commit date
-var APP_VERSION = "Ver 2026-04-16";
+var APP_VERSION = "Ver 2026-04-17";
 
 var mode = "Select";
 var options = [];
@@ -12,23 +12,53 @@ var tools = [];
 var currentTool = null;
 var currentFileName = "none";
 
-function traceImageToSvg(dataUrl, filename) {
-    ImageTracer.imageToSVG(dataUrl, function(svgString) {
-        var cleanedSvg = removeBoundaryPaths(svgString);
-        parseSvgContent(cleanedSvg, filename);
+function importReferenceImage(dataUrl, filename) {
+    var img = new Image();
+    img.onload = function() {
+        var name = filename.replace(/\.[^.]+$/, '');
+        var wpW = getOption("workpieceWidth") * viewScale;
+        var wpH = getOption("workpieceLength") * viewScale;
+        var imgAspect = img.naturalWidth / img.naturalHeight;
+        var wpAspect = wpW / wpH;
+
+        var w, h;
+        if (imgAspect > wpAspect) {
+            w = wpW * 0.8;
+            h = w / imgAspect;
+        } else {
+            h = wpH * 0.8;
+            w = h * imgAspect;
+        }
+
+        var x0 = (wpW - w) / 2;
+        var y0 = (wpH - h) / 2;
+
+        addUndo(false, true, false);
+
+        var id = 'IMG' + svgpathId++;
+        var svgpath = {
+            id: id,
+            name: name,
+            type: 'image',
+            imageData: dataUrl,
+            imageNaturalWidth: img.naturalWidth,
+            imageNaturalHeight: img.naturalHeight,
+            path: [
+                { x: x0,     y: y0 },
+                { x: x0 + w, y: y0 },
+                { x: x0 + w, y: y0 + h },
+                { x: x0,     y: y0 + h },
+            ],
+            bbox: { minx: x0, miny: y0, maxx: x0 + w, maxy: y0 + h },
+            visible: true,
+            creationTool: 'Image'
+        };
+
+        svgpaths.push(svgpath);
+        addSvgPath(id, name);
         redraw();
-    }, {
-        numberofcolors: 4,
-        colorsampling: 0,
-        pathomit: 40,
-        blurradius: 3,
-        blurdelta: 20,
-        ltres: 1,
-        qtres: 1,
-        strokewidth: 1,
-        linefilter: true,
-        rightangleenhance: true
-    });
+    };
+    img.src = dataUrl;
 }
 
 function setProjectName(name) {
@@ -303,7 +333,7 @@ fileInput.addEventListener('change', function (e) {
     if (ext === 'png' || ext === 'jpg' || ext === 'jpeg') {
         var reader = new FileReader();
         reader.onload = function (event) {
-            traceImageToSvg(event.target.result, file.name);
+            importReferenceImage(event.target.result, file.name);
         };
         reader.readAsDataURL(file);
         fileInput.value = "";
@@ -351,7 +381,7 @@ pngFileInput.addEventListener('change', function (e) {
 
     var reader = new FileReader();
     reader.onload = function (event) {
-        traceImageToSvg(event.target.result, file.name);
+        importReferenceImage(event.target.result, file.name);
     };
     reader.readAsDataURL(file);
     pngFileInput.value = "";
@@ -647,6 +677,7 @@ function initializeLayout() {
     initializeGcodeView();
     cncController.operationManager.addOperations();
     lucide.createIcons();
+    updateSnapButton();
 }
 
 // Toolbar creation
@@ -678,6 +709,12 @@ function createToolbar() {
                 </button>
                 <button type="button" class="btn btn-outline-secondary btn-sm btn-toolbar" data-action="redo" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Redo last action (Ctrl/Cmd+Y)">
                     <i data-lucide="redo-2"></i>Redo
+                </button>
+            </div>
+            <div class="toolbar-separator"></div>
+            <div class="toolbar-section">
+                <button type="button" id="snap-toggle-btn" class="btn btn-sm btn-toolbar btn-outline-secondary" data-action="snap" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Snap to Grid (S)">
+                    <i data-lucide="magnet"></i>Snap
                 </button>
             </div>
             <div class="ms-auto toolbar-section">
@@ -715,6 +752,8 @@ function createToolbar() {
                 setProjectName('');
                 window._importedGcode = null;
                 newProject();
+                const drawToolsTab = document.getElementById('draw-tools-tab');
+                if (drawToolsTab) new bootstrap.Tab(drawToolsTab).show();
                 break;
             case 'open':
                 fileOpen.click();
@@ -734,6 +773,9 @@ function createToolbar() {
             case 'redo':
                 doRedo();
                 break;
+            case 'snap':
+                toggleSnap();
+                break;
             case 'options':
                 showOptionsModal();
                 break;
@@ -742,6 +784,20 @@ function createToolbar() {
                 break;
         }
     });
+}
+
+function toggleSnap() {
+    const current = getOption("snapGrid") !== false;
+    setOption("snapGrid", !current);
+    updateSnapButton();
+}
+
+function updateSnapButton() {
+    const btn = document.getElementById('snap-toggle-btn');
+    if (!btn) return;
+    const on = getOption("snapGrid") !== false;
+    btn.classList.toggle('btn-primary', on);
+    btn.classList.toggle('btn-outline-secondary', !on);
 }
 
 // Sidebar creation
@@ -944,7 +1000,7 @@ function setupSidebarEventHandlers(sidebar) {
         const pathId = item.dataset.pathId;
 
         if (operation) {
-            const isDrawTool = ['Select', 'Workpiece', 'Move', 'Edit', 'Pen', 'Shape', 'Boolean', 'Gemini', 'Text', 'Tabs', 'Offset', 'Pattern'].includes(operation);
+            const isDrawTool = ['Select', 'Workpiece', 'Move', 'Edit', 'Pen', 'Curve', 'Shape', 'Boolean', 'Gemini', 'Text', 'Tabs', 'Offset', 'Pattern'].includes(operation);
 
             if (isDrawTool) {
                 showToolPropertiesEditor(operation);
@@ -2349,6 +2405,9 @@ function handleOperationClick(operation) {
         case 'Pen':
             doPen();
             break;
+        case 'Curve':
+            doCurve();
+            break;
         case 'Shape':
             doShape();
             break;
@@ -2457,7 +2516,7 @@ function handlePathClick(pathId) {
     const path = svgpaths.find(p => p.id === pathId);
     if (path && path.creationTool && path.creationProperties) {
         // Only show properties editor if this is a draw tool that supports editing
-        if (path.creationTool === 'Text' || path.creationTool === 'Shape' || path.creationTool === 'Offset' || path.creationTool === 'Pattern') {
+        if (path.creationTool === 'Text' || path.creationTool === 'Shape' || path.creationTool === 'Offset' || path.creationTool === 'Pattern' || path.creationTool === 'Curve' || path.creationTool === 'Pen') {
             // Always switch to Draw Tools tab when editing from paths list
             const drawToolsTab = document.getElementById('draw-tools-tab');
             const drawToolsPane = document.getElementById('draw-tools');
@@ -2469,9 +2528,15 @@ function handlePathClick(pathId) {
             drawToolsTab.classList.add('active');
             drawToolsPane.classList.add('show', 'active');
 
-            // Show properties editor for this path
-            showPathPropertiesEditor(path);
             cncController.setMode(path.creationTool);
+
+            // For Curve/Pen: enter edit mode first so getPropertiesHTML shows editing status
+            if (path.creationTool === 'Curve' || path.creationTool === 'Pen') {
+                const op = cncController.operationManager.getOperation(path.creationTool);
+                if (op) op.enterEditMode(path);
+            }
+
+            showPathPropertiesEditor(path);
 
             // For Offset/Pattern: select generated paths first (red), source paths last (magenta)
             if ((path.creationTool === 'Offset' || path.creationTool === 'Pattern') && path.creationProperties.sourceIds) {
@@ -3127,8 +3192,11 @@ function getToolIcon(bit) {
 
 function getIconForPath(sp) {
     if (sp.creationTool === 'STL') return 'file-box';
+    if (sp.creationTool === 'Image') return 'image';
     if (sp.creationTool === 'Offset') return 'fullscreen';
     if (sp.creationTool === 'Pattern') return 'grid-3x3';
+    if (sp.creationTool === 'Curve') return 'spline';
+    if (sp.creationTool === 'Pen') return 'pen-tool';
     return getPathIcon(sp.name);
 }
 
@@ -3164,7 +3232,7 @@ function updatePathVisibilityIcon(id, visible) {
     } else {
         const svgpath = svgpaths.find(p => p.id === id);
         if (!svgpath) return;
-        iconName = visible ? getPathIcon(svgpath.name) : 'eye-off';
+        iconName = visible ? getIconForPath(svgpath) : 'eye-off';
         displayName = svgpath.name;
     }
 

@@ -9,7 +9,6 @@ class Workpiece extends Operation {
             woodSpecies:        { key: 'woodSpecies',        label: 'Wood Species',   type: 'choice',    default: 'Pine', options: [] },
             gridSize:           { key: 'gridSize',           label: 'Grid Size',      type: 'dimension', default: 10   },
             showGrid:           { key: 'showGrid',           label: 'Show Grid',      type: 'checkbox',  default: true },
-            snapGrid:           { key: 'snapGrid',           label: 'Snap to Grid',   type: 'checkbox',  default: true },
             showOrigin:         { key: 'showOrigin',         label: 'Show Origin',    type: 'checkbox',  default: true },
             showWorkpiece:      { key: 'showWorkpiece',      label: 'Show Workpiece', type: 'checkbox',  default: true },
             originPosition:     { key: 'originPosition',     label: 'Origin Position', type: 'radio-grid', default: 'middle-center',
@@ -70,7 +69,6 @@ class Workpiece extends Operation {
 
             <div class="row g-2">
                 <div class="col-6">${fh(this.fields.showGrid,      getOption("showGrid")      !== false)}</div>
-                <div class="col-6">${fh(this.fields.snapGrid,      getOption("snapGrid")      !== false)}</div>
             </div>
             <div class="row g-2">
                 <div class="col-6">${fh(this.fields.showOrigin,    getOption("showOrigin")    !== false)}</div>
@@ -151,10 +149,6 @@ class Workpiece extends Operation {
 
         if ('showGrid' in data) {
             setOption("showGrid", data.showGrid);
-        }
-
-        if ('snapGrid' in data) {
-            setOption("snapGrid", data.snapGrid);
         }
 
         if ('showOrigin' in data) {

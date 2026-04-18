@@ -200,7 +200,7 @@
                         <div id="status"
                             class="bg-light border-top p-2 text-muted d-flex align-items-center justify-content-between">
                             <span>Tool: Select</span>
-                            <span class="small">Ver 2026-04-16</span>
+                            <span class="small">Ver 2026-04-17</span>
                         </div>
                     </div>
                 </div>
@@ -214,10 +214,10 @@
 
 <!--  Bootstrap JS -->
 
-<script src="js/jquery-2.1.1.min.js"></script>
+<script src="js/lib/jquery-2.1.1.min.js"></script>
 
-<script type="text/javascript" src="js/paper-full.js"></script>
-<script type="text/javascript" src="js/lucide.js"></script>
+<script type="text/javascript" src="js/lib/paper-full.js"></script>
+<script type="text/javascript" src="js/lib/lucide.js"></script>
 <script type="text/javascript">
 // Register custom inlay icons with Lucide
 (function() {
@@ -253,18 +253,18 @@
     };
 })();
 </script>
-<script type="text/javascript" src="js/bootstrap-min.js"></script>
+<script type="text/javascript" src="js/lib/bootstrap-min.js"></script>
 <script type="text/javascript" src="js/gcodeView.js"></script>
 <script type="text/javascript" src="js/bootstrap-layout/simulationControls.js"></script>
 <script type="text/javascript" src="js/bootstrap-layout/gcodeViewerPanel.js"></script>
 <script type="text/javascript" src="js/bootstrap-layout/gcodeProfiles.js"></script>
 <script type="text/javascript" src="js/bootstrap-layout/modals.js"></script>
 <script type="text/javascript" src="js/bootstrap-layout.js"></script>
-<script type="text/javascript" src="js/simplify.js"></script>
-<script type="text/javascript" src="js/clipperf.js"></script>
-<script type="text/javascript" src="js/jspoly.js"></script>
-<script type="text/javascript" src="js/bezier.js"></script>
-<script type="text/javascript" src="js/maker.js"></script>
+<script type="text/javascript" src="js/lib/simplify.js"></script>
+<script type="text/javascript" src="js/lib/clipperf.js"></script>
+<script type="text/javascript" src="js/lib/jspoly.js"></script>
+<script type="text/javascript" src="js/lib/bezier.js"></script>
+<script type="text/javascript" src="js/lib/maker.js"></script>
 <script src="js/vcarve.js"></script>
 <script src="js/PropertiesManager.js"></script>
 <script src="js/operations/Operation.js"></script>
@@ -274,6 +274,7 @@
 <script src="js/operations/PathEdit.js"></script>
 <script src="js/operations/Boolean.js"></script>
 <script src="js/operations/Gemini.js"></script>
+<script src="js/operations/Curve.js"></script>
 <script src="js/operations/Pen.js"></script>
 <script src="js/operations/Shape.js"></script>
 <script src="js/fontList.js"></script>
@@ -296,18 +297,17 @@
 <script type="text/javascript" src="js/cnc.js"></script>
 <script src="js/2dSimulation.js"></script>
 <script type="text/javascript" src="js/svg.js"></script>
-<script src="js/opentype.js"></script>
+<script src="js/lib/opentype.js"></script>
 <!-- 3D View dependencies -->
 <script type="importmap">
 {
   "imports": {
-    "three": "./js/three.module.js",
-    "three/addons/loaders/STLLoader": "./js/STLLoader.js"
+    "three": "./js/lib/three.module.js",
+    "three/addons/loaders/STLLoader": "./js/lib/STLLoader.js"
   }
 }
 </script>
 
-<script src="js/imagetracer_v1.2.6.js"></script>
 <script type="module" src="./js/3dView.js"></script>
 <script type="module" src="./js/stl.js"></script>
 

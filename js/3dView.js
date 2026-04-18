@@ -1,4 +1,4 @@
-import * as THREE from './three.module.js';
+import * as THREE from './lib/three.module.js';
 import { VoxelGrid } from './voxels/VoxelGrid.js';
 import { VoxelMaterialRemover } from './voxels/VoxelMaterialRemover.js';
 
@@ -897,14 +897,17 @@ function updateSimulation3DUI() {
 
   if (!startBtn || !pauseBtn || !stopBtn) return;
 
-  if (toolpathAnimation && toolpathAnimation.isPlaying) {
+  const hasAnimation = toolpathAnimation != null;
+  const isPlaying = hasAnimation && toolpathAnimation.isPlaying;
+
+  if (isPlaying) {
     startBtn.disabled = true;
     pauseBtn.disabled = false;
     stopBtn.disabled = false;
   } else {
     startBtn.disabled = false;
     pauseBtn.disabled = true;
-    stopBtn.disabled = true;
+    stopBtn.disabled = !hasAnimation;
   }
 
   // Update all displays including progress slider

@@ -80,6 +80,13 @@ document.addEventListener('keydown', function (evt) {
 		return;
 	}
 
+	// S key: Toggle snap to grid
+	if ((evt.key === 's' || evt.key === 'S') && !cmdOrCtrl) {
+		evt.preventDefault();
+		if (typeof toggleSnap === 'function') toggleSnap();
+		return;
+	}
+
 	// Delete key: Delete selected (but not when PathEdit or TabEditor tool is active)
 	if (evt.key === 'Delete' || evt.key === 'Backspace') {
 		// Check if PathEdit or TabEditor tool is active - if so, let them handle the delete
@@ -87,7 +94,9 @@ document.addEventListener('keydown', function (evt) {
 			cncController.operationManager &&
 			cncController.operationManager.currentOperation &&
 			(cncController.operationManager.currentOperation.name === 'Edit' ||
-			 cncController.operationManager.currentOperation.name === 'Tabs')) {
+			 cncController.operationManager.currentOperation.name === 'Tabs' ||
+			 cncController.operationManager.currentOperation.name === 'Curve' ||
+			 cncController.operationManager.currentOperation.name === 'Pen')) {
 			// Let PathEdit/TabEditor handle the delete key for deleting points/tabs
 			return;
 		}
@@ -298,6 +307,10 @@ function restoreProject(project) {
 	if (project.svgpaths) restoreSvgpaths(project.svgpaths, project.selectedIds);
 	var editOp = cncController && cncController.operationManager && cncController.operationManager.getOperation('Edit');
 	if (editOp) { editOp.originalPathBeforeRadius = null; editOp.originalPathBeforeRadiusId = null; }
+	['Curve', 'Pen'].forEach(name => {
+		var op = cncController && cncController.operationManager && cncController.operationManager.getOperation(name);
+		if (op && typeof op.refreshEditPath === 'function') op.refreshEditPath();
+	});
 	onPathsChanged(null);
 }
 
@@ -465,6 +478,7 @@ function loadProject(json) {
 	}
 
 	cncController.setMode("Select");
+	if (typeof updateSnapButton === 'function') updateSnapButton();
 	redraw();
 }
 
@@ -658,6 +672,11 @@ function doGemini() {
 
 function doPen() {
 	cncController.setMode("Pen");
+	selectMgr.unselectAll();
+}
+
+function doCurve() {
+	cncController.setMode("Curve");
 	selectMgr.unselectAll();
 }
 
