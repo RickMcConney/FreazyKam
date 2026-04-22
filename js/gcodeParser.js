@@ -44,10 +44,25 @@ function parseGcodeTemplate(template) {
         inversions.Z = false;
     }
 
+    // Extract arc I/J mapping from template.
+    // The first IJ letter in the template feeds machine I, the second feeds machine J.
+    // E.g. "-J I F" means: machine I = -(CAM j-offset), machine J = CAM i-offset.
+    const arcIJ = { iKey: 'i', iNeg: false, jKey: 'j', jNeg: false };
+    const ijMatches = [...template.matchAll(/(-?)([IJ])\b/g)];
+    if (ijMatches.length >= 1) {
+        arcIJ.iKey = ijMatches[0][2].toLowerCase();  // 'i' or 'j'
+        arcIJ.iNeg = ijMatches[0][1] === '-';
+    }
+    if (ijMatches.length >= 2) {
+        arcIJ.jKey = ijMatches[1][2].toLowerCase();
+        arcIJ.jNeg = ijMatches[1][1] === '-';
+    }
+
     return {
         command: command,
         axes: axes,
-        inversions: inversions
+        inversions: inversions,
+        arcIJ: arcIJ
     };
 }
 
@@ -68,33 +83,25 @@ function createGcodeParseConfig(profile) {
             cutAxes: ['X', 'Y', 'Z'],
             rapidInversions: { X: false, Y: false, Z: false },
             cutInversions: { X: false, Y: false, Z: false },
+            arcIJ: { iKey: 'i', iNeg: false, jKey: 'j', jNeg: false },
             useInches: false
         };
     }
 
     const rapidInfo = parseGcodeTemplate(profile.rapidTemplate || 'G0 X Y Z F');
     const cutInfo = parseGcodeTemplate(profile.cutTemplate || 'G1 X Y Z F');
-
-    // Extract arc commands from templates (first token)
-    var cwArcCmd = 'G2', ccwArcCmd = 'G3';
-    if (profile.cwArcTemplate) {
-        var tokens = profile.cwArcTemplate.trim().split(/\s+/);
-        if (tokens[0]) cwArcCmd = tokens[0];
-    }
-    if (profile.ccwArcTemplate) {
-        var tokens = profile.ccwArcTemplate.trim().split(/\s+/);
-        if (tokens[0]) ccwArcCmd = tokens[0];
-    }
+    const cwArcInfo = parseGcodeTemplate(profile.cwArcTemplate || 'G2 X Y I J F');
 
     return {
         rapidCommand: rapidInfo.command,
         cutCommand: cutInfo.command,
-        cwArcCommand: cwArcCmd,
-        ccwArcCommand: ccwArcCmd,
+        cwArcCommand: cwArcInfo.command,
+        ccwArcCommand: parseGcodeTemplate(profile.ccwArcTemplate || 'G3 X Y I J F').command,
         rapidAxes: rapidInfo.axes,
         cutAxes: cutInfo.axes,
         rapidInversions: rapidInfo.inversions,
         cutInversions: cutInfo.inversions,
+        arcIJ: cwArcInfo.arcIJ,
         useInches: profile.gcodeUnits === 'inches'
     };
 }
@@ -127,7 +134,7 @@ const SHARED_NON_MOVEMENT = Object.freeze({
  * @param {object} parseConfig - Parse configuration from createGcodeParseConfig()
  * @returns {object} - { movements: array, tools: array } where tools are shared across movements
  */
-function parseGcodeFile(gcode, parseConfig) {
+function parseGcodeFile(gcode, parseConfig, isFor3D) {
     if (!parseConfig) {
         parseConfig = createGcodeParseConfig(null);
     }
@@ -269,19 +276,50 @@ function parseGcodeFile(gcode, parseConfig) {
             // G2/G3 arc command — expand to linear segments for simulation
             const endPos = { x: currentX, y: currentY, z: currentZ };
 
-            for (const axis of axes) {
-                if (coordinates.hasOwnProperty(axis)) {
-                    let value = coordinates[axis];
-                    if (inversions[axis]) value = -value;
-                    if (axis === 'X') endPos.x = value;
-                    else if (axis === 'Y') endPos.y = value;
-                    else if (axis === 'Z') endPos.z = value;
+            if (!isFor3D) {
+                // 2D: undo axis swap and negation to recover CAM/canvas coordinates.
+                // compileTemplate always emits position i under gcodeLabels[i] ('X','Y','Z').
+                // axes[i] is the CAM axis that was placed at position i, so reading
+                // coordinates[gcodeLabels[i]] and assigning it to the CAM axis axes[i]
+                // undoes the swap. Applying inversions[axes[i]] undoes the negation.
+                const gcodeLabels = ['X', 'Y', 'Z'];
+                for (let i = 0; i < Math.min(axes.length, 3); i++) {
+                    const gcodeLabel = gcodeLabels[i];
+                    const camAxis = axes[i];
+                    if (coordinates.hasOwnProperty(gcodeLabel)) {
+                        let value = coordinates[gcodeLabel];
+                        if (inversions[camAxis]) value = -value;
+                        if (camAxis === 'X') endPos.x = value;
+                        else if (camAxis === 'Y') endPos.y = value;
+                        else if (camAxis === 'Z') endPos.z = value;
+                    }
                 }
+            } else {
+                // 3D: literal machine coordinates from G-code
+                if (coordinates.hasOwnProperty('X')) endPos.x = coordinates['X'];
+                if (coordinates.hasOwnProperty('Y')) endPos.y = coordinates['Y'];
+                if (coordinates.hasOwnProperty('Z')) endPos.z = coordinates['Z'];
             }
 
-            // I, J are relative offsets from current position to arc center
-            const ci = coordinates.I || 0;
-            const cj = coordinates.J || 0;
+            // I, J are relative offsets from current position to arc center.
+            // For 3D use literal machine values. For 2D undo the template's IJ mapping
+            // (e.g. "G2 -Y X -J I F" emits I=-j_cam, J=i_cam; undo recovers ci/cj in CAM coords).
+            let ci, cj;
+            if (!isFor3D) {
+                const rawI = coordinates.I || 0;
+                const rawJ = coordinates.J || 0;
+                const aij = parseConfig.arcIJ;
+                // undoI recovers the CAM offset that was routed to machine I
+                const undoI = aij.iNeg ? -rawI : rawI;
+                // undoJ recovers the CAM offset that was routed to machine J
+                const undoJ = aij.jNeg ? -rawJ : rawJ;
+                ci = 0; cj = 0;
+                if (aij.iKey === 'i') ci = undoI; else cj = undoI;
+                if (aij.jKey === 'j') cj = undoJ; else ci = undoJ;
+            } else {
+                ci = coordinates.I || 0;
+                cj = coordinates.J || 0;
+            }
             const cx = currentX + ci;
             const cy = currentY + cj;
 
@@ -343,14 +381,29 @@ function parseGcodeFile(gcode, parseConfig) {
             // Linear move (G0/G1)
             const newPos = { x: currentX, y: currentY, z: currentZ };
 
-            for (const axis of axes) {
-                if (coordinates.hasOwnProperty(axis)) {
-                    let value = coordinates[axis];
-                    if (inversions[axis]) value = -value;
-                    if (axis === 'X') newPos.x = value;
-                    else if (axis === 'Y') newPos.y = value;
-                    else if (axis === 'Z') newPos.z = value;
+            if (!isFor3D) {
+                // 2D: undo axis swap and negation to recover CAM/canvas coordinates.
+                // compileTemplate always emits position i under gcodeLabels[i] ('X','Y','Z').
+                // axes[i] is the CAM axis that was placed at position i, so reading
+                // coordinates[gcodeLabels[i]] and assigning it to the CAM axis axes[i]
+                // undoes the swap. Applying inversions[axes[i]] undoes the negation.
+                const gcodeLabels = ['X', 'Y', 'Z'];
+                for (let i = 0; i < Math.min(axes.length, 3); i++) {
+                    const gcodeLabel = gcodeLabels[i];
+                    const camAxis = axes[i];
+                    if (coordinates.hasOwnProperty(gcodeLabel)) {
+                        let value = coordinates[gcodeLabel];
+                        if (inversions[camAxis]) value = -value;
+                        if (camAxis === 'X') newPos.x = value;
+                        else if (camAxis === 'Y') newPos.y = value;
+                        else if (camAxis === 'Z') newPos.z = value;
+                    }
                 }
+            } else {
+                // 3D: literal machine coordinates from G-code
+                if (coordinates.hasOwnProperty('X')) newPos.x = coordinates['X'];
+                if (coordinates.hasOwnProperty('Y')) newPos.y = coordinates['Y'];
+                if (coordinates.hasOwnProperty('Z')) newPos.z = coordinates['Z'];
             }
 
             const movement = {

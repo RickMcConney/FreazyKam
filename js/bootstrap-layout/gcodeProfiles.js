@@ -58,7 +58,8 @@ function loadGcodeProfiles() {
     }
 
     if (gcodeProfiles.length > 0) {
-        currentGcodeProfile = gcodeProfiles[0];
+        var savedId = parseInt(localStorage.getItem('currentGcodeProfileId'));
+        currentGcodeProfile = gcodeProfiles.find(p => p.recid === savedId) || gcodeProfiles[0];
     }
 }
 
@@ -124,6 +125,7 @@ function loadSelectedGcodeProfile() {
 
     if (profile) {
         currentGcodeProfile = profile;
+        localStorage.setItem('currentGcodeProfileId', profile.recid);
         renderPostProcessorForm(profile);
         updateGcodeSectionTitle(profile.name);
     }

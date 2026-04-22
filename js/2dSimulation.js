@@ -61,7 +61,7 @@ function setupSimulation2D() {
         // This respects axis inversions, custom ordering, and extracts tool metadata
         const profile = window.currentGcodeProfile || null;
         const parseConfig = createGcodeParseConfig(profile);
-        const parseResult = parseGcodeFile(simulation2D.gcode, parseConfig);
+        const parseResult = parseGcodeFile(simulation2D.gcode, parseConfig,false);
         const movements = parseResult.movements;
         const tools = parseResult.tools;
 

@@ -1876,7 +1876,7 @@ class ToolpathAnimation {
 
     // Use shared G-code parser to parse movements
     timers.parseStart = performance.now();
-    const parseResult = parseGcodeFile(gcode, parseConfig);
+    const parseResult = parseGcodeFile(gcode, parseConfig, true);
     const parsedMovements = parseResult.movements;
     const toolsArray = parseResult.tools;
     const parsedLineMap = parseResult.lineMap || null;

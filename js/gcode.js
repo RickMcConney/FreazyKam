@@ -208,8 +208,8 @@ function convertFeedUnits(feed, useInches) {
 // - Axis inversion: "G0 -X Y -Z" negates X and Z values
 // - Axis swapping: "G0 Y X Z" swaps X and Y coordinates
 // - Spindle speed: "M3 S" outputs spindle speed when params.s is provided
-function processAxisParam(output, axisChar, match, value, inverted, fmt) {
-	if (!match) return output;
+function processAxisParam(output, axisChar, value, inverted) {
+	//if (!match) return output;
 	if (value !== undefined && value !== null) {
 		if (inverted) value = -value;
 		return output.replace(new RegExp('-?' + axisChar + '\\b'), axisChar + fmt(value));
@@ -217,7 +217,7 @@ function processAxisParam(output, axisChar, match, value, inverted, fmt) {
 	return output.replace(new RegExp('-?' + axisChar + '\\b'), '').trim();
 }
 
-function processSimpleParam(output, paramChar, value, fmt) {
+function processSimpleParam(output, paramChar, value) {
 	const re = new RegExp('\\b' + paramChar + '\\b', 'g');
 	if (value !== undefined && value !== null) {
 		return output.replace(re, paramChar + fmt(value));
@@ -225,69 +225,83 @@ function processSimpleParam(output, paramChar, value, fmt) {
 	return output.replace(re, '').trim();
 }
 
-function applyGcodeTemplate(template, params) {
-	if (!template) return '';
+var decimals = 2; // Default decimal places for mm; updated to 4 if inches are used
+function fmt(v) {
+	if (typeof v !== 'number') return v;
+	return parseFloat(v.toFixed(decimals));
+}
 
+function parseProfile(profile)
+{
 	// Round coordinates: 2 decimal places for mm, 4 for inches
 	var useInches = currentGcodeProfile && currentGcodeProfile.gcodeUnits === 'inches';
-	var decimals = useInches ? 4 : 2;
-	function fmt(v) {
-		if (typeof v !== 'number') return v;
-		return parseFloat(v.toFixed(decimals));
+	decimals = useInches ? 4 : 2;
+
+	function withZ(tmpl) {
+		return /\bZ\b/.test(tmpl) ? tmpl : tmpl.replace(/\bI\b/, 'Z I');
 	}
 
-	var output = template;
-
-	// Parse template to detect axis inversions and swapping
-	var axisMap = {};
-	var inversions = {};
-
-	// Detect negation and axis mapping
-	// Match patterns like "-X", "X", "-Y", "Y", "-Z", "Z"
-	var xMatch = template.match(/(-?)X\b/);
-	var yMatch = template.match(/(-?)Y\b/);
-	var zMatch = template.match(/(-?)Z\b/);
-
-	// Determine if axes are swapped by their positions in the template
-	var axisPositions = [];
-	if (xMatch) {
-		axisPositions.push({ axis: 'X', pos: xMatch.index, inverted: xMatch[1] === '-' });
-	}
-	if (yMatch) {
-		axisPositions.push({ axis: 'Y', pos: yMatch.index, inverted: yMatch[1] === '-' });
-	}
-	if (zMatch) {
-		axisPositions.push({ axis: 'Z', pos: zMatch.index, inverted: zMatch[1] === '-' });
-	}
-
-	// Sort by position to determine the mapping
-	axisPositions.sort((a, b) => a.pos - b.pos);
-
-	// Create mapping: template axis -> value to use
-	// For example, if template is "G0 Y X Z", then:
-	// - First position is Y, should get X value (params.x)
-	// - Second position is X, should get Y value (params.y)
-	var valueOrder = ['x', 'y', 'z'];
-	axisPositions.forEach((item, idx) => {
-		if (idx < valueOrder.length) {
-			axisMap[item.axis] = valueOrder[idx];
-			inversions[item.axis] = item.inverted;
-		}
-	});
-
-	output = processAxisParam(output, 'X', xMatch, params[axisMap['X'] || 'x'], inversions['X'], fmt);
-	output = processAxisParam(output, 'Y', yMatch, params[axisMap['Y'] || 'y'], inversions['Y'], fmt);
-	output = processAxisParam(output, 'Z', zMatch, params[axisMap['Z'] || 'z'], inversions['Z'], fmt);
-	output = processSimpleParam(output, 'F', params.f, fmt);
-	output = processSimpleParam(output, 'I', params.i, fmt);
-	output = processSimpleParam(output, 'J', params.j, fmt);
-	output = processSimpleParam(output, 'S', params.s, fmt);
-
-	// Clean up multiple spaces
-	output = output.replace(/\s+/g, ' ').trim();
-
-	return output;
+	profile.cutFormater = compileTemplate(profile.cutTemplate, ['X', 'Y', 'Z', 'F']);
+	profile.rapidFormater = compileTemplate(profile.rapidTemplate, ['X', 'Y', 'Z', 'F']);
+	profile.ccwArcFormater = compileTemplate(profile.ccwArcTemplate, ['X', 'Y', 'I', 'J', 'F']);
+	profile.cwArcFormater = compileTemplate(profile.cwArcTemplate, ['X', 'Y', 'I', 'J', 'F']);
+	profile.ccwArcWithZFormater = compileTemplate(withZ(profile.ccwArcTemplate), ['X', 'Y', 'Z', 'I', 'J', 'F']);
+	profile.cwArcWithZFormater = compileTemplate(withZ(profile.cwArcTemplate), ['X', 'Y', 'Z', 'I', 'J', 'F']);
+	profile.spindleFormater = compileTemplate(profile.spindleOnGcode, ['S']);
 }
+
+function compileTemplate(template, labels) {
+
+  // 1. Identify the prefix (everything before the first axis X, Y, Z, I, J, or F)
+  const axisRegex = /(-?)([XYZIJFS])/g;
+  const firstMatch = template.search(/(-?)[XYZS]/);
+  
+  const prefix = template.substring(0, firstMatch).trim();
+  const mappingPart = template.substring(firstMatch);
+
+  // 2. Extract mappings
+  const instructions = [];
+  let match;
+  let labelIndex = 0;
+
+  while ((match = axisRegex.exec(mappingPart)) !== null) {
+    const sign = match[1];
+    const sourceKey = match[2].toLowerCase();
+    const outputLabel = labels[labelIndex++];
+
+    if (outputLabel) {
+      instructions.push({
+        label: outputLabel,
+        sign: sign,
+        key: sourceKey
+      });
+    }
+  }
+
+  // 3. Return optimized function
+  return function(values) {
+    const result = [prefix];
+
+    for (let i = 0; i < instructions.length; i++) {
+      const inst = instructions[i];
+      const val = values[inst.key];
+      
+      if (val !== undefined && val !== null) {
+        const signedVal = inst.sign === '-' ? -val : val;
+        result.push(`${inst.label}${fmt(signedVal)}`);
+      }
+    }
+
+    return result.join(' ');
+  };
+}
+
+function applyGcodeTemplate(formater, params) {
+	if (!formater) return '';
+
+	return formater(params);
+}
+
 
 // Format a comment using the current profile's comment character
 function formatComment(text, profile) {
@@ -653,17 +667,13 @@ function emitHelicalPathWithArcs(path, profile, useInches, feedXY) {
 		for (var j = 0; j < path.length; j++) {
 			var p = toGcodeUnits(path[j].x, path[j].y, useInches);
 			var zCoord = toGcodeUnitsZ(path[j].z || 0, useInches);
-			output += applyGcodeTemplate(profile.cutTemplate, { x: p.x, y: p.y, z: zCoord, f: feedXY }) + '\n';
+			output += applyGcodeTemplate(profile.cutFormater, { x: p.x, y: p.y, z: zCoord, f: feedXY }) + '\n';
 		}
 		return output;
 	}
 
-	// Ensure arc templates include Z for helical interpolation (insert before I if missing)
-	function withZ(tmpl) {
-		return /\bZ\b/.test(tmpl) ? tmpl : tmpl.replace(/\bI\b/, 'Z I');
-	}
-	var cwTmpl = withZ(profile.cwArcTemplate);
-	var ccwTmpl = withZ(profile.ccwArcTemplate);
+	var cwTmpl = profile.cwArcWithZFormater;
+	var ccwTmpl = profile.ccwArcWithZFormater;
 
 	var segments = fitArcsToPath(path, 0.05);
 
@@ -692,10 +702,27 @@ function emitHelicalPathWithArcs(path, profile, useInches, feedXY) {
 		} else {
 			var coord = toGcodeUnits(seg.x, seg.y, useInches);
 			var zCoord = toGcodeUnitsZ(segZ, useInches);
-			output += applyGcodeTemplate(profile.cutTemplate, { x: coord.x, y: coord.y, z: zCoord, f: feedXY }) + '\n';
+			output += applyGcodeTemplate(profile.cutFormater, { x: coord.x, y: coord.y, z: zCoord, f: feedXY }) + '\n';
 		}
 	}
 
+	return output;
+}
+
+/**
+ * Emit G-code for a 2D path XY only
+ *
+ * @param {Array} path        - Array of {x, y} points in world coordinates
+ * @param {Object} profile    - G-code profile with templates
+ * @param {boolean} useInches - Whether to convert to inches
+ * @returns {string} G-code output
+ */
+function emitPathNoZ(path, profile, useInches){
+	var output = '';
+	for (var j = 0; j < path.length; j++) {
+		var p = toGcodeUnits(path[j].x, path[j].y, useInches);
+		output += applyGcodeTemplate(profile.cutFormater, { x: p.x, y: p.y}) + '\n';
+	}
 	return output;
 }
 
@@ -717,7 +744,7 @@ function emitPathWithArcs(path, profile, useInches, feedXY) {
 		// Fallback: pure G1 output
 		for (var j = 0; j < path.length; j++) {
 			var p = toGcodeUnits(path[j].x, path[j].y, useInches);
-			output += applyGcodeTemplate(profile.cutTemplate, { x: p.x, y: p.y, f: feedXY }) + '\n';
+			output += applyGcodeTemplate(profile.cutFormater, { x: p.x, y: p.y, f: feedXY }) + '\n';
 		}
 		return output;
 	}
@@ -735,11 +762,11 @@ function emitPathWithArcs(path, profile, useInches, feedXY) {
 				iMM = iMM / MM_PER_INCH;
 				jMM = jMM / MM_PER_INCH;
 			}
-			var tmpl = seg.cw ? profile.cwArcTemplate : profile.ccwArcTemplate;
+			var tmpl = seg.cw ? profile.cwArcFormater : profile.ccwArcFormater;
 			output += applyGcodeTemplate(tmpl, { x: endCoord.x, y: endCoord.y, i: iMM, j: jMM, f: feedXY }) + '\n';
 		} else {
 			var coord = toGcodeUnits(seg.x, seg.y, useInches);
-			output += applyGcodeTemplate(profile.cutTemplate, { x: coord.x, y: coord.y, f: feedXY }) + '\n';
+			output += applyGcodeTemplate(profile.cutFormater, { x: coord.x, y: coord.y, f: feedXY }) + '\n';
 		}
 	}
 
@@ -815,7 +842,9 @@ function _setupGcodeProfile() {
 	};
 	// Merge: defaults provide fallback for any fields missing from the saved profile
 	// (old profiles pre-dating arc support won't have cwArcTemplate/useArcs etc.)
-	return Object.assign({}, defaults, currentGcodeProfile);
+	Object.assign({}, defaults, currentGcodeProfile);
+	parseProfile(currentGcodeProfile);
+	return currentGcodeProfile;
 }
 
 // HELPER FUNCTION: Return toolpaths in user-defined array order (no auto-sorting)
@@ -850,7 +879,7 @@ function _generateGcodeHeader(profile, spindleSpeed, useInches) {
 
 	// Add spindle on command if provided
 	if (profile.spindleOnGcode && profile.spindleOnGcode.trim() !== '') {
-		output += applyGcodeTemplate(profile.spindleOnGcode, { s: spindleSpeed }) + '\n';
+		output += applyGcodeTemplate(profile.spindleFormater, { s: spindleSpeed }) + '\n';
 	}
 
 	return output;
@@ -867,7 +896,7 @@ function _generateToolChangeGcode(tool, profile) {
 	// Add spindle on command with new tool's RPM
 	var toolRpm = tool.rpm || 18000;
 	if (profile.spindleOnGcode && profile.spindleOnGcode.trim() !== '') {
-		output += applyGcodeTemplate(profile.spindleOnGcode, { s: toolRpm }) + '\n';
+		output += applyGcodeTemplate(profile.spindleFormater, { s: toolRpm }) + '\n';
 	}
 
 	return output;
@@ -906,7 +935,7 @@ function _generateDrillOperationGcode(toolpath, profile, useInches, settings) {
 		var feedXY = convertFeedUnits(feed, useInches);
 		var feedZ = convertFeedUnits(zfeed, useInches);
 
-		output += applyGcodeTemplate(profile.rapidTemplate, { z: zCoordSafe, f: feedZ / 2 }) + '\n';
+		output += applyGcodeTemplate(profile.rapidFormater, { z: zCoordSafe, f: feedZ / 2 }) + '\n';
 
 		z = 0;
 		var left = depth;
@@ -914,12 +943,12 @@ function _generateDrillOperationGcode(toolpath, profile, useInches, settings) {
 		for (var j = 0; j < path.length; j++) {
 			// Retract to safe height before moving to next hole
 			if (j > 0) {
-				output += applyGcodeTemplate(profile.rapidTemplate, { z: zCoordSafe, f: feedZ / 2 }) + '\n';
+				output += applyGcodeTemplate(profile.rapidFormater, { z: zCoordSafe, f: feedZ / 2 }) + '\n';
 			}
 
 			// Move to hole position at safe height
 			var p = toGcodeUnits(path[j].x, path[j].y, useInches);
-			output += applyGcodeTemplate(profile.rapidTemplate, { x: p.x, y: p.y, f: feedXY }) + '\n';
+			output += applyGcodeTemplate(profile.rapidFormater, { x: p.x, y: p.y, f: feedXY }) + '\n';
 
 			// Reset left for this hole
 			left = depth;
@@ -931,13 +960,13 @@ function _generateDrillOperationGcode(toolpath, profile, useInches, settings) {
 				z = left - depth;
 				var zCoord = toGcodeUnitsZ(z, useInches);
 				var zCoordPullUp = toGcodeUnitsZ(z + toolStep + zbacklash, useInches);
-				output += applyGcodeTemplate(profile.cutTemplate, { z: zCoord, f: feedZ }) + '\n';
-				output += applyGcodeTemplate(profile.rapidTemplate, { z: zCoordPullUp, f: feedZ / 2 }) + '\n';
+				output += applyGcodeTemplate(profile.cutFormater, { z: zCoord, f: feedZ }) + '\n';
+				output += applyGcodeTemplate(profile.rapidFormater, { z: zCoordPullUp, f: feedZ / 2 }) + '\n';
 			}
 		}
 
 		// Retract to safe height after drilling
-		output += applyGcodeTemplate(profile.rapidTemplate, { z: zCoordSafe, f: feedZ / 2 }) + '\n';
+		output += applyGcodeTemplate(profile.rapidFormater, { z: zCoordSafe, f: feedZ / 2 }) + '\n';
 	}
 
 	return output;
@@ -963,20 +992,20 @@ function _generateHelicalDrillOperationGcode(toolpath, profile, useInches, setti
 		if (comment) output += comment + '\n';
 
 		// Rapid to safe height
-		output += applyGcodeTemplate(profile.rapidTemplate, { z: zCoordSafe, f: feedZ / 2 }) + '\n';
+		output += applyGcodeTemplate(profile.rapidFormater, { z: zCoordSafe, f: feedZ / 2 }) + '\n';
 
 		// Rapid to start position
 		var startP = toGcodeUnits(path[0].x, path[0].y, useInches);
-		output += applyGcodeTemplate(profile.rapidTemplate, { x: startP.x, y: startP.y, f: feedXY }) + '\n';
+		output += applyGcodeTemplate(profile.rapidFormater, { x: startP.x, y: startP.y, f: feedXY }) + '\n';
 
 		// Plunge to surface (z=0)
-		output += applyGcodeTemplate(profile.cutTemplate, { z: toGcodeUnitsZ(0, useInches), f: feedZ }) + '\n';
+		output += applyGcodeTemplate(profile.cutFormater, { z: toGcodeUnitsZ(0, useInches), f: feedZ }) + '\n';
 
 		// Helical descent and final cleanup circle — arc-fitted with Z (helical interpolation)
 		output += emitHelicalPathWithArcs(path.slice(1), profile, useInches, helicalFeed);
 
 		// Retract to safe height
-		output += applyGcodeTemplate(profile.rapidTemplate, { z: zCoordSafe, f: feedZ / 2 }) + '\n';
+		output += applyGcodeTemplate(profile.rapidFormater, { z: zCoordSafe, f: feedZ / 2 }) + '\n';
 	}
 
 	return output;
@@ -1000,7 +1029,7 @@ function _generateVcarveOperationGcode(toolpath, profile, useInches, settings) {
 		var feedXY = convertFeedUnits(feed, useInches);
 		var feedZ = convertFeedUnits(zfeed, useInches);
 
-		output += applyGcodeTemplate(profile.rapidTemplate, { z: zCoordSafe, f: feedZ / 2 }) + '\n';
+		output += applyGcodeTemplate(profile.rapidFormater, { z: zCoordSafe, f: feedZ / 2 }) + '\n';
 
 		for (var j = 0; j < path.length; j++) {
 			var p = toGcodeUnits(path[j].x, path[j].y, useInches);
@@ -1024,10 +1053,10 @@ function _generateVcarveOperationGcode(toolpath, profile, useInches, settings) {
 
 			if (j == 0) {
 				// Move to first point at safe height, then plunge
-				output += applyGcodeTemplate(profile.rapidTemplate, { x: p.x, y: p.y, f: feedXY }) + '\n';
+				output += applyGcodeTemplate(profile.rapidFormater, { x: p.x, y: p.y, f: feedXY }) + '\n';
 			}
 
-			output += applyGcodeTemplate(profile.cutTemplate, { x: p.x, y: p.y, z: cz, f: feedZ }) + '\n';
+			output += applyGcodeTemplate(profile.cutFormater, { x: p.x, y: p.y, z: cz, f: feedZ }) + '\n';
 		}
 	}
 
@@ -1057,18 +1086,18 @@ function _generateSurfacingOperationGcode(toolpath, profile, useInches, settings
 
 		if (firstLine) {
 			// Initial retract, rapid to start XY, then plunge once
-			output += applyGcodeTemplate(profile.rapidTemplate, { z: safeHeight, f: feedZ }) + '\n';
-			output += applyGcodeTemplate(profile.rapidTemplate, { x: start.x, y: start.y, f: feedXY }) + '\n';
-			output += applyGcodeTemplate(profile.cutTemplate, { z: zCoord, f: feedZ }) + '\n';
+			output += applyGcodeTemplate(profile.rapidFormater, { z: safeHeight, f: feedZ }) + '\n';
+			output += applyGcodeTemplate(profile.rapidFormater, { x: start.x, y: start.y, f: feedXY }) + '\n';
+			output += applyGcodeTemplate(profile.cutFormater, { z: zCoord, f: feedZ }) + '\n';
 			firstLine = false;
 		} else {
 			// Stay at cut depth — feed move to start of next pass (not rapid, as the
 			// workpiece may not be perfectly sized and the transition crosses the stock)
-			output += applyGcodeTemplate(profile.cutTemplate, { x: start.x, y: start.y, f: feedXY }) + '\n';
+			output += applyGcodeTemplate(profile.cutFormater, { x: start.x, y: start.y }) + '\n';
 		}
 
-		// Cut across the pass (with arc fitting if enabled)
-		output += emitPathWithArcs(path.slice(1), profile, useInches, feedXY);
+		// Cut across the path
+		output += emitPathNoZ(path.slice(1), profile, useInches);
 	}
 
 	return output;
@@ -1113,16 +1142,16 @@ function _generate3dProfileOperationGcode(toolpath, profile, useInches, settings
 
 			if (isNear) {
 				// Close enough — feed directly without retract
-				output += applyGcodeTemplate(profile.cutTemplate, { x: start.x, y: start.y, z: startZ, f: feedXY }) + '\n';
+				output += applyGcodeTemplate(profile.cutFormater, { x: start.x, y: start.y, z: startZ, f: feedXY }) + '\n';
 			} else {
 				// Far away — retract to safe height and rapid to start
-				output += applyGcodeTemplate(profile.rapidTemplate, { z: zCoordSafe, f: feedZ }) + '\n';
-				output += applyGcodeTemplate(profile.rapidTemplate, { x: start.x, y: start.y, f: feedXY }) + '\n';
-				output += applyGcodeTemplate(profile.cutTemplate, { z: startZ, f: feedZ }) + '\n';
+				output += applyGcodeTemplate(profile.rapidFormater, { z: zCoordSafe, f: feedZ }) + '\n';
+				output += applyGcodeTemplate(profile.rapidFormater, { x: start.x, y: start.y, f: feedXY }) + '\n';
+				output += applyGcodeTemplate(profile.cutFormater, { z: startZ, f: feedZ }) + '\n';
 			}
 		} else {
 			// Continuous — feed directly to start of next segment
-			output += applyGcodeTemplate(profile.cutTemplate, { x: start.x, y: start.y, z: startZ, f: feedXY }) + '\n';
+			output += applyGcodeTemplate(profile.cutFormater, { x: start.x, y: start.y, z: startZ, f: feedXY }) + '\n';
 		}
 
 		// Feed along raster line with varying Z.
@@ -1153,7 +1182,7 @@ function _generate3dProfileOperationGcode(toolpath, profile, useInches, settings
 					continue;
 				}
 				// Direction changed — emit the pending point
-				output += applyGcodeTemplate(profile.cutTemplate, { x: pendingP.x, y: pendingP.y, z: pendingZ, f: feedXY }) + '\n';
+				output += applyGcodeTemplate(profile.cutFormater, { x: pendingP.x, y: pendingP.y, z: pendingZ, f: feedXY }) + '\n';
 				prevP = pendingP;
 				prevZ = pendingZ;
 			}
@@ -1164,7 +1193,7 @@ function _generate3dProfileOperationGcode(toolpath, profile, useInches, settings
 
 		// Emit the last pending point
 		if (pendingP !== null) {
-			output += applyGcodeTemplate(profile.cutTemplate, { x: pendingP.x, y: pendingP.y, z: pendingZ, f: feedXY }) + '\n';
+			output += applyGcodeTemplate(profile.cutFormater, { x: pendingP.x, y: pendingP.y, z: pendingZ, f: feedXY }) + '\n';
 			lastEndX = pendingP.x;
 			lastEndY = pendingP.y;
 			lastEndZ = pendingZ;
@@ -1219,11 +1248,11 @@ function generateRampIn(path, toolDiameter, currentZ, stepdown, safeHeight, prof
 	var rampCoord = toGcodeUnits(rampPt.x, rampPt.y, useInches);
 
 	// Retract to safe height
-	output += applyGcodeTemplate(profile.rapidTemplate, { z: safeZCoord, f: feedZ }) + '\n';
+	output += applyGcodeTemplate(profile.rapidFormater, { z: safeZCoord, f: feedZ }) + '\n';
 	// Rapid to ramp start point (offset along path)
-	output += applyGcodeTemplate(profile.rapidTemplate, { x: rampCoord.x, y: rampCoord.y, f: feedXY }) + '\n';
+	output += applyGcodeTemplate(profile.rapidFormater, { x: rampCoord.x, y: rampCoord.y, f: feedXY }) + '\n';
 	// Plunge to previous pass depth
-	output += applyGcodeTemplate(profile.cutTemplate, { z: prevZCoord, f: feedZ }) + '\n';
+	output += applyGcodeTemplate(profile.cutFormater, { z: prevZCoord, f: feedZ }) + '\n';
 
 	// Ramp back to path start following the path segments in reverse,
 	// interpolating Z from prevZ to currentZ along the way.
@@ -1250,7 +1279,7 @@ function generateRampIn(path, toolDiameter, currentZ, stepdown, safeHeight, prof
 		var frac = totalRampDist > 0 ? distSoFar / totalRampDist : 1;
 		var interpZ = prevZ + zRange * frac;
 		var pc = toGcodeUnits(path[rampSegIdx - 1].x, path[rampSegIdx - 1].y, useInches);
-		output += applyGcodeTemplate(profile.cutTemplate, { x: pc.x, y: pc.y, z: toGcodeUnitsZ(interpZ, useInches), f: feedXY }) + '\n';
+		output += applyGcodeTemplate(profile.cutFormater, { x: pc.x, y: pc.y, z: toGcodeUnitsZ(interpZ, useInches), f: feedXY }) + '\n';
 	}
 
 	for (var i = rampSegIdx - 2; i >= 0; i--) {
@@ -1260,12 +1289,12 @@ function generateRampIn(path, toolDiameter, currentZ, stepdown, safeHeight, prof
 		var frac = totalRampDist > 0 ? distSoFar / totalRampDist : 1;
 		var interpZ = prevZ + zRange * frac;
 		var pc = toGcodeUnits(path[i].x, path[i].y, useInches);
-		output += applyGcodeTemplate(profile.cutTemplate, { x: pc.x, y: pc.y, z: toGcodeUnitsZ(interpZ, useInches), f: feedXY }) + '\n';
+		output += applyGcodeTemplate(profile.cutFormater, { x: pc.x, y: pc.y, z: toGcodeUnitsZ(interpZ, useInches), f: feedXY }) + '\n';
 	}
 
 	// Ensure we end exactly at path start at full depth
 	var startCoord = toGcodeUnits(path[0].x, path[0].y, useInches);
-	output += applyGcodeTemplate(profile.cutTemplate, { x: startCoord.x, y: startCoord.y, z: currentZCoord, f: feedXY }) + '\n';
+	output += applyGcodeTemplate(profile.cutFormater, { x: startCoord.x, y: startCoord.y, z: currentZCoord, f: feedXY }) + '\n';
 
 	return output;
 }
@@ -1280,7 +1309,7 @@ function _generatePocketOperationGcode(toolpath, profile, useInches, settings) {
 	if (comment) output += comment + '\n';
 
 	var z = safeHeight;
-	output += applyGcodeTemplate(profile.rapidTemplate, { z: z, f: zfeed / 2 }) + '\n';
+	output += applyGcodeTemplate(profile.rapidFormater, { z: z, f: zfeed / 2 }) + '\n';
 
 	var left = depth;
 	var pass = 0;
@@ -1327,7 +1356,7 @@ function _generatePocketOperationGcode(toolpath, profile, useInches, settings) {
 			if (skipRetract) {
 				// Feed directly to start of next path at cutting depth
 				var startP = toGcodeUnits(path[0].x, path[0].y, useInches);
-				output += applyGcodeTemplate(profile.cutTemplate, { x: startP.x, y: startP.y, z: zCoord, f: feedXY }) + '\n';
+				output += applyGcodeTemplate(profile.cutFormater, { x: startP.x, y: startP.y, z: zCoord, f: feedXY }) + '\n';
 			} else {
 				// Full ramp-in with retract
 				output += generateRampIn(path, toolpath.tool.diameter, z, toolStep, safeHeight, profile, useInches, feedXY, feedZ);
@@ -1356,7 +1385,7 @@ function emitProfileRun(points, z, profile, useInches, feedXY) {
 		var output = '';
 		for (var i = 0; i < points.length; i++) {
 			var p = toGcodeUnits(points[i].x, points[i].y, useInches);
-			output += applyGcodeTemplate(profile.cutTemplate, { x: p.x, y: p.y, z: zCoord, f: feedXY }) + '\n';
+			output += applyGcodeTemplate(profile.cutFormater, { x: p.x, y: p.y, z: zCoord, f: feedXY }) + '\n';
 		}
 		return output;
 	}
@@ -1373,11 +1402,11 @@ function emitProfileRun(points, z, profile, useInches, feedXY) {
 				iMM = iMM / MM_PER_INCH;
 				jMM = jMM / MM_PER_INCH;
 			}
-			var tmpl = seg.cw ? profile.cwArcTemplate : profile.ccwArcTemplate;
+			var tmpl = seg.cw ? profile.cwArcFormater : profile.ccwArcFormater;
 			output += applyGcodeTemplate(tmpl, { x: endCoord.x, y: endCoord.y, i: iMM, j: jMM, f: feedXY }) + '\n';
 		} else {
 			var coord = toGcodeUnits(seg.x, seg.y, useInches);
-			output += applyGcodeTemplate(profile.cutTemplate, { x: coord.x, y: coord.y, z: zCoord, f: feedXY }) + '\n';
+			output += applyGcodeTemplate(profile.cutFormater, { x: coord.x, y: coord.y, z: zCoord, f: feedXY }) + '\n';
 		}
 	}
 	return output;
@@ -1425,12 +1454,12 @@ function _generateProfilePass(augmentedPath, pass, z, tabData, toolDiameter, too
 			}
 			var lift = getTabLiftAmount(z, tabs, workpieceThickness, tabHeightMM);
 			if (pt.marker === 'lift') {
-				output += applyGcodeTemplate(profile.cutTemplate, { x: p.x, y: p.y, z: toGcodeUnitsZ(z, useInches),        f: feedXY }) + '\n';
-				output += applyGcodeTemplate(profile.cutTemplate, { x: p.x, y: p.y, z: toGcodeUnitsZ(z + lift, useInches), f: feedXY }) + '\n';
+				output += applyGcodeTemplate(profile.cutFormater, { x: p.x, y: p.y, z: toGcodeUnitsZ(z, useInches),        f: feedXY }) + '\n';
+				output += applyGcodeTemplate(profile.cutFormater, { x: p.x, y: p.y, z: toGcodeUnitsZ(z + lift, useInches), f: feedXY }) + '\n';
 				currentlyLifted = true;
 			} else if (pt.marker === 'lower') {
-				output += applyGcodeTemplate(profile.cutTemplate, { x: p.x, y: p.y, z: toGcodeUnitsZ(z + lift, useInches), f: feedXY }) + '\n';
-				output += applyGcodeTemplate(profile.cutTemplate, { x: p.x, y: p.y, z: toGcodeUnitsZ(z, useInches),        f: feedXY }) + '\n';
+				output += applyGcodeTemplate(profile.cutFormater, { x: p.x, y: p.y, z: toGcodeUnitsZ(z + lift, useInches), f: feedXY }) + '\n';
+				output += applyGcodeTemplate(profile.cutFormater, { x: p.x, y: p.y, z: toGcodeUnitsZ(z, useInches),        f: feedXY }) + '\n';
 				currentlyLifted = false;
 			}
 		} else if (!currentlyLifted) {
@@ -1443,7 +1472,7 @@ function _generateProfilePass(augmentedPath, pass, z, tabData, toolDiameter, too
 				regularRun = [];
 			}
 			var lift = getTabLiftAmount(z, tabs, workpieceThickness, tabHeightMM);
-			output += applyGcodeTemplate(profile.cutTemplate, { x: p.x, y: p.y, z: toGcodeUnitsZ(z + lift, useInches), f: feedXY }) + '\n';
+			output += applyGcodeTemplate(profile.cutFormater, { x: p.x, y: p.y, z: toGcodeUnitsZ(z + lift, useInches), f: feedXY }) + '\n';
 		}
 	}
 
@@ -1453,7 +1482,7 @@ function _generateProfilePass(augmentedPath, pass, z, tabData, toolDiameter, too
 	// If we started lifted (tab at path start), complete the cut at the end of the pass
 	if (startedLifted && firstMarkerPos) {
 		var mc = toGcodeUnits(firstMarkerPos.x, firstMarkerPos.y, useInches);
-		output += applyGcodeTemplate(profile.cutTemplate, { x: mc.x, y: mc.y, z: toGcodeUnitsZ(z, useInches), f: feedXY }) + '\n';
+		output += applyGcodeTemplate(profile.cutFormater, { x: mc.x, y: mc.y, z: toGcodeUnitsZ(z, useInches), f: feedXY }) + '\n';
 	}
 
 	return output;
@@ -1473,7 +1502,7 @@ function _generateProfileOperationGcode(toolpath, profile, useInches, settings) 
 
 		var feedXY = convertFeedUnits(feed, useInches);
 		var feedZ = convertFeedUnits(zfeed, useInches);
-		output += applyGcodeTemplate(profile.rapidTemplate, { z: toGcodeUnitsZ(safeHeight, useInches), f: feedZ / 2 }) + '\n';
+		output += applyGcodeTemplate(profile.rapidFormater, { z: toGcodeUnitsZ(safeHeight, useInches), f: feedZ / 2 }) + '\n';
 
 		// Collect tabs from the source SVG path
 		var svgPath = toolpath.svgId ? svgpaths.find(p => p.id === toolpath.svgId) : null;
@@ -1558,6 +1587,7 @@ function checkTableLimits(tpaths) {
 
 // MAIN FUNCTION: Generate G-code output for all toolpaths
 function toGcode() {
+	var timeStart = performance.now();
 	// 1. SETUP AND VALIDATION
 	var profile = _setupGcodeProfile();
 	var useInches = profile.gcodeUnits === 'inches';
@@ -1641,11 +1671,12 @@ function toGcode() {
 		output += generator(toolpath, profile, useInches, settings);
 
 		// Retract to safe height after finishing operation
-		output += applyGcodeTemplate(profile.rapidTemplate, { z: safeHeight, f: settings.zfeed / 2 }) + '\n';
+		output += applyGcodeTemplate(profile.rapidFormater, { z: safeHeight, f: settings.zfeed / 2 }) + '\n';
 	}
 
 	// 5. GENERATE FOOTER
 	output += _generateGcodeFooter(profile);
+	console.log('G-code generation took ' + Math.round(performance.now() - timeStart) + 'ms');
 
 	// Remove trailing newline to avoid blank lines at end of G-code
 	return output.trimEnd();
