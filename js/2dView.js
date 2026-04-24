@@ -375,6 +375,8 @@ function drawOrigin() {
 
 // Core rendering function (does actual drawing)
 function redrawCore() {
+	if (!canvas.width || !canvas.height) return;
+
 	// Recreate static canvas if it doesn't exist or canvas was resized
 	if (!staticCanvas || staticCanvas.width !== canvas.width || staticCanvas.height !== canvas.height) {
 		staticCanvas = document.createElement('canvas');

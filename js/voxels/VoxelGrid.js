@@ -80,14 +80,10 @@ class VoxelGrid {
 
     const colors = [];
     for (let i = 0; i < positions.length; i += 3) {
-      // Get normal for this vertex
       const normalX = normals[i];
       const normalY = normals[i + 1];
       const normalZ = normals[i + 2];
 
-      // Check if normal points primarily in Z direction (top/bottom faces)
-      // Top/bottom normals: (0, 0, ±1) have |normalZ| close to 1
-      // Side normals: have significant X or Y components
       const absNormalZ = Math.abs(normalZ);
 
       if (absNormalZ > 0.8) {
@@ -251,18 +247,17 @@ class VoxelGrid {
 
   /**
    * Update instance colors for cut voxels
-   * Changes instance color to yellow for voxels that have been cut
-   * The yellow color blends with vertex colors to show cutting effect
+   * Cut-through voxels (height == 0) get background blue; partially cut voxels get yellow
    */
   updateVoxelColors() {
     if (this.voxelHeightChanged.size === 0) return;
 
     const yellowColor = new THREE.Color(0xFFFF00);
+    const blueColor = new THREE.Color(0xadd8e6);
 
-    // For each voxel that was cut, update its instance color to yellow
     for (const index of this.voxelHeightChanged) {
-      // Set instance color to yellow to show this voxel has been cut
-      this.mesh.setColorAt(index, yellowColor);
+      const isCutThrough = this.voxelTopZ[index] <= this.materialBottomZ;
+      this.mesh.setColorAt(index, isCutThrough ? blueColor : yellowColor);
     }
 
     // Mark instance colors as needing update
@@ -390,7 +385,7 @@ class VoxelGrid {
 
       // Use cached X/Y — they never change after initializeGrid()
       dummy.position.set(this.voxelWorldX[index], this.voxelWorldY[index], worldZ);
-      dummy.scale.set(1, 1, scaleZ);
+      dummy.scale.set(scaleZ > 0 ? 1 : 0, scaleZ > 0 ? 1 : 0, scaleZ);
       dummy.updateMatrix();
 
       this.mesh.setMatrixAt(index, dummy.matrix);

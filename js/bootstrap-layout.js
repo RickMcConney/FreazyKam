@@ -4,7 +4,7 @@
  */
 
 // Version number based on latest commit date
-var APP_VERSION = "Ver 2026-04-21";
+var APP_VERSION = "Ver 2026-04-23";
 
 var mode = "Select";
 var options = [];
@@ -714,7 +714,7 @@ function createToolbar() {
             <div class="toolbar-separator"></div>
             <div class="toolbar-section">
                 <button type="button" id="snap-toggle-btn" class="btn btn-sm btn-toolbar btn-outline-secondary" data-action="snap" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Snap to Grid (S)">
-                    <i data-lucide="magnet"></i>Snap
+                    <i id="snap-icon" data-lucide="magnet"></i>Snap
                 </button>
             </div>
             <div class="ms-auto toolbar-section">
@@ -793,12 +793,22 @@ function toggleSnap() {
 }
 
 function updateSnapButton() {
-    const btn = document.getElementById('snap-toggle-btn');
-    if (!btn) return;
+    const button = document.getElementById('snap-toggle-btn');
+    const icon = document.getElementById('snap-icon');
+    if (!button || !icon) return;
     const on = getOption("snapGrid") !== false;
-    btn.classList.toggle('btn-primary', on);
-    btn.classList.toggle('btn-outline-secondary', !on);
+    //button.classList.toggle('btn-primary', on);
+    //button.classList.toggle('btn-outline-success', !on);
+    if (on) {
+        icon.setAttribute('stroke', '#106efd');
+        button.style.color = '#106efd';
+    }
+    else {
+        icon.setAttribute('stroke', '#6c757d');
+        button.style.color = '';
+    }
 }
+
 
 // Sidebar creation
 function createSidebar() {

@@ -16,6 +16,7 @@ let isResizing = false;  // Track if window is currently being resized
 let resizeTimeoutId = null;  // Timeout ID for detecting end of resize
 let animationFrameId = null;  // Track animation loop to prevent duplicates
 let animationLoopActive = false;  // Flag to control whether animation loop should run
+let deferredSTLVisibilitySyncId = null;  // Timeout for reapplying STL checkbox after meshes load
 
 // Simple profiling: wall-clock timing with frame counter
 let profileFrameCount = 0;
@@ -28,8 +29,8 @@ let voxelRemovalTotalTime = 0;
 // ============ CONFIGURATION CONSTANTS ============
 const CONFIG = {
   // Scene and rendering
-  SCENE_BACKGROUND_COLOR: 0x4a4a4a,
-  RENDERER_CLEAR_COLOR: 0x4a4a4a,
+  SCENE_BACKGROUND_COLOR: 0xadd8e6,
+  RENDERER_CLEAR_COLOR: 0xadd8e6,
   ANTIALIAS: true,
 
   // Camera
@@ -164,6 +165,43 @@ function getWorkpieceBoundsOffset() {
   return { x: offsetX, y: offsetY };
 }
 
+function sync3DVisibilityControls(options = {}) {
+  const { deferSTL = false } = options;
+
+  const axesCheckbox = document.getElementById('3d-show-axes');
+  if (axesCheckbox && typeof window.setAxesVisibility3D === 'function') {
+    window.setAxesVisibility3D(axesCheckbox.checked);
+  }
+
+  const toolpathCheckbox = document.getElementById('3d-show-toolpath');
+  if (toolpathCheckbox && typeof window.setToolpathVisibility3D === 'function') {
+    window.setToolpathVisibility3D(toolpathCheckbox.checked);
+  }
+
+  const workpieceCheckbox = document.getElementById('3d-show-workpiece');
+  if (workpieceCheckbox && typeof window.setWorkpieceVisibility3D === 'function') {
+    window.setWorkpieceVisibility3D(workpieceCheckbox.checked);
+  }
+
+  const stlCheckbox = document.getElementById('3d-show-stl');
+  if (deferredSTLVisibilitySyncId) {
+    clearTimeout(deferredSTLVisibilitySyncId);
+    deferredSTLVisibilitySyncId = null;
+  }
+  if (stlCheckbox && typeof window.setSTLVisibility3D === 'function') {
+    if (deferSTL) {
+      // STL meshes may be attached shortly after the 3D scene is rebuilt.
+      deferredSTLVisibilitySyncId = setTimeout(() => {
+        deferredSTLVisibilitySyncId = null;
+        const currentSTLCheckbox = document.getElementById('3d-show-stl');
+        window.setSTLVisibility3D(currentSTLCheckbox ? currentSTLCheckbox.checked : true);
+      }, 150);
+    } else {
+      window.setSTLVisibility3D(stlCheckbox.checked);
+    }
+  }
+}
+
 // Wait for DOM and listen for tab show event
 document.addEventListener('DOMContentLoaded', setupTabListener);
 
@@ -178,16 +216,7 @@ function setupTabListener() {
       if (animationFrameId === null) {
         animationFrameId = requestAnimationFrame(animate);
       }
-      // Sync visibility toggles with the freshly created scene
-      const wpCheckbox = document.getElementById('3d-show-workpiece');
-      if (wpCheckbox && !wpCheckbox.checked && typeof setWorkpieceVisibility3D === 'function') {
-        setWorkpieceVisibility3D(false);
-      }
-      const stlCheckbox = document.getElementById('3d-show-stl');
-      if (stlCheckbox && !stlCheckbox.checked && typeof setSTLVisibility3D === 'function') {
-        // Delay to let addPendingSTLMeshes() finish first
-        setTimeout(() => setSTLVisibility3D(false), 150);
-      }
+      sync3DVisibilityControls({ deferSTL: true });
     });
 
     tab3dElement.addEventListener('hidden.bs.tab', () => {
@@ -235,6 +264,7 @@ function refreshToolpath() {
   // Reset animation state
   toolpathAnimation.pause();
   toolpathAnimation.setProgress(0);
+  sync3DVisibilityControls();
 }
 
 function initThree() {
@@ -723,6 +753,8 @@ function updateWorkpiece3D(width, length, thickness, originPosition, woodSpecies
   if (toolpathAnimation) {
     toolpathAnimation.workpieceManager = workpieceManager;
   }
+
+  sync3DVisibilityControls();
 }
 
 window.updateWorkpiece3D = updateWorkpiece3D;
@@ -1008,6 +1040,11 @@ function animate() {
  * Called when switching away from 3D view tab
  */
 function cleanup3DView() {
+
+  if (deferredSTLVisibilitySyncId) {
+    clearTimeout(deferredSTLVisibilitySyncId);
+    deferredSTLVisibilitySyncId = null;
+  }
 
   // Stop animation loop
   if (animationFrameId !== null) {

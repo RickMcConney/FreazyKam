@@ -662,9 +662,10 @@ function intersectSegmentWithRedEnds(p1, p2, tab, tabLength, toolRadius, viewSca
 		// Intersection point exists on segment, check if within perpendicular bounds
 		const intersectPerpDist = p1PerpDist + tLeft * (p2PerpDist - p1PerpDist);
 		if (Math.abs(intersectPerpDist) <= halfBoxWidth) {
+			// Approach-direction: entering if coming from outside-left (p1 is to the left of this end)
 			intersections.push({
 				distance: tLeft,
-				type: 'enter',
+				type: p1AlongDir < leftEndPos ? 'enter' : 'exit',
 				perpDist: intersectPerpDist
 			});
 		}
@@ -676,9 +677,10 @@ function intersectSegmentWithRedEnds(p1, p2, tab, tabLength, toolRadius, viewSca
 		// Intersection point exists on segment, check if within perpendicular bounds
 		const intersectPerpDist = p1PerpDist + tRight * (p2PerpDist - p1PerpDist);
 		if (Math.abs(intersectPerpDist) <= halfBoxWidth) {
+			// Approach-direction: entering if coming from outside-right (p1 is to the right of this end)
 			intersections.push({
 				distance: tRight,
-				type: 'exit',
+				type: p1AlongDir > rightEndPos ? 'enter' : 'exit',
 				perpDist: intersectPerpDist
 			});
 		}
@@ -862,9 +864,6 @@ function calculateTabMarkers(toolpath, tabs, tabLength, toolRadius, viewScale) {
 
 	const markers = [];
 
-	// Detect path direction: true = counter-clockwise (inside cuts), false = clockwise (outside cuts)
-	const isCounterClockwise = isPathCounterClockwise(toolpath);
-
 	// For each segment in toolpath
 	for (let segIdx = 0; segIdx < toolpath.length - 1; segIdx++) {
 		const p1 = toolpath[segIdx];
@@ -883,17 +882,7 @@ function calculateTabMarkers(toolpath, tabs, tabLength, toolRadius, viewScale) {
 				continue;
 			}
 
-			// Flip entry/exit types for counter-clockwise paths (inside cuts)
-			// For counter-clockwise traversal, entry and exit are reversed
-			if (isCounterClockwise) {
-				for (let int of intersections) {
-					if (int.type === 'enter') {
-						int.type = 'exit';
-					} else if (int.type === 'exit') {
-						int.type = 'enter';
-					}
-				}
-			}
+
 
 			// Process intersections - handle both pairs and single intersections
 			for (let intIdx = 0; intIdx < intersections.length; intIdx++) {
