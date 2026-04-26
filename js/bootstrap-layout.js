@@ -3525,9 +3525,10 @@ function toggleTooltips(on) {
     var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
     var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
         if (on) {
-            return new bootstrap.Tooltip(tooltipTriggerEl);
+            const tip = new bootstrap.Tooltip(tooltipTriggerEl, { trigger: 'hover' });
+            tooltipTriggerEl.addEventListener('click', () => tip.hide(), { passive: true });
+            return tip;
         } else {
-
             bootstrap.Tooltip.getInstance(tooltipTriggerEl)?.dispose();
             return null;
         }
