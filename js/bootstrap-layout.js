@@ -4,7 +4,7 @@
  */
 
 // Version number based on latest commit date
-var APP_VERSION = "Ver 2026-04-23";
+var APP_VERSION = "Ver 2026-04-26";
 
 var mode = "Select";
 var options = [];
@@ -1172,6 +1172,7 @@ function setupCanvasTabHandlers() {
         });
 
         canvas3DTab.addEventListener('hidden.bs.tab', function () {
+            if (typeof stopSimulation3D === 'function') stopSimulation3D();
             if (typeof cleanup3DView === 'function') cleanup3DView();
         });
     }
