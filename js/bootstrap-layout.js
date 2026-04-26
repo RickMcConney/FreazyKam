@@ -714,7 +714,13 @@ function createToolbar() {
             <div class="toolbar-separator"></div>
             <div class="toolbar-section">
                 <button type="button" id="snap-toggle-btn" class="btn btn-sm btn-toolbar btn-outline-secondary" data-action="snap" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Snap to Grid (S)">
-                    <i id="snap-icon" data-lucide="magnet"></i>Snap
+                    <svg id="snap-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#6c757d" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;">
+                        <path d="m12 15 4 4"/>
+                        <path d="M2.352 10.648a1.205 1.205 0 0 0 0 1.704l2.296 2.296a1.205 1.205 0 0 0 1.704 0l6.029-6.029a1 1 0 1 1 3 3l-6.029 6.029a1.205 1.205 0 0 0 0 1.704l2.296 2.296a1.205 1.205 0 0 0 1.704 0l6.365-6.367A1 1 0 0 0 8.716 4.282z"/>
+                        <path d="m5 8 4 4"/>
+                        <path id="snap-pole-left" d="M5 8 L2.352 10.648 L2.352 12.352 L4.648 14.648 L6.352 14.648 L9 12 Z" stroke="none" fill="none"/>
+                        <path id="snap-pole-right" d="M12 15 L9.352 17.648 L9.352 19.352 L11.648 21.648 L13.352 21.648 L16 19 Z" stroke="none" fill="none"/>
+                    </svg>Snap
                 </button>
             </div>
             <div class="ms-auto toolbar-section">
@@ -797,16 +803,14 @@ function updateSnapButton() {
     const icon = document.getElementById('snap-icon');
     if (!button || !icon) return;
     const on = getOption("snapGrid") !== false;
-    //button.classList.toggle('btn-primary', on);
-    //button.classList.toggle('btn-outline-success', !on);
-    if (on) {
-        icon.setAttribute('stroke', '#106efd');
-        button.style.color = '#106efd';
-    }
-    else {
-        icon.setAttribute('stroke', '#6c757d');
-        button.style.color = '';
-    }
+    const color = on ? '#106efd' : '#6c757d';
+    icon.setAttribute('stroke', color);
+    button.style.color = on ? color : '';
+    const fill = on ? color : 'none';
+    const poleLeft = document.getElementById('snap-pole-left');
+    const poleRight = document.getElementById('snap-pole-right');
+    if (poleLeft) poleLeft.setAttribute('fill', fill);
+    if (poleRight) poleRight.setAttribute('fill', fill);
 }
 
 
