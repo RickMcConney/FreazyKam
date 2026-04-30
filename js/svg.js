@@ -2,232 +2,147 @@ function load() {
 	fileInput.click();
 }
 
-// Initialize Paper.js for SVG parsing
-function initPaperJS() {
-	if (typeof paper === 'undefined') {
-		console.error('Paper.js library not loaded');
-		return false;
-	}
-
-	// Check if Paper.js is already set up
-	if (paper.project) {
-		return true;
-	}
-
-	// Set up Paper.js with the hidden canvas
-	var canvas = document.getElementById('paper-canvas');
-
-	if (!canvas) {
-		console.error('Paper.js canvas not found');
-		return false;
-	}
-
-	try {
-		paper.setup(canvas);
-		return true;
-	} catch (error) {
-		console.error('Failed to initialize Paper.js:', error);
-		return false;
-	}
+function getElementTypeName(tagName) {
+	var names = {
+		'path': 'Path', 'rect': 'Rect', 'circle': 'Circle',
+		'ellipse': 'Ellipse', 'line': 'Line', 'polyline': 'PolyLine', 'polygon': 'Poly'
+	};
+	return names[tagName.toLowerCase()] || tagName;
 }
 
-// New robust SVG parsing using Paper.js library
-function parseSvgPointsElements(svgElement, tagName, label, closePath) {
-	var results = [];
-	var elements = svgElement.getElementsByTagName(tagName);
-	for (var i = 0; i < elements.length; i++) {
-		var points = elements[i].getAttribute('points');
-		if (!points) continue;
-		try {
-			var paperPath = new paper.Path();
-			var pointValues = points.trim().split(/[\s,]+/);
-			for (var j = 0; j < pointValues.length; j += 2) {
-				if (j + 1 < pointValues.length) {
-					var rawX = parseFloat(pointValues[j]);
-					var rawY = parseFloat(pointValues[j + 1]);
-					if (j === 0) {
-						paperPath.moveTo(rawX, rawY);
-					} else {
-						paperPath.lineTo(rawX, rawY);
-					}
+function getPerpendicularDistance(p, p1, p2) {
+	var dx = p2.x - p1.x;
+	var dy = p2.y - p1.y;
+	if (dx === 0 && dy === 0) {
+		return Math.sqrt(Math.pow(p.x - p1.x, 2) + Math.pow(p.y - p1.y, 2));
+	}
+	var numerator = Math.abs(dy * p.x - dx * p.y + p2.x * p1.y - p2.y * p1.x);
+	return numerator / Math.sqrt(dx * dx + dy * dy);
+}
+
+function simplifyPoints(points, epsilon) {
+	if (points.length <= 2) return points;
+	var dmax = 0, index = 0;
+	var last = points.length - 1;
+	for (var i = 1; i < last; i++) {
+		var d = getPerpendicularDistance(points[i], points[0], points[last]);
+		if (d > dmax) { index = i; dmax = d; }
+	}
+	if (dmax > epsilon) {
+		var res1 = simplifyPoints(points.slice(0, index + 1), epsilon);
+		var res2 = simplifyPoints(points.slice(index), epsilon);
+		return res1.slice(0, res1.length - 1).concat(res2);
+	}
+	return [points[0], points[last]];
+}
+
+// Tessellate normalized path data segments into {x,y} points
+function getPointsFromSegments(segments, steps) {
+	steps = steps || 20;
+	var points = [];
+	var lastX = 0, lastY = 0;
+	var start = {x:0,y:0};
+
+	for (var i = 0; i < segments.length; i++) {
+		var seg = segments[i];
+		var v = seg.values;
+		switch (seg.type) {
+			case 'M':
+				start = {x: v[0], y: v[1]};
+				points.push(start);
+				lastX = start.x; lastY = start.y;
+				break;
+			case 'L':
+				points.push({ x: v[0], y: v[1] });
+				lastX = v[0]; lastY = v[1];
+				break;
+			case 'C':
+				for (var s = 1; s <= steps; s++) {
+					var t = s / steps;
+					var mt = 1 - t;
+					points.push({
+						x: mt*mt*mt*lastX + 3*mt*mt*t*v[0] + 3*mt*t*t*v[2] + t*t*t*v[4],
+						y: mt*mt*mt*lastY + 3*mt*mt*t*v[1] + 3*mt*t*t*v[3] + t*t*t*v[5]
+					});
 				}
-			}
-			if (closePath) paperPath.closePath();
-			var convertedPaths = newTransformFromPaperPath(paperPath, label);
-			results = results.concat(convertedPaths);
-		} catch (e) {
-			console.error('Error creating ' + tagName + ':', e);
+				lastX = v[4]; lastY = v[5];
+				break;
+			case 'Q':
+				for (var s = 1; s <= steps; s++) {
+					var t = s / steps;
+					var mt = 1 - t;
+					points.push({
+						x: mt*mt*lastX + 2*mt*t*v[0] + t*t*v[2],
+						y: mt*mt*lastY + 2*mt*t*v[1] + t*t*v[3]
+					});
+				}
+				lastX = v[2]; lastY = v[3];
+				break;
+			case 'Z':
+				if (lastX !== start.x || lastY !== start.y) {
+					points.push({ x: start.x, y: start.y });
+					lastX = start.x; lastY = start.y;
+				}
+				break;
 		}
 	}
-	return results;
+	return points;
 }
 
-function parseSvgPathElements(svgElement) {
-	var paths = [];
-	var pathElements = svgElement.getElementsByTagName('path');
-	for (var i = 0; i < pathElements.length; i++) {
-		var d = pathElements[i].getAttribute('d');
-		if (!d) continue;
-		try {
-			var paperPath = new paper.CompoundPath(d);
-			var children = paperPath.children;
-			if (children && children.length > 0) {
-				for (var j = 0; j < children.length; j++) {
-					paths = paths.concat(newTransformFromPaperPath(children[j], "Path"));
-				}
-			} else if (paperPath.segments && paperPath.segments.length > 0) {
-				paths = paths.concat(newTransformFromPaperPath(paperPath, "Path"));
-			} else {
-				var simplePath = new paper.Path(d);
-				if (simplePath.segments && simplePath.segments.length > 0) {
-					paths = paths.concat(newTransformFromPaperPath(simplePath, "Path"));
-				}
-			}
-		} catch (pathError) {
-			console.error('Error creating Paper.js path:', pathError);
+// Split normalized path segments at sub-path boundaries (each M after the first)
+function splitSegmentsAtSubpaths(segments) {
+	var subpaths = [];
+	var current = [];
+	for (var i = 0; i < segments.length; i++) {
+		if (segments[i].type === 'M' && current.length > 0) {
+			subpaths.push(current);
+			current = [];
 		}
+		current.push(segments[i]);
 	}
-	return paths;
+	if (current.length > 0) subpaths.push(current);
+	return subpaths;
 }
 
-// Shared loop: get all elements by tagName, build a Paper.js path via createPaperPath,
-// then collect results via newTransformFromPaperPath.
-function parseSvgShapeElements(svgElement, tagName, typeName, createPaperPath) {
-	var paths = [];
-	var elements = svgElement.getElementsByTagName(tagName);
-	for (var i = 0; i < elements.length; i++) {
-		var paperPath = createPaperPath(elements[i]);
-		if (paperPath) paths = paths.concat(newTransformFromPaperPath(paperPath, typeName));
-	}
-	return paths;
-}
-
-function parseSvgLineElements(svgElement) {
-	return parseSvgShapeElements(svgElement, 'line', 'Line', function(el) {
-		var p = new paper.Path();
-		p.moveTo(parseFloat(el.getAttribute('x1')), parseFloat(el.getAttribute('y1')));
-		p.lineTo(parseFloat(el.getAttribute('x2')), parseFloat(el.getAttribute('y2')));
-		return p;
-	});
-}
-
-function parseSvgRectElements(svgElement) {
-	return parseSvgShapeElements(svgElement, 'rect', 'Rect', function(el) {
-		return new paper.Path.Rectangle(
-			parseFloat(el.getAttribute('x') || 0), parseFloat(el.getAttribute('y') || 0),
-			parseFloat(el.getAttribute('width')), parseFloat(el.getAttribute('height'))
-		);
-	});
-}
-
-function parseSvgCircleElements(svgElement) {
-	return parseSvgShapeElements(svgElement, 'circle', 'Circle', function(el) {
-		return new paper.Path.Circle(
-			parseFloat(el.getAttribute('cx') || 0), parseFloat(el.getAttribute('cy') || 0),
-			parseFloat(el.getAttribute('r'))
-		);
-	});
-}
-
-function parseSvgEllipseElements(svgElement) {
-	return parseSvgShapeElements(svgElement, 'ellipse', 'Ellipse', function(el) {
-		return new paper.Path.Ellipse({
-			center: new paper.Point(parseFloat(el.getAttribute('cx') || 0), parseFloat(el.getAttribute('cy') || 0)),
-			radius: new paper.Size(parseFloat(el.getAttribute('rx')), parseFloat(el.getAttribute('ry')))
-		});
-	});
-}
-
-function parseSvgTextElements(svgElement) {
-	var paths = [];
-	var textElements = svgElement.getElementsByTagName('text');
-	for (var i = 0; i < textElements.length; i++) {
-		var textEl = textElements[i];
-		var textContent = textEl.textContent || textEl.text || '';
-		if (!textContent.trim()) continue;
-		try {
-			var paperText = new paper.PointText(
-				parseFloat(textEl.getAttribute('x') || 0),
-				parseFloat(textEl.getAttribute('y') || 0)
-			);
-			paperText.content = textContent;
-			paperText.fontSize = parseFloat(textEl.getAttribute('font-size') || 12);
-			var textPath = paperText.createPath();
-			paths = paths.concat(newTransformFromPaperPath(textPath, "Text"));
-		} catch (textError) {
-			console.warn('Could not convert text element to path:', textError);
-		}
-	}
-	return paths;
-}
-
-// Lighten, center on workpiece, and register parsed SVG paths
+// Center on workpiece and register parsed SVG paths
 function importParsedPaths(paths, name) {
 	addUndo(false, true, false);
 
 	const svgGroupId = 'svg-group-' + Date.now();
 	const groupedPaths = [];
 
-	// Lighten paths
-	for (var i = 0; i < paths.length; i++) {
-		var lightened = clipper.JS.Lighten(paths[i].geom, getOption("tolerance") * viewScale);
-		paths[i].geom = (Array.isArray(lightened) && lightened.length > 0) ? lightened : [];
-	}
-
-	// Calculate bounding box of all imported paths to center them on workpiece
+	// Bounding box across all imported paths
 	var importedBbox = { minx: Infinity, miny: Infinity, maxx: -Infinity, maxy: -Infinity };
 	for (var i = 0; i < paths.length; i++) {
-		if (paths[i].geom && paths[i].geom.length > 0 && paths[i].geom[0] && typeof paths[i].geom[0].x === 'number') {
-			var pathBbox = boundingBox(paths[i].geom);
-			if (importedBbox.minx > pathBbox.minx) importedBbox.minx = pathBbox.minx;
-			if (importedBbox.miny > pathBbox.miny) importedBbox.miny = pathBbox.miny;
-			if (importedBbox.maxx < pathBbox.maxx) importedBbox.maxx = pathBbox.maxx;
-			if (importedBbox.maxy < pathBbox.maxy) importedBbox.maxy = pathBbox.maxy;
-		}
+		var b = boundingBox(paths[i].geom);
+		importedBbox.minx = Math.min(importedBbox.minx, b.minx);
+		importedBbox.miny = Math.min(importedBbox.miny, b.miny);
+		importedBbox.maxx = Math.max(importedBbox.maxx, b.maxx);
+		importedBbox.maxy = Math.max(importedBbox.maxy, b.maxy);
 	}
 
-	// Calculate offset to center paths on workpiece
-	var offsetX = 0;
-	var offsetY = 0;
-	if (importedBbox.minx !== Infinity) {
-		var importedCenterX = (importedBbox.minx + importedBbox.maxx) / 2;
-		var importedCenterY = (importedBbox.miny + importedBbox.maxy) / 2;
-		var workpieceCenterX = (getOption("workpieceWidth") * viewScale) / 2;
-		var workpieceCenterY = (getOption("workpieceLength") * viewScale) / 2;
-		offsetX = workpieceCenterX - importedCenterX;
-		offsetY = workpieceCenterY - importedCenterY;
-	}
+	// Offset to center the whole import on the workpiece
+	var offsetX = (getOption("workpieceWidth")  * viewScale) / 2 - (importedBbox.minx + importedBbox.maxx) / 2;
+	var offsetY = (getOption("workpieceLength") * viewScale) / 2 - (importedBbox.miny + importedBbox.maxy) / 2;
 
-	// Apply offset to center paths and create path objects
 	for (var i = 0; i < paths.length; i++) {
-		if (paths[i].geom && paths[i].geom.length > 0 && paths[i].geom[0] && typeof paths[i].geom[0].x === 'number') {
-			var geom = paths[i].geom;
-			var len = geom.length;
-			var isClosed = len > 1 && geom[len - 1].x === geom[0].x && geom[len - 1].y === geom[0].y;
-			var stopAt = isClosed ? len - 1 : len;
-			for (var j = 0; j < stopAt; j++) {
-				geom[j].x += offsetX;
-				geom[j].y += offsetY;
-			}
-			if (isClosed) {
-				geom[len - 1].x = geom[0].x;
-				geom[len - 1].y = geom[0].y;
-			}
-
-			let pathName = paths[i].name + ' ' + svgpathId;
-			let id = paths[i].name + svgpathId;
-			const pathObj = {
-				id: id,
-				name: pathName,
-				path: paths[i].geom,
-				visible: true,
-				bbox: boundingBox(paths[i].geom),
-				svgGroupId: svgGroupId
-			};
-			svgpaths.push(pathObj);
-			groupedPaths.push(pathObj);
-			svgpathId++;
+		var geom = paths[i].geom;
+		for (var j = 0; j < geom.length; j++) {
+			geom[j].x += offsetX;
+			geom[j].y += offsetY;
 		}
+
+		const pathObj = {
+			id: paths[i].name + svgpathId,
+			name: paths[i].name + ' ' + svgpathId,
+			path: geom,
+			visible: true,
+			bbox: boundingBox(geom),
+			svgGroupId: svgGroupId
+		};
+		svgpaths.push(pathObj);
+		groupedPaths.push(pathObj);
+		svgpathId++;
 	}
 
 	if (typeof addSvgGroup === 'function' && groupedPaths.length > 0) {
@@ -237,15 +152,6 @@ function importParsedPaths(paths, name) {
 
 function parseSvgContent(data, name) {
 	try {
-		if (!initPaperJS()) {
-			console.error('Paper.js initialization failed — SVG import aborted');
-			return null;
-		}
-
-		if (paper.project) {
-			paper.project.clear();
-		}
-
 		// Detect DPI based on SVG source
 		if (data.indexOf("Adobe Illustrator") >= 0) {
 			pixelsPerInch = 72;
@@ -258,124 +164,138 @@ function parseSvgContent(data, name) {
 		}
 		svgscale = viewScale * 25.4 / pixelsPerInch;
 
-		var svgElement = new DOMParser().parseFromString(data, "image/svg+xml").documentElement;
+		// Parse as XML so namespace-prefixed child elements (e.g. <d:SVGTestCase>)
+		// containing HTML block elements like <p> don't cause the HTML parser to
+		// exit SVG foreign-content mode and lose the subsequent <path>/<rect> elements.
+		// After parsing, adopt the root SVG into a live-document container so that
+		// getScreenCTM() works (requires elements to be in the rendered tree).
+		var container = document.createElement('div');
+		container.style.cssText = 'position:fixed;top:-10000px;left:-10000px;visibility:hidden';
+		document.body.appendChild(container);
 
-		// Parse all SVG element types
+		// Try XML parser first — it correctly handles namespace-prefixed child elements
+		// (e.g. <d:SVGTestCase> containing <p>) that cause the HTML parser to exit
+		// SVG foreign-content mode and lose the subsequent shape elements.
+		// Fall back to innerHTML if the XML parse fails OR the root element has no SVG
+		// namespace (common in hand-written SVGs that omit xmlns="..."), since without
+		// the namespace declaration DOMParser produces plain Elements, not SVGSVGElements.
+		// Try XML parser first — it correctly handles namespace-prefixed child elements
+		// (e.g. <d:SVGTestCase> containing <p>) that cause the HTML parser to exit
+		// SVG foreign-content mode and lose the subsequent shape elements.
+		// Fall back to innerHTML if the XML parse fails OR the root element has no SVG
+		// namespace (common in hand-written SVGs that omit xmlns="..."), since without
+		// the namespace declaration DOMParser produces plain Elements, not SVGSVGElements.
+		var svgEl = null;
+		var xmlDoc = new DOMParser().parseFromString(data, 'image/svg+xml');
+		if (!xmlDoc.querySelector('parsererror')) {
+			var adopted = document.adoptNode(xmlDoc.documentElement);
+			container.appendChild(adopted);
+			if (typeof adopted.getScreenCTM === 'function') svgEl = adopted;
+			else container.removeChild(adopted);
+		}
+		if (!svgEl) {
+			// Fallback: HTML parser (handles SVGs without xmlns declaration)
+			container.innerHTML = data;
+			svgEl = container.querySelector('svg');
+		}
+
+		if (!svgEl) {
+			document.body.removeChild(container);
+			console.error('parseSvgContent: no <svg> element found');
+			return null;
+		}
+
+		var vb = svgEl.viewBox && svgEl.viewBox.baseVal;
+		var vbx = vb ? vb.x || 0 : 0;
+		var vby = vb ? vb.y || 0 : 0;
+
 		var paths = [];
-		paths = paths.concat(parseSvgPathElements(svgElement));
-		paths = paths.concat(parseSvgPointsElements(svgElement, 'polygon', 'Poly', true));
-		paths = paths.concat(parseSvgPointsElements(svgElement, 'polyline', 'PolyLine', false));
-		paths = paths.concat(parseSvgLineElements(svgElement));
-		paths = paths.concat(parseSvgRectElements(svgElement));
-		paths = paths.concat(parseSvgCircleElements(svgElement));
-		paths = paths.concat(parseSvgEllipseElements(svgElement));
-		paths = paths.concat(parseSvgTextElements(svgElement));
+		var elements = svgEl.querySelectorAll('path, rect, circle, ellipse, line, polyline, polygon, use');
+
+		elements.forEach(function(el) {
+			try {
+				// CTM relative to SVG root — bakes in all ancestor transforms
+				var rootCTM = svgEl.getScreenCTM();
+				var elCTM = el.getScreenCTM();
+				if (!rootCTM || !elCTM) return;
+				var matrix = rootCTM.inverse().multiply(elCTM);
+
+				// Skip elements inside <defs> — after adoptNode their CTM is non-null
+				// but they are definitions only, not rendered instances.
+				if (el.closest('defs')) return;
+
+				// For <use>: getScreenCTM() on the element itself omits both the
+				// transform attribute and the x/y offset.  Resolve by temporarily
+				// inserting a <g> with the same transform into the same parent so the
+				// browser computes it correctly, then add the x/y translation.
+				var shapeEl = el;
+				var typeName;
+				if (el.tagName.toLowerCase() === 'use') {
+					var href = el.getAttribute('href') || el.getAttribute('xlink:href');
+					if (!href || href.charAt(0) !== '#') return;
+					var refId = href.slice(1);
+					shapeEl = svgEl.querySelector('[id="' + refId.replace(/"/g, '\\"') + '"]');
+					if (!shapeEl) return;
+					typeName = getElementTypeName(shapeEl.tagName);
+
+					var tempG = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+					var transformAttr = el.getAttribute('transform');
+					if (transformAttr) tempG.setAttribute('transform', transformAttr);
+					el.parentElement.appendChild(tempG);
+					var useMatrix = tempG.getScreenCTM();
+					el.parentElement.removeChild(tempG);
+					if (!useMatrix) return;
+					var useX = parseFloat(el.getAttribute('x') || 0) || 0;
+					var useY = parseFloat(el.getAttribute('y') || 0) || 0;
+					if (useX !== 0 || useY !== 0) useMatrix = useMatrix.translate(useX, useY);
+					matrix = rootCTM.inverse().multiply(useMatrix);
+				} else {
+					typeName = getElementTypeName(el.tagName);
+				}
+
+				var pathData = shapeEl.getPathData({ normalize: true });
+				if (!pathData || pathData.length === 0) return;
+
+				// Apply CTM to all coordinate pairs, offset by viewBox origin
+				var transformedSegments = pathData.map(function(seg) {
+					var tv = [];
+					for (var i = 0; i < seg.values.length; i += 2) {
+						var x = seg.values[i], y = seg.values[i + 1];
+						tv.push(
+							x * matrix.a + y * matrix.c + matrix.e - vbx,
+							x * matrix.b + y * matrix.d + matrix.f - vby
+						);
+					}
+					return { type: seg.type, values: tv };
+				});
+
+				// Split compound paths into individual sub-paths
+				var subpaths = splitSegmentsAtSubpaths(transformedSegments);
+				subpaths.forEach(function(subSegs) {
+					var dense = getPointsFromSegments(subSegs, 20);
+					var simplified = simplifyPoints(dense, 0.5);
+					if (simplified.length < 1) return;
+
+					for (var k = 0; k < simplified.length; k++) {
+						simplified[k].x *= svgscale;
+						simplified[k].y *= svgscale;
+					}
+
+					paths.push({ geom: simplified, name: typeName });
+				});
+
+			} catch (e) {
+				console.error('parseSvgContent: error processing <' + el.tagName + '>:', e);
+			}
+		});
+
+		document.body.removeChild(container);
 
 		importParsedPaths(paths, name);
-
 		return paths;
+
 	} catch (error) {
-		console.error('parseSvgContent: unexpected error — ', error);
+		console.error('parseSvgContent: unexpected error —', error);
 		return null;
 	}
 }
-
-function newTransformFromPaperPath(paperPath, name) {
-	var paths = [];
-
-	try {
-		// Check if the path is valid
-		if (!paperPath) {
-			console.warn('Paper.js path is null or undefined');
-			return paths;
-		}
-
-		// Check if the path has segments property
-		if (!paperPath.segments) {
-			console.warn('Paper.js path has no segments property');
-			return paths;
-		}
-
-		if (paperPath.segments.length === 0) {
-			console.warn('Paper.js path has no segments');
-			return paths;
-		}
-
-		// Flatten the path in-place, handle potential errors
-		try {
-			paperPath.flatten(0.05);
-		} catch (flattenError) {
-			console.warn('Could not flatten path, using original:', flattenError);
-		}
-
-		// Convert to our format
-		var geom = [];
-		var segments = paperPath.segments;
-
-		for (var i = 0; i < segments.length; i++) {
-			var segment = segments[i];
-			if (segment && segment.point) {
-				geom.push({
-					x: segment.point.x * svgscale,
-					y: segment.point.y * svgscale
-				});
-			}
-		}
-
-		// Close the path if it's closed and has segments
-		if (paperPath.closed && segments.length > 0 && segments[0] && segments[0].point) {
-			// Push a copy of the first point, not a reference to it
-			geom.push({ x: geom[0].x, y: geom[0].y });
-		}
-
-		// Only add path if it has geometry
-		if (geom.length > 1) {
-			paths.push({
-				geom: geom,
-				name: name
-			});
-		} else if (geom.length === 1) {
-			// Single point - create a small line segment
-			// Note: point.x and point.y are already scaled
-			var point = geom[0];
-			geom.push({
-				x: point.x + 0.1,
-				y: point.y + 0.1
-			});
-			paths.push({
-				geom: geom,
-				name: "Point"
-			});
-		}
-
-	} catch (error) {
-		console.error('Error converting Paper.js path:', error);
-
-		// Try to create a simple path from the original segments
-		try {
-			if (paperPath && paperPath.segments && paperPath.segments.length > 0) {
-				var simpleGeom = [];
-				for (var i = 0; i < paperPath.segments.length; i++) {
-					var seg = paperPath.segments[i];
-					if (seg && seg.point) {
-						simpleGeom.push({
-							x: seg.point.x * svgscale,
-							y: seg.point.y * svgscale
-						});
-					}
-				}
-				if (simpleGeom.length > 0) {
-					paths.push({
-						geom: simpleGeom,
-						name: "Seg"
-					});
-				}
-			}
-		} catch (fallbackError) {
-			console.error('Fallback path conversion also failed:', fallbackError);
-		}
-	}
-
-	return paths;
-}
-

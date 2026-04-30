@@ -170,6 +170,22 @@ function drawNorms(norms) {
 
 
 function drawPolyline(path, color, lineWidth, isMultiSegment) {
+	if (path.length === 1) {
+		const pt = worldToScreen(path[0].x, path[0].y);
+		const r = 4;
+		ctx.beginPath();
+		ctx.arc(pt.x, pt.y, r, 0, Math.PI * 2);
+		ctx.fillStyle = color;
+		ctx.fill();
+		ctx.beginPath();
+		ctx.moveTo(pt.x - r * 1.5, pt.y); ctx.lineTo(pt.x + r * 1.5, pt.y);
+		ctx.moveTo(pt.x, pt.y - r * 1.5); ctx.lineTo(pt.x, pt.y + r * 1.5);
+		ctx.strokeStyle = color;
+		ctx.lineWidth = lineWidth;
+		ctx.stroke();
+		return;
+	}
+
 	ctx.beginPath();
 	ctx.lineCap = 'round';
 	ctx.lineJoin = 'round';

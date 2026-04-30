@@ -195,11 +195,14 @@ function parseDimension(value) {
 	return totalInches * MM_PER_INCH;
 }
 
-// Maximum squared distance threshold for path highlighting; margin = sqrt of this
-var CLOSEST_PATH_THRESHOLD_SQ = 100;
-var CLOSEST_PATH_BBOX_MARGIN = 10; // sqrt(CLOSEST_PATH_THRESHOLD_SQ)
+// Selection tolerance in screen pixels — kept constant regardless of zoom level
+var SELECT_TOLERANCE_PX = 10;
 
 function findClosestPath(pt) {
+	// Convert screen-pixel tolerance to world units so it stays 10px at any zoom
+	var toleranceWorld = SELECT_TOLERANCE_PX / zoomLevel;
+	var thresholdSq = toleranceWorld * toleranceWorld;
+
 	var overallMin = Infinity;
 	var bestPath = null;
 
@@ -207,8 +210,8 @@ function findClosestPath(pt) {
 		if (!svgpaths[i].visible) continue;
 
 		var bbox = svgpaths[i].bbox;
-		if (pt.x < bbox.minx - CLOSEST_PATH_BBOX_MARGIN || pt.x > bbox.maxx + CLOSEST_PATH_BBOX_MARGIN ||
-		    pt.y < bbox.miny - CLOSEST_PATH_BBOX_MARGIN || pt.y > bbox.maxy + CLOSEST_PATH_BBOX_MARGIN) {
+		if (pt.x < bbox.minx - toleranceWorld || pt.x > bbox.maxx + toleranceWorld ||
+		    pt.y < bbox.miny - toleranceWorld || pt.y > bbox.maxy + toleranceWorld) {
 			continue;
 		}
 
@@ -230,7 +233,7 @@ function findClosestPath(pt) {
 			if (d < minDist) minDist = d;
 		}
 
-		if (minDist < overallMin && minDist < CLOSEST_PATH_THRESHOLD_SQ) {
+		if (minDist < overallMin && minDist < thresholdSq) {
 			overallMin = minDist;
 			bestPath = svgpaths[i];
 		}

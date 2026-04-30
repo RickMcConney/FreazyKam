@@ -153,11 +153,10 @@ class PathEdit extends Select {
                 const n = path.length;
                 this.syncFirstLast = false;
 
-                if (this.selectedPath.closed && n > 1) {
-                    // Only sync if we're dragging the first or last point
-                    if (this.hasDuplicateEndpoint(path) && (this.activeHandle === 0 || this.activeHandle === n-1)) {
-                        this.syncFirstLast = true;
-                    }
+                // hasDuplicateEndpoint is the canonical check — SVG-imported closed paths
+                // have a duplicate endpoint but no `closed` flag, so checking `closed` alone misses them.
+                if (this.hasDuplicateEndpoint(path) && (this.activeHandle === 0 || this.activeHandle === n-1)) {
+                    this.syncFirstLast = true;
                 }
 
                 // Store original path for undo (in case of drag)
@@ -288,7 +287,7 @@ class PathEdit extends Select {
                 }
 
                 this.updatePropertiesPanel();
-            } else if (this.selectedPath && !this.selectedPath.closed) {
+            } else if (this.selectedPath && !this.selectedPath.closed && !this.hasDuplicateEndpoint(this.selectedPath.path)) {
                 // Check if dragging the last point onto the first point to close the path
                 const path = this.selectedPath.path;
                 const n = path.length;

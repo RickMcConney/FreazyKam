@@ -196,11 +196,13 @@ class Select extends Operation {
             const b = svgpath.bbox;
             return pt.x >= b.minx && pt.x <= b.maxx && pt.y >= b.miny && pt.y <= b.maxy;
         }
-        return this._minSegDistSq(pt, svgpath.path) < 100;
+        const t = SELECT_TOLERANCE_PX / zoomLevel;
+        return this._minSegDistSq(pt, svgpath.path) < t * t;
     }
 
     pointInPath(pt) {
-        const bboxMargin = 10;
+        const bboxMargin = SELECT_TOLERANCE_PX / zoomLevel;
+        const thresholdSq = bboxMargin * bboxMargin;
         let bestPath = null;
         let bestDist = Infinity;
 
@@ -220,7 +222,7 @@ class Select extends Operation {
             const dist = this._minSegDistSq(pt, svgpaths[i].path);
             if (dist < bestDist) { bestDist = dist; bestPath = svgpaths[i]; }
         }
-        return bestDist < 100 ? bestPath : null;
+        return bestDist < thresholdSq ? bestPath : null;
     }
 
     updateSelectBox(mouse, evt, canvas) {
