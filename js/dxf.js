@@ -232,7 +232,7 @@
             for (const ent of entities) {
                 const pts = entityToPoints(ent, scale);
                 if (!pts || pts.length < 2) continue;
-                const simplified = simplifyPoints(pts, 0.5);
+                const simplified = simplifyPoints(pts, 0.1);
                 if (simplified.length < 2) continue;
                 const label = ent.type.charAt(0) + ent.type.slice(1).toLowerCase();
                 paths.push({ geom: simplified, name: label });

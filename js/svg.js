@@ -38,7 +38,7 @@ function simplifyPoints(points, epsilon) {
 
 // Tessellate normalized path data segments into {x,y} points
 function getPointsFromSegments(segments, steps) {
-	steps = steps || 20;
+	steps = steps || 50;
 	var points = [];
 	var lastX = 0, lastY = 0;
 	var start = {x:0,y:0};
@@ -272,8 +272,8 @@ function parseSvgContent(data, name) {
 				// Split compound paths into individual sub-paths
 				var subpaths = splitSegmentsAtSubpaths(transformedSegments);
 				subpaths.forEach(function(subSegs) {
-					var dense = getPointsFromSegments(subSegs, 20);
-					var simplified = simplifyPoints(dense, 0.5);
+					var dense = getPointsFromSegments(subSegs, 50);
+					var simplified = simplifyPoints(dense, 0.1);
 					if (simplified.length < 1) return;
 
 					for (var k = 0; k < simplified.length; k++) {
