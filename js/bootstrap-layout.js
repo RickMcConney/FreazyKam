@@ -4,7 +4,7 @@
  */
 
 // Version number based on latest commit date
-var APP_VERSION = "Ver 2026-04-30";
+var APP_VERSION = "Ver 2026-05-01";
 
 var mode = "Select";
 var options = [];
@@ -296,7 +296,7 @@ function loadTools() {
 // File input handlers
 var fileInput = document.createElement('input');
 fileInput.type = 'file';
-fileInput.accept = '.svg,.stl,.png,.jpg,.jpeg,.gcode,.nc,.ngc,.tap';
+fileInput.accept = '.svg,.dxf,.stl,.png,.jpg,.jpeg,.gcode,.nc,.ngc,.tap';
 fileInput.id = 'fileInput';
 fileInput.addEventListener('change', function (e) {
     autoCloseToolProperties('file import');
@@ -336,6 +336,17 @@ fileInput.addEventListener('change', function (e) {
             importReferenceImage(event.target.result, file.name);
         };
         reader.readAsDataURL(file);
+        fileInput.value = "";
+        return;
+    }
+
+    if (ext === 'dxf') {
+        var reader = new FileReader();
+        reader.onload = function (event) {
+            parseDxfContent(event.target.result, file.name);
+            redraw();
+        };
+        reader.readAsText(file);
         fileInput.value = "";
         return;
     }
