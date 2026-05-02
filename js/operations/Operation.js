@@ -130,6 +130,16 @@ class Operation {
         return this.snapToGrid(worldCoords.x, worldCoords.y);
     }
 
+    // Like normalizeEvent but without snap-to-grid — use for hit testing so
+    // the snap offset doesn't push the cursor away from paths at high zoom.
+    normalizeEventWorld(target, e) {
+        if (!e) { e = window.event; }
+        var rect = target.getBoundingClientRect();
+        var x = (e.clientX - rect.left) / (rect.right - rect.left) * target.width;
+        var y = (e.clientY - rect.top) / (rect.bottom - rect.top) * target.height;
+        return screenToWorld(x, y);
+    }
+
         /**
          * Check if any edge of a path intersects the edges of a selection box
          */

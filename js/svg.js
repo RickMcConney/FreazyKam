@@ -150,20 +150,26 @@ function importParsedPaths(paths, name) {
 	}
 }
 
+function parseSvgDimToMM(attr) {
+	if (!attr) return null;
+	var m = attr.match(/^([\d.]+)\s*(mm|cm|in|px|pt|pc)?$/i);
+	if (!m) return null;
+	var v = parseFloat(m[1]);
+	switch ((m[2] || 'px').toLowerCase()) {
+		case 'mm': return v;
+		case 'cm': return v * 10;
+		case 'in': return v * 25.4;
+		case 'pt': return v * 25.4 / 72;
+		case 'pc': return v * 25.4 / 6;
+		case 'px': return null; // px has no real-world meaning without PPI info
+	}
+	return null;
+}
+
 function parseSvgContent(data, name) {
 	try {
-		// Detect DPI based on SVG source
-		var useViewBoxScale = false;
-		if (data.indexOf("Adobe Illustrator") >= 0) {
-			pixelsPerInch = 72;
-		} else if (data.indexOf("woodgears.ca") >= 0) {
-			pixelsPerInch = 254;
-		} else if (data.indexOf("tinkercad") >= 0) {
-			pixelsPerInch = 25.4;
-		} else {
-			pixelsPerInch = 96;
-			useViewBoxScale = true;
-		}
+		// svgscale resolved after parsing (needs viewBox); set a safe default for now
+		pixelsPerInch = 96;
 		svgscale = viewScale * 25.4 / pixelsPerInch;
 
 		// Parse as XML so namespace-prefixed child elements (e.g. <d:SVGTestCase>)
@@ -211,10 +217,38 @@ function parseSvgContent(data, name) {
 		var vbx = vb ? vb.x || 0 : 0;
 		var vby = vb ? vb.y || 0 : 0;
 
-		// No recognized source: scale so viewBox width equals world bbox width (1 SVG unit = 1 world unit)
-		if (useViewBoxScale && vb && vb.width > 0) {
-			svgscale = 10;
-			pixelsPerInch = viewScale * 25.4;
+		// Resolve svgscale in priority order:
+		// 1. width/height with real-world units + viewBox → exact scale
+		// 2. viewBox present (no unit dims) → 1 SVG unit = 1mm
+		// 3. String detection for known tools without viewBox
+		// 4. Default 96 PPI
+		if (vb && vb.width > 0) {
+			var wAttr = svgEl.getAttribute('width');
+			var hAttr = svgEl.getAttribute('height');
+			var mmPerUnit = null;
+			if (wAttr) {
+				var wMM = parseSvgDimToMM(wAttr);
+				if (wMM !== null) mmPerUnit = wMM / vb.width;
+			}
+			if (mmPerUnit === null && hAttr) {
+				var hMM = parseSvgDimToMM(hAttr);
+				if (hMM !== null) mmPerUnit = hMM / vb.height;
+			}
+			// Use exact scale if we got real-world units; otherwise 1 SVG unit = 1mm.
+			// Percentage/missing width+height fall through to the 1mm default.
+			svgscale = mmPerUnit !== null ? mmPerUnit * viewScale : viewScale;
+		} else {
+			// No viewBox — fall back to string detection then 96 PPI default
+			if (data.indexOf("Adobe Illustrator") >= 0) {
+				pixelsPerInch = 72;
+			} else if (data.indexOf("woodgears.ca") >= 0) {
+				pixelsPerInch = 254;
+			} else if (data.indexOf("tinkercad") >= 0) {
+				pixelsPerInch = 25.4;
+			} else {
+				pixelsPerInch = 96;
+			}
+			svgscale = viewScale * 25.4 / pixelsPerInch;
 		}
 
 		var paths = [];
@@ -279,9 +313,10 @@ function parseSvgContent(data, name) {
 
 				// Split compound paths into individual sub-paths
 				var subpaths = splitSegmentsAtSubpaths(transformedSegments);
+				var tolerance = getOption("tolerance") || 0.1;
 				subpaths.forEach(function(subSegs) {
 					var dense = getPointsFromSegments(subSegs, 50);
-					var simplified = simplifyPoints(dense, 0.1);
+					var simplified = simplifyPoints(dense, tolerance);
 					if (simplified.length < 1) return;
 
 					for (var k = 0; k < simplified.length; k++) {

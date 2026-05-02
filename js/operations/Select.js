@@ -142,6 +142,7 @@ class Select extends Operation {
         const rawMouse = this.normalizeEventRaw(canvas, evt);
         this.dragStartXWorld = rawMouse.x;
         this.dragStartYWorld = rawMouse.y;
+        const mouseHit = this.normalizeEventWorld(canvas, evt);
         this.dragPath = null;
 
         // Find any currently highlighted path by checking the highlight property directly
@@ -150,13 +151,13 @@ class Select extends Operation {
         // Capture the path to potentially drag:
         // If a path is highlighted and mouse is inside its bounding box, use that path
         // This ensures the visually highlighted shape is the one that gets dragged
-        if (highlightedPath && this.isNearEdge(mouse, highlightedPath)) {
+        if (highlightedPath && this.isNearEdge(mouseHit, highlightedPath)) {
             this.potentialDragPath = highlightedPath;
             // Keep it highlighted
             highlightedPath.highlight = true;
         } else {
             // Mouse is outside the highlighted path - fall back to other detection methods
-            this.potentialDragPath = this.pointInPath(mouse);
+            this.potentialDragPath = this.pointInPath(mouseHit);
         }
 
         // Don't change state yet - wait for onMouseMove to detect threshold crossing
@@ -308,11 +309,12 @@ class Select extends Operation {
 
     onMouseMove(canvas, evt) {
         var mouse = this.normalizeEvent(canvas, evt);
+        const mouseHit = this.normalizeEventWorld(canvas, evt);
         const snapOff = typeof getOption === 'function' && getOption("snapGrid") === false;
         const rawMouse = snapOff ? this.normalizeEventRaw(canvas, evt) : mouse;
 
         if (!this.mouseDown) {
-            this.handleHover(mouse);
+            this.handleHover(mouseHit);
             return;
         }
 
@@ -339,6 +341,7 @@ class Select extends Operation {
 
     onMouseUp(canvas, evt) {
         var mouse = this.normalizeEvent(canvas, evt);
+        const mouseHit = this.normalizeEventWorld(canvas, evt);
         const wasDragging = Select.state == Select.DRAGGING;
         this.mouseDown = false;
 
@@ -347,7 +350,7 @@ class Select extends Operation {
         if (Select.state == Select.IDLE) {
             // Use the path captured at mouse down (which includes highlighted paths)
             // Fall back to closestPath for clicks near edges
-            let path = this.potentialDragPath || closestPath(mouse, false);
+            let path = this.potentialDragPath || closestPath(mouseHit, false);
             this.toggleSelection(path, evt);
         }
 

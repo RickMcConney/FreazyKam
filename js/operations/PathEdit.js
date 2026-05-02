@@ -108,11 +108,12 @@ class PathEdit extends Select {
 
     onMouseDown(canvas, evt) {
         const mouse = this.normalizeEvent(canvas, evt);
+        const mouseHit = this.normalizeEventWorld(canvas, evt);
         this.mouseDown = true;
 
         // Check if Shift key is held for setting first point
         if (evt.shiftKey && this.selectedPath) {
-            const clickedHandle = this.getHandleAtPoint(mouse);
+            const clickedHandle = this.getHandleAtPoint(mouseHit);
             if (clickedHandle !== null && clickedHandle !== 0) {
                 this.setFirstPoint(clickedHandle);
                 return;
@@ -142,7 +143,7 @@ class PathEdit extends Select {
 
         // First check if we're clicking on a point handle
         if (this.selectedPath) {
-            this.activeHandle = this.getHandleAtPoint(mouse);
+            this.activeHandle = this.getHandleAtPoint(mouseHit);
 
             if (this.activeHandle !== null) {
                 // Track that we haven't dragged yet
@@ -169,7 +170,7 @@ class PathEdit extends Select {
         }
 
         // If not clicking on a handle, check for path selection
-        const clickedPath = closestPath(mouse, false);
+        const clickedPath = closestPath(mouseHit, false);
         if (clickedPath) {
             // Deselect all other paths
             selectMgr.unselectAll();
@@ -195,6 +196,7 @@ class PathEdit extends Select {
 
     onMouseMove(canvas, evt) {
         const mouse = this.normalizeEvent(canvas, evt);
+        const mouseHit = this.normalizeEventWorld(canvas, evt);
         const selectedPath = this.selectedPath;
 
         if (this.mouseDown && this.activeHandle !== null && selectedPath) {
@@ -228,7 +230,7 @@ class PathEdit extends Select {
             redraw();
         } else if (!this.mouseDown && selectedPath) {
             // Check if hovering over a handle for cursor feedback
-            const hoverHandle = this.getHandleAtPoint(mouse);
+            const hoverHandle = this.getHandleAtPoint(mouseHit);
             const oldHover = this.hoveredHandle;
             const oldPreview = this.insertPreviewPoint;
             this.hoveredHandle = hoverHandle;
@@ -236,7 +238,7 @@ class PathEdit extends Select {
             // Check if Alt key is held for adding points
             if (evt.altKey) {
                 // Find closest segment for insertion preview
-                const segment = this.findClosestSegment(mouse);
+                const segment = this.findClosestSegment(mouseHit);
                 if (segment && hoverHandle === null) {
                     // Show preview for adding a point
                     this.insertPreviewPoint = {
@@ -266,7 +268,7 @@ class PathEdit extends Select {
             }
         }
         else {
-            closestPath(mouse, true);
+            closestPath(mouseHit, true);
         }
     }
 
@@ -297,7 +299,7 @@ class PathEdit extends Select {
                     const dx = last.x - first.x;
                     const dy = last.y - first.y;
                     const dist = Math.sqrt(dx * dx + dy * dy);
-                    if (dist < this.handleSize * 2) {
+                    if (dist < this.handleSize * 2 / zoomLevel) {
                         // Snap last point to first and close the path
                         last.x = first.x;
                         last.y = first.y;
@@ -398,7 +400,7 @@ class PathEdit extends Select {
         // Skip duplicate last point on closed paths
         const checkCount = this.hasDuplicateEndpoint(path) ? n - 1 : n;
         let closestHandle = null;
-        let closestDistance = this.handleSize * 2;
+        let closestDistance = this.handleSize * 2 / zoomLevel;
 
         // Find the closest handle within the threshold distance
         for (let i = 0; i < checkCount; i++) {
@@ -470,7 +472,7 @@ class PathEdit extends Select {
         }
 
         // Only return if within reasonable distance
-        if (minDistance < this.handleSize * 3) {
+        if (minDistance < this.handleSize * 3 / zoomLevel) {
             return {
                 segmentIndex: closestSegmentIndex,
                 point: closestPoint,

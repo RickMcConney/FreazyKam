@@ -188,10 +188,11 @@ class Transform extends Select {
     }
     onMouseDown(canvas, evt) {
         var mouse = this.normalizeEvent(canvas, evt);
+        const mouseHit = this.normalizeEventWorld(canvas, evt);
         this.mouseDown = true;
 
         // First check if we're clicking on a handle
-        this.activeHandle = this.getHandleAtPoint(mouse);
+        this.activeHandle = this.getHandleAtPoint(mouseHit);
         this.hoverHandle = null;
 
         // If clicking on a handle, handle transformation
@@ -283,7 +284,7 @@ class Transform extends Select {
 
         // Update hover detection when not dragging
         if (!this.mouseDown) {
-            this.handleHoverDetection(mouse);
+            this.handleHoverDetection(this.normalizeEventWorld(canvas, evt));
         }
 
         // Handle state-specific transformations when mouse is down
@@ -1094,7 +1095,7 @@ class Transform extends Select {
         for (let handle of handles) {
             const dx = handle.x - point.x;
             const dy = handle.y - point.y;
-            if (Math.sqrt(dx * dx + dy * dy) <= Transform.HANDLE_HIT_RADIUS) {
+            if (Math.sqrt(dx * dx + dy * dy) <= Transform.HANDLE_HIT_RADIUS / zoomLevel) {
                 return handle;
             }
         }

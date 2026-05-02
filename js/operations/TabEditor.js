@@ -86,11 +86,12 @@ class TabEditor extends Select {
 
     onMouseDown(canvas, evt) {
         var mouse = this.normalizeEvent(canvas, evt);
+        var mouseHit = this.normalizeEventWorld(canvas, evt);
         this.mouseDown = true;
 
         // Check if clicking on a tab handle
         if (this.selectedPath && this.selectedPath.creationProperties && this.selectedPath.creationProperties.tabs) {
-            const tabIndex = this.getTabAtPoint(mouse);
+            const tabIndex = this.getTabAtPoint(mouseHit);
             if (tabIndex !== null) {
                 this.draggedTab = tabIndex;
                 this.hoveredTab = null;  // Clear hover when dragging starts
@@ -100,7 +101,7 @@ class TabEditor extends Select {
         }
 
         // If not clicking on a tab, check for path selection
-        var clickedPath = closestPath(mouse, false);
+        var clickedPath = closestPath(mouseHit, false);
         if (clickedPath) {
             selectMgr.unselectAll();
             selectMgr.selectPath(clickedPath);
@@ -121,16 +122,17 @@ class TabEditor extends Select {
 
     onMouseMove(canvas, evt) {
         var mouse = this.normalizeEvent(canvas, evt);
+        var mouseHit = this.normalizeEventWorld(canvas, evt);
 
         this.selectedPath = selectMgr.lastSelected();
 
         if (this.mouseDown && this.draggedTab !== null && this.selectedPath) {
             // Move tab along path boundary
-            this.moveTabAlongPath(this.draggedTab, mouse);
+            this.moveTabAlongPath(this.draggedTab, mouseHit);
             redraw();
         } else if (!this.mouseDown && this.selectedPath) {
             // Check for hovered tab
-            const tabIndex = this.getTabAtPoint(mouse);
+            const tabIndex = this.getTabAtPoint(mouseHit);
             this.hoveredTab = tabIndex;
 
             if (tabIndex !== null) {
@@ -141,7 +143,7 @@ class TabEditor extends Select {
 
             redraw();
         } else {
-            closestPath(mouse, true);
+            closestPath(mouseHit, true);
         }
     }
 
@@ -160,7 +162,7 @@ class TabEditor extends Select {
 
         const tabs = this.selectedPath.creationProperties.tabs;
         let closestTab = null;
-        let closestDistance = this.tabHandleSize * 3;
+        let closestDistance = this.tabHandleSize * 3 / zoomLevel;
 
         for (let i = 0; i < tabs.length; i++) {
             const tab = tabs[i];
