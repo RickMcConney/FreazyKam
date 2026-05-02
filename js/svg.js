@@ -153,6 +153,7 @@ function importParsedPaths(paths, name) {
 function parseSvgContent(data, name) {
 	try {
 		// Detect DPI based on SVG source
+		var useViewBoxScale = false;
 		if (data.indexOf("Adobe Illustrator") >= 0) {
 			pixelsPerInch = 72;
 		} else if (data.indexOf("woodgears.ca") >= 0) {
@@ -161,6 +162,7 @@ function parseSvgContent(data, name) {
 			pixelsPerInch = 25.4;
 		} else {
 			pixelsPerInch = 96;
+			useViewBoxScale = true;
 		}
 		svgscale = viewScale * 25.4 / pixelsPerInch;
 
@@ -208,6 +210,12 @@ function parseSvgContent(data, name) {
 		var vb = svgEl.viewBox && svgEl.viewBox.baseVal;
 		var vbx = vb ? vb.x || 0 : 0;
 		var vby = vb ? vb.y || 0 : 0;
+
+		// No recognized source: scale so viewBox width equals world bbox width (1 SVG unit = 1 world unit)
+		if (useViewBoxScale && vb && vb.width > 0) {
+			svgscale = 10;
+			pixelsPerInch = viewScale * 25.4;
+		}
 
 		var paths = [];
 		var elements = svgEl.querySelectorAll('path, rect, circle, ellipse, line, polyline, polygon, use');
