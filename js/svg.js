@@ -37,8 +37,50 @@ function simplifyPoints(points, epsilon) {
 }
 
 // Tessellate normalized path data segments into {x,y} points
-function getPointsFromSegments(segments, steps) {
-	steps = steps || 50;
+function midpoint(a, b) {
+	return {
+		x: (a.x + b.x) / 2,
+		y: (a.y + b.y) / 2
+	};
+}
+
+function flattenCubic(points, p0, p1, p2, p3, tolerance, depth) {
+	depth = depth || 0;
+	var d1 = getPerpendicularDistance(p1, p0, p3);
+	var d2 = getPerpendicularDistance(p2, p0, p3);
+	if (Math.max(d1, d2) <= tolerance || depth >= 16) {
+		points.push({ x: p3.x, y: p3.y });
+		return;
+	}
+
+	var p01 = midpoint(p0, p1);
+	var p12 = midpoint(p1, p2);
+	var p23 = midpoint(p2, p3);
+	var p012 = midpoint(p01, p12);
+	var p123 = midpoint(p12, p23);
+	var p0123 = midpoint(p012, p123);
+
+	flattenCubic(points, p0, p01, p012, p0123, tolerance, depth + 1);
+	flattenCubic(points, p0123, p123, p23, p3, tolerance, depth + 1);
+}
+
+function flattenQuadratic(points, p0, p1, p2, tolerance, depth) {
+	depth = depth || 0;
+	if (getPerpendicularDistance(p1, p0, p2) <= tolerance || depth >= 16) {
+		points.push({ x: p2.x, y: p2.y });
+		return;
+	}
+
+	var p01 = midpoint(p0, p1);
+	var p12 = midpoint(p1, p2);
+	var p012 = midpoint(p01, p12);
+
+	flattenQuadratic(points, p0, p01, p012, tolerance, depth + 1);
+	flattenQuadratic(points, p012, p12, p2, tolerance, depth + 1);
+}
+
+function getPointsFromSegments(segments, tolerance) {
+	tolerance = Math.max(tolerance || 0.01, 0.001);
 	var points = [];
 	var lastX = 0, lastY = 0;
 	var start = {x:0,y:0};
@@ -57,25 +99,24 @@ function getPointsFromSegments(segments, steps) {
 				lastX = v[0]; lastY = v[1];
 				break;
 			case 'C':
-				for (var s = 1; s <= steps; s++) {
-					var t = s / steps;
-					var mt = 1 - t;
-					points.push({
-						x: mt*mt*mt*lastX + 3*mt*mt*t*v[0] + 3*mt*t*t*v[2] + t*t*t*v[4],
-						y: mt*mt*mt*lastY + 3*mt*mt*t*v[1] + 3*mt*t*t*v[3] + t*t*t*v[5]
-					});
-				}
+				flattenCubic(
+					points,
+					{ x: lastX, y: lastY },
+					{ x: v[0], y: v[1] },
+					{ x: v[2], y: v[3] },
+					{ x: v[4], y: v[5] },
+					tolerance
+				);
 				lastX = v[4]; lastY = v[5];
 				break;
 			case 'Q':
-				for (var s = 1; s <= steps; s++) {
-					var t = s / steps;
-					var mt = 1 - t;
-					points.push({
-						x: mt*mt*lastX + 2*mt*t*v[0] + t*t*v[2],
-						y: mt*mt*lastY + 2*mt*t*v[1] + t*t*v[3]
-					});
-				}
+				flattenQuadratic(
+					points,
+					{ x: lastX, y: lastY },
+					{ x: v[0], y: v[1] },
+					{ x: v[2], y: v[3] },
+					tolerance
+				);
 				lastX = v[2]; lastY = v[3];
 				break;
 			case 'Z':
@@ -150,7 +191,20 @@ function importParsedPaths(paths, name) {
 	}
 }
 
-function parseSvgDimToMM(attr) {
+function detectSvgPixelsPerInch(data) {
+	if (data.indexOf("Adobe Illustrator") >= 0) {
+		return 72;
+	}
+	if (data.indexOf("woodgears.ca") >= 0) {
+		return 254;
+	}
+	if (data.indexOf("tinkercad") >= 0) {
+		return 25.4;
+	}
+	return 96;
+}
+
+function parseSvgDimToMM(attr, ppi) {
 	if (!attr) return null;
 	var m = attr.match(/^([\d.]+)\s*(mm|cm|in|px|pt|pc)?$/i);
 	if (!m) return null;
@@ -161,7 +215,7 @@ function parseSvgDimToMM(attr) {
 		case 'in': return v * 25.4;
 		case 'pt': return v * 25.4 / 72;
 		case 'pc': return v * 25.4 / 6;
-		case 'px': return null; // px has no real-world meaning without PPI info
+		case 'px': return v * 25.4 / (ppi || 96);
 	}
 	return null;
 }
@@ -169,7 +223,7 @@ function parseSvgDimToMM(attr) {
 function parseSvgContent(data, name) {
 	try {
 		// svgscale resolved after parsing (needs viewBox); set a safe default for now
-		pixelsPerInch = 96;
+		pixelsPerInch = detectSvgPixelsPerInch(data);
 		svgscale = viewScale * 25.4 / pixelsPerInch;
 
 		// Parse as XML so namespace-prefixed child elements (e.g. <d:SVGTestCase>)
@@ -227,11 +281,11 @@ function parseSvgContent(data, name) {
 			var hAttr = svgEl.getAttribute('height');
 			var mmPerUnit = null;
 			if (wAttr) {
-				var wMM = parseSvgDimToMM(wAttr);
+				var wMM = parseSvgDimToMM(wAttr, pixelsPerInch);
 				if (wMM !== null) mmPerUnit = wMM / vb.width;
 			}
 			if (mmPerUnit === null && hAttr) {
-				var hMM = parseSvgDimToMM(hAttr);
+				var hMM = parseSvgDimToMM(hAttr, pixelsPerInch);
 				if (hMM !== null) mmPerUnit = hMM / vb.height;
 			}
 			// Use exact scale if we got real-world units; otherwise 1 SVG unit = 1mm.
@@ -239,100 +293,137 @@ function parseSvgContent(data, name) {
 			svgscale = mmPerUnit !== null ? mmPerUnit * viewScale : viewScale;
 		} else {
 			// No viewBox — fall back to string detection then 96 PPI default
-			if (data.indexOf("Adobe Illustrator") >= 0) {
-				pixelsPerInch = 72;
-			} else if (data.indexOf("woodgears.ca") >= 0) {
-				pixelsPerInch = 254;
-			} else if (data.indexOf("tinkercad") >= 0) {
-				pixelsPerInch = 25.4;
-			} else {
-				pixelsPerInch = 96;
-			}
 			svgscale = viewScale * 25.4 / pixelsPerInch;
 		}
 
 		var paths = [];
-		var elements = svgEl.querySelectorAll('path, rect, circle, ellipse, line, polyline, polygon, use');
+		var shapeSelector = 'path, rect, circle, ellipse, line, polyline, polygon';
+		var drawableSelector = shapeSelector + ', use';
+		var elements = svgEl.querySelectorAll(drawableSelector);
+		var rootCTM = svgEl.getScreenCTM();
+		var tolerance = getOption("tolerance") || 0.1;
+		var geometryTolerance = Math.max((tolerance * viewScale) / svgscale, 0.001);
+		var cleanupTolerance = geometryTolerance * 0.25;
+		var activeUseRefs = {};
+
+		function getUseHrefId(el) {
+			var href = el.getAttribute('href') || el.getAttribute('xlink:href');
+			if (!href) return null;
+			var urlMatch = href.match(/^url\(#(.+)\)$/);
+			if (urlMatch) return urlMatch[1];
+			return href.charAt(0) === '#' ? href.slice(1) : null;
+		}
+
+		function findSvgElementById(root, id) {
+			var items = root.querySelectorAll('[id]');
+			for (var i = 0; i < items.length; i++) {
+				if (items[i].getAttribute('id') === id) return items[i];
+			}
+			return null;
+		}
+
+		function processShapeElement(shapeEl) {
+			if (!rootCTM) return;
+			var elCTM = shapeEl.getScreenCTM();
+			if (!elCTM) return;
+			var matrix = rootCTM.inverse().multiply(elCTM);
+			var typeName = getElementTypeName(shapeEl.tagName);
+
+			var pathData = shapeEl.getPathData({ normalize: true });
+			if (!pathData || pathData.length === 0) return;
+
+			// Apply CTM to all coordinate pairs, offset by viewBox origin
+			var transformedSegments = pathData.map(function(seg) {
+				var tv = [];
+				for (var i = 0; i < seg.values.length; i += 2) {
+					var x = seg.values[i], y = seg.values[i + 1];
+					tv.push(
+						x * matrix.a + y * matrix.c + matrix.e - vbx,
+						x * matrix.b + y * matrix.d + matrix.f - vby
+					);
+				}
+				return { type: seg.type, values: tv };
+			});
+
+			// Split compound paths into individual sub-paths
+			var subpaths = splitSegmentsAtSubpaths(transformedSegments);
+			subpaths.forEach(function(subSegs) {
+				var dense = getPointsFromSegments(subSegs, geometryTolerance);
+				var simplified = simplifyPoints(dense, cleanupTolerance);
+				if (simplified.length < 1) return;
+
+				for (var k = 0; k < simplified.length; k++) {
+					simplified[k].x *= svgscale;
+					simplified[k].y *= svgscale;
+				}
+
+				paths.push({ geom: simplified, name: typeName });
+			});
+		}
+
+		function processUseElement(el) {
+			var refId = getUseHrefId(el);
+			if (!refId) return;
+			if (activeUseRefs[refId]) return;
+			var refEl = findSvgElementById(svgEl, refId);
+			if (!refEl) return;
+
+			var tempG = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+			var transformParts = [];
+			var transformAttr = el.getAttribute('transform');
+			var useX = parseFloat(el.getAttribute('x') || 0) || 0;
+			var useY = parseFloat(el.getAttribute('y') || 0) || 0;
+			if (transformAttr) transformParts.push(transformAttr);
+			if (useX !== 0 || useY !== 0) transformParts.push('translate(' + useX + ' ' + useY + ')');
+			if (transformParts.length > 0) tempG.setAttribute('transform', transformParts.join(' '));
+
+			var clone = refEl.cloneNode(true);
+			tempG.appendChild(clone);
+			el.parentElement.appendChild(tempG);
+			activeUseRefs[refId] = true;
+
+			try {
+				if (clone.matches && clone.matches(drawableSelector)) {
+					processRenderedElement(clone);
+				}
+				var childElements = clone.querySelectorAll ? clone.querySelectorAll(drawableSelector) : [];
+				childElements.forEach(function(child) {
+					processRenderedElement(child);
+				});
+			} finally {
+				delete activeUseRefs[refId];
+				el.parentElement.removeChild(tempG);
+			}
+		}
+
+		function processRenderedElement(el) {
+			if (el.tagName.toLowerCase() === 'use') {
+				processUseElement(el);
+			} else {
+				processShapeElement(el);
+			}
+		}
 
 		elements.forEach(function(el) {
 			try {
-				// CTM relative to SVG root — bakes in all ancestor transforms
-				var rootCTM = svgEl.getScreenCTM();
-				var elCTM = el.getScreenCTM();
-				if (!rootCTM || !elCTM) return;
-				var matrix = rootCTM.inverse().multiply(elCTM);
-
 				// Skip elements inside <defs> — after adoptNode their CTM is non-null
 				// but they are definitions only, not rendered instances.
 				if (el.closest('defs')) return;
 
-				// For <use>: getScreenCTM() on the element itself omits both the
-				// transform attribute and the x/y offset.  Resolve by temporarily
-				// inserting a <g> with the same transform into the same parent so the
-				// browser computes it correctly, then add the x/y translation.
-				var shapeEl = el;
-				var typeName;
-				if (el.tagName.toLowerCase() === 'use') {
-					var href = el.getAttribute('href') || el.getAttribute('xlink:href');
-					if (!href || href.charAt(0) !== '#') return;
-					var refId = href.slice(1);
-					shapeEl = svgEl.querySelector('[id="' + refId.replace(/"/g, '\\"') + '"]');
-					if (!shapeEl) return;
-					typeName = getElementTypeName(shapeEl.tagName);
-
-					var tempG = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-					var transformAttr = el.getAttribute('transform');
-					if (transformAttr) tempG.setAttribute('transform', transformAttr);
-					el.parentElement.appendChild(tempG);
-					var useMatrix = tempG.getScreenCTM();
-					el.parentElement.removeChild(tempG);
-					if (!useMatrix) return;
-					var useX = parseFloat(el.getAttribute('x') || 0) || 0;
-					var useY = parseFloat(el.getAttribute('y') || 0) || 0;
-					if (useX !== 0 || useY !== 0) useMatrix = useMatrix.translate(useX, useY);
-					matrix = rootCTM.inverse().multiply(useMatrix);
-				} else {
-					typeName = getElementTypeName(el.tagName);
-				}
-
-				var pathData = shapeEl.getPathData({ normalize: true });
-				if (!pathData || pathData.length === 0) return;
-
-				// Apply CTM to all coordinate pairs, offset by viewBox origin
-				var transformedSegments = pathData.map(function(seg) {
-					var tv = [];
-					for (var i = 0; i < seg.values.length; i += 2) {
-						var x = seg.values[i], y = seg.values[i + 1];
-						tv.push(
-							x * matrix.a + y * matrix.c + matrix.e - vbx,
-							x * matrix.b + y * matrix.d + matrix.f - vby
-						);
-					}
-					return { type: seg.type, values: tv };
-				});
-
-				// Split compound paths into individual sub-paths
-				var subpaths = splitSegmentsAtSubpaths(transformedSegments);
-				var tolerance = getOption("tolerance") || 0.1;
-				subpaths.forEach(function(subSegs) {
-					var dense = getPointsFromSegments(subSegs, 50);
-					var simplified = simplifyPoints(dense, tolerance);
-					if (simplified.length < 1) return;
-
-					for (var k = 0; k < simplified.length; k++) {
-						simplified[k].x *= svgscale;
-						simplified[k].y *= svgscale;
-					}
-
-					paths.push({ geom: simplified, name: typeName });
-				});
-
+				processRenderedElement(el);
 			} catch (e) {
 				console.error('parseSvgContent: error processing <' + el.tagName + '>:', e);
 			}
 		});
 
 		document.body.removeChild(container);
+
+		if (paths.length === 0) {
+			if (typeof notify === 'function') {
+				notify('No supported SVG geometry found in this SVG file', 'warning');
+			}
+			return [];
+		}
 
 		importParsedPaths(paths, name);
 		return paths;
