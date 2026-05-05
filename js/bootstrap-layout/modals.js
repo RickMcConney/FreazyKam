@@ -325,6 +325,75 @@ function createModals() {
     `;
     body.appendChild(confirmModal);
 
+    // SVG Pixels Per Inch Input Modal
+    const svgPpiModal = document.createElement('div');
+    svgPpiModal.innerHTML = `
+        <div class="modal fade" id="svgPpiModal" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">
+                            <i data-lucide="ruler"></i>
+                            SVG Scale
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p class="mb-3">This SVG does not identify its pixels-per-inch scale. Enter the PPI value to use for import.</p>
+                        <div class="mb-3">
+                            <label for="svg-ppi-input" class="form-label">Pixels per inch</label>
+                            <input type="number" class="form-control" id="svg-ppi-input" min="0.001" step="0.1" value="96" inputmode="decimal">
+                            <div class="invalid-feedback" id="svg-ppi-error">
+                                Enter a positive pixels-per-inch value.
+                            </div>
+                            <div class="form-text">Common values: 96 for browser/Inkscape SVGs, 72 for older Illustrator SVGs.</div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="button" class="btn btn-primary" id="confirm-svg-ppi">Import</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    body.appendChild(svgPpiModal);
+
+    // DXF Unit Selection Modal
+    const dxfUnitsModal = document.createElement('div');
+    dxfUnitsModal.innerHTML = `
+        <div class="modal fade" id="dxfUnitsModal" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">
+                            <i data-lucide="ruler"></i>
+                            DXF Units
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p class="mb-3">This DXF does not declare its drawing units. Choose the units to use for import.</p>
+                        <div class="mb-3">
+                            <label for="dxf-units-select" class="form-label">Drawing units</label>
+                            <select class="form-select" id="dxf-units-select">
+                                <option value="mm">Millimeters</option>
+                                <option value="cm">Centimeters</option>
+                                <option value="in">Inches</option>
+                                <option value="m">Meters</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="button" class="btn btn-primary" id="confirm-dxf-units">Import</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    body.appendChild(dxfUnitsModal);
+
     // Reset Options Confirmation Modal
     const resetOptionsModal = document.createElement('div');
     resetOptionsModal.innerHTML = `
@@ -435,6 +504,126 @@ function showConfirmModal(options) {
 
     // Initialize Lucide icons
     lucide.createIcons();
+}
+
+function showSvgPpiModal(defaultValue) {
+    return new Promise(function(resolve) {
+        const modalElement = document.getElementById('svgPpiModal');
+        const input = document.getElementById('svg-ppi-input');
+        const confirmBtn = document.getElementById('confirm-svg-ppi');
+        if (!modalElement || !input || !confirmBtn) {
+            resolve(null);
+            return;
+        }
+
+        input.value = defaultValue || 96;
+        input.classList.remove('is-invalid');
+
+        const newConfirmBtn = confirmBtn.cloneNode(true);
+        confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+
+        let resolved = false;
+        const modal = new bootstrap.Modal(modalElement);
+
+        function cleanup() {
+            modalElement.removeEventListener('hidden.bs.modal', onHidden);
+            input.removeEventListener('keydown', onKeyDown);
+        }
+
+        function finish(value) {
+            if (resolved) return;
+            resolved = true;
+            cleanup();
+            modal.hide();
+            resolve(value);
+        }
+
+        function onHidden() {
+            if (resolved) return;
+            resolved = true;
+            cleanup();
+            resolve(null);
+        }
+
+        function confirmValue() {
+            const ppi = parseFloat(input.value);
+            if (!isFinite(ppi) || ppi <= 0) {
+                input.classList.add('is-invalid');
+                input.focus();
+                return;
+            }
+            input.classList.remove('is-invalid');
+            finish(ppi);
+        }
+
+        function onKeyDown(evt) {
+            if (evt.key === 'Enter') {
+                evt.preventDefault();
+                confirmValue();
+            }
+        }
+
+        newConfirmBtn.addEventListener('click', confirmValue);
+        input.addEventListener('keydown', onKeyDown);
+        modalElement.addEventListener('hidden.bs.modal', onHidden);
+        modalElement.addEventListener('shown.bs.modal', function() {
+            input.focus();
+            input.select();
+        }, { once: true });
+
+        modal.show();
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+    });
+}
+
+function showDxfUnitsModal(defaultUnits) {
+    return new Promise(function(resolve) {
+        const modalElement = document.getElementById('dxfUnitsModal');
+        const select = document.getElementById('dxf-units-select');
+        const confirmBtn = document.getElementById('confirm-dxf-units');
+        if (!modalElement || !select || !confirmBtn) {
+            resolve(null);
+            return;
+        }
+
+        select.value = defaultUnits || 'mm';
+
+        const newConfirmBtn = confirmBtn.cloneNode(true);
+        confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+
+        let resolved = false;
+        const modal = new bootstrap.Modal(modalElement);
+
+        function cleanup() {
+            modalElement.removeEventListener('hidden.bs.modal', onHidden);
+        }
+
+        function finish(value) {
+            if (resolved) return;
+            resolved = true;
+            cleanup();
+            modal.hide();
+            resolve(value);
+        }
+
+        function onHidden() {
+            if (resolved) return;
+            resolved = true;
+            cleanup();
+            resolve(null);
+        }
+
+        newConfirmBtn.addEventListener('click', function() {
+            finish(select.value);
+        }, { once: true });
+        modalElement.addEventListener('hidden.bs.modal', onHidden);
+        modalElement.addEventListener('shown.bs.modal', function() {
+            select.focus();
+        }, { once: true });
+
+        modal.show();
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+    });
 }
 
 function renderOptionsTable() {

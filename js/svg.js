@@ -195,13 +195,26 @@ function detectSvgPixelsPerInch(data) {
 	if (data.indexOf("Adobe Illustrator") >= 0) {
 		return 72;
 	}
-	if (data.indexOf("woodgears.ca") >= 0) {
-		return 254;
-	}
+	//if (data.indexOf("woodgears.ca") >= 0) {
+	//	return 254;
+	//}
 	if (data.indexOf("tinkercad") >= 0) {
 		return 25.4;
 	}
-	return 96;
+	return null;
+}
+
+async function resolveSvgPixelsPerInch(data) {
+	var detectedPpi = detectSvgPixelsPerInch(data);
+	if (detectedPpi !== null) return detectedPpi;
+
+	if (typeof showSvgPpiModal === 'function') {
+		return await showSvgPpiModal(96);
+	}
+
+	var entered = window.prompt('This SVG does not identify its pixels-per-inch scale. Enter the PPI value to use for import:', '96');
+	var ppi = parseFloat(entered);
+	return isFinite(ppi) && ppi > 0 ? ppi : null;
 }
 
 function parseSvgDimToMM(attr, ppi) {
@@ -215,16 +228,22 @@ function parseSvgDimToMM(attr, ppi) {
 		case 'in': return v * 25.4;
 		case 'pt': return v * 25.4 / 72;
 		case 'pc': return v * 25.4 / 6;
-		case 'px': return v * 25.4 / (ppi || 96);
+		case 'px': return ppi ? v * 25.4 / ppi : null;
 	}
 	return null;
 }
 
-function parseSvgContent(data, name) {
+function svgDimUsesPixels(attr) {
+	if (!attr) return false;
+	var m = attr.match(/^([\d.]+)\s*(mm|cm|in|px|pt|pc)?$/i);
+	return !!m && (!m[2] || m[2].toLowerCase() === 'px');
+}
+
+async function parseSvgContent(data, name) {
 	try {
 		// svgscale resolved after parsing (needs viewBox); set a safe default for now
 		pixelsPerInch = detectSvgPixelsPerInch(data);
-		svgscale = viewScale * 25.4 / pixelsPerInch;
+		svgscale = viewScale * 25.4 / (pixelsPerInch || 96);
 
 		// Parse as XML so namespace-prefixed child elements (e.g. <d:SVGTestCase>)
 		// containing HTML block elements like <p> don't cause the HTML parser to
@@ -275,24 +294,53 @@ function parseSvgContent(data, name) {
 		// 1. width/height with real-world units + viewBox → exact scale
 		// 2. viewBox present (no unit dims) → 1 SVG unit = 1mm
 		// 3. String detection for known tools without viewBox
-		// 4. Default 96 PPI
+		// 4. User-provided PPI when the SVG does not identify one
 		if (vb && vb.width > 0) {
 			var wAttr = svgEl.getAttribute('width');
 			var hAttr = svgEl.getAttribute('height');
+			var hasPixelDim = svgDimUsesPixels(wAttr) || svgDimUsesPixels(hAttr);
 			var mmPerUnit = null;
-			if (wAttr) {
+			if (wAttr && (!svgDimUsesPixels(wAttr) || pixelsPerInch)) {
 				var wMM = parseSvgDimToMM(wAttr, pixelsPerInch);
 				if (wMM !== null) mmPerUnit = wMM / vb.width;
 			}
-			if (mmPerUnit === null && hAttr) {
+			if (mmPerUnit === null && hAttr && (!svgDimUsesPixels(hAttr) || pixelsPerInch)) {
 				var hMM = parseSvgDimToMM(hAttr, pixelsPerInch);
 				if (hMM !== null) mmPerUnit = hMM / vb.height;
+			}
+			if (mmPerUnit === null && hasPixelDim) {
+				pixelsPerInch = await resolveSvgPixelsPerInch(data);
+				if (!pixelsPerInch) {
+					document.body.removeChild(container);
+					if (typeof notify === 'function') {
+						notify('SVG import canceled: pixels-per-inch value is required', 'warning');
+					}
+					return null;
+				}
+				if (wAttr) {
+					var wMMPx = parseSvgDimToMM(wAttr, pixelsPerInch);
+					if (wMMPx !== null) mmPerUnit = wMMPx / vb.width;
+				}
+				if (mmPerUnit === null && hAttr) {
+					var hMMPx = parseSvgDimToMM(hAttr, pixelsPerInch);
+					if (hMMPx !== null) mmPerUnit = hMMPx / vb.height;
+				}
 			}
 			// Use exact scale if we got real-world units; otherwise 1 SVG unit = 1mm.
 			// Percentage/missing width+height fall through to the 1mm default.
 			svgscale = mmPerUnit !== null ? mmPerUnit * viewScale : viewScale;
 		} else {
-			// No viewBox — fall back to string detection then 96 PPI default
+			// No viewBox — fall back to detected or user-provided PPI
+			if (!pixelsPerInch) {
+				pixelsPerInch = await resolveSvgPixelsPerInch(data);
+				if (!pixelsPerInch) {
+					document.body.removeChild(container);
+					if (typeof notify === 'function') {
+						notify('SVG import canceled: pixels-per-inch value is required', 'warning');
+					}
+					return null;
+				}
+			}
 			svgscale = viewScale * 25.4 / pixelsPerInch;
 		}
 

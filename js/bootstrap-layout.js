@@ -4,7 +4,7 @@
  */
 
 // Version number based on latest commit date
-var APP_VERSION = "Ver 2026-05-03";
+var APP_VERSION = "Ver 2026-05-04";
 
 var mode = "Select";
 var options = [];
@@ -342,8 +342,8 @@ fileInput.addEventListener('change', function (e) {
 
     if (ext === 'dxf') {
         var reader = new FileReader();
-        reader.onload = function (event) {
-            parseDxfContent(event.target.result, file.name);
+        reader.onload = async function (event) {
+            await parseDxfContent(event.target.result, file.name);
             redraw();
         };
         reader.readAsText(file);
@@ -352,8 +352,8 @@ fileInput.addEventListener('change', function (e) {
     }
 
     var reader = new FileReader();
-    reader.onload = function (event) {
-        parseSvgContent(event.target.result, file.name);
+    reader.onload = async function (event) {
+        await parseSvgContent(event.target.result, file.name);
         redraw();
     };
     reader.readAsText(file);

@@ -81,7 +81,7 @@ function applyGemini() {
             // If a match is found, return the first one. Otherwise, return null.
             var svgText =  match ? match[0] : null;
             try {
-                    parseSvgContent(svgText,"Gemini");
+                    return parseSvgContent(svgText,"Gemini");
                     
             } catch (e) {
                 console.error("Error processing generated text:", e);

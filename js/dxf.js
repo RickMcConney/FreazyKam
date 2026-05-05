@@ -22,14 +22,62 @@
                 for (let j = i + 1; j < Math.min(i + 6, groups.length); j++) {
                     if (groups[j].code === 70) {
                         const u = parseInt(groups[j].value, 10);
+                        if (u === 0) return null;              // unitless
                         if (u === 1) return 25.4 * viewScale;  // inches
+                        if (u === 5) return 10 * viewScale;    // centimeters
                         if (u === 6) return 1000 * viewScale;  // meters
-                        return viewScale;                       // mm or unitless
+                        return viewScale;                       // mm or unsupported units
                     }
                 }
             }
         }
-        return viewScale; // default: assume mm
+        return null; // no declared units
+    }
+
+    function getDxfUnitsScaleFromChoice(units) {
+        if (units === 'in') return 25.4 * viewScale;
+        if (units === 'cm') return 10 * viewScale;
+        if (units === 'm') return 1000 * viewScale;
+        return viewScale;
+    }
+
+    function getEntityBounds(entities) {
+        const bounds = { minx: Infinity, miny: Infinity, maxx: -Infinity, maxy: -Infinity };
+        function addPoint(x, y) {
+            if (!isFinite(x) || !isFinite(y)) return;
+            bounds.minx = Math.min(bounds.minx, x);
+            bounds.miny = Math.min(bounds.miny, y);
+            bounds.maxx = Math.max(bounds.maxx, x);
+            bounds.maxy = Math.max(bounds.maxy, y);
+        }
+
+        for (const ent of entities) {
+            for (let i = 0; i < ent.xs.length; i++) addPoint(ent.xs[i], ent.ys[i] || 0);
+            for (let i = 0; i < ent.x1s.length; i++) addPoint(ent.x1s[i], ent.y1s[i] || 0);
+        }
+        return bounds;
+    }
+
+    function guessUnitlessDxfUnits(entities) {
+        const bounds = getEntityBounds(entities);
+        if (!isFinite(bounds.minx) || !isFinite(bounds.maxx) || !isFinite(bounds.miny) || !isFinite(bounds.maxy)) {
+            return 'mm';
+        }
+        const maxExtent = Math.max(bounds.maxx - bounds.minx, bounds.maxy - bounds.miny);
+        return maxExtent > 1 && maxExtent < 50 ? 'cm' : 'mm';
+    }
+
+    async function resolveDxfUnitsScale(groups, entities) {
+        const declaredScale = getDxfUnitsScale(groups);
+        if (declaredScale !== null) return declaredScale;
+
+        const defaultUnits = guessUnitlessDxfUnits(entities);
+        if (typeof showDxfUnitsModal === 'function') {
+            const selectedUnits = await showDxfUnitsModal(defaultUnits);
+            return selectedUnits ? getDxfUnitsScaleFromChoice(selectedUnits) : null;
+        }
+
+        return getDxfUnitsScaleFromChoice(defaultUnits);
     }
 
     function extractDxfEntities(groups) {
@@ -222,14 +270,108 @@
         return null;
     }
 
-    window.parseDxfContent = function (text, name) {
+    function pointsNear(a, b, tolerance) {
+        const dx = a.x - b.x;
+        const dy = a.y - b.y;
+        return dx * dx + dy * dy <= tolerance * tolerance;
+    }
+
+    function appendPointIfDifferent(points, point, tolerance) {
+        if (points.length === 0 || !pointsNear(points[points.length - 1], point, tolerance)) {
+            points.push(point);
+        }
+    }
+
+    function isClosedChain(points, tolerance) {
+        return points.length > 2 && pointsNear(points[0], points[points.length - 1], tolerance);
+    }
+
+    function stitchLineSegments(segments, tolerance) {
+        const chains = [];
+        const unused = segments.slice();
+
+        while (unused.length > 0) {
+            const first = unused.shift();
+            const chain = [first[0], first[1]];
+            let extended = true;
+
+            while (extended && !isClosedChain(chain, tolerance)) {
+                extended = false;
+                const head = chain[0];
+                const tail = chain[chain.length - 1];
+
+                for (let i = 0; i < unused.length; i++) {
+                    const seg = unused[i];
+                    const start = seg[0];
+                    const end = seg[1];
+
+                    if (pointsNear(tail, start, tolerance)) {
+                        appendPointIfDifferent(chain, end, tolerance);
+                    } else if (pointsNear(tail, end, tolerance)) {
+                        appendPointIfDifferent(chain, start, tolerance);
+                    } else if (pointsNear(head, end, tolerance)) {
+                        if (!pointsNear(chain[0], start, tolerance)) chain.unshift(start);
+                    } else if (pointsNear(head, start, tolerance)) {
+                        if (!pointsNear(chain[0], end, tolerance)) chain.unshift(end);
+                    } else {
+                        continue;
+                    }
+
+                    unused.splice(i, 1);
+                    extended = true;
+                    break;
+                }
+            }
+
+            chains.push(chain);
+        }
+
+        return chains;
+    }
+
+    function buildStitchedLinePaths(lineEntities, scale) {
+        const byLayer = {};
+        const tolerance = Math.max(0.001, (getOption("tolerance") || 0.1) * viewScale * 0.1);
+
+        for (const ent of lineEntities) {
+            const pts = entityToPoints(ent, scale);
+            if (!pts || pts.length < 2 || pointsNear(pts[0], pts[1], tolerance)) continue;
+            const layer = ent.layer || '0';
+            if (!byLayer[layer]) byLayer[layer] = [];
+            byLayer[layer].push(pts);
+        }
+
+        const paths = [];
+        Object.keys(byLayer).forEach(function(layer) {
+            const chains = stitchLineSegments(byLayer[layer], tolerance);
+            chains.forEach(function(chain) {
+                if (chain.length >= 2) paths.push({ geom: chain, name: 'Line' });
+            });
+        });
+
+        return paths;
+    }
+
+    window.parseDxfContent = async function (text, name) {
         try {
             const groups   = parseDxfGroups(text);
-            const scale    = getDxfUnitsScale(groups);
             const entities = extractDxfEntities(groups);
+            const scale    = await resolveDxfUnitsScale(groups, entities);
+            if (!scale) {
+                if (typeof notify === 'function') {
+                    notify('DXF import canceled: drawing units are required', 'warning');
+                }
+                return;
+            }
             const paths    = [];
+            const lineEntities = [];
 
             for (const ent of entities) {
+                if (ent.type === 'LINE') {
+                    lineEntities.push(ent);
+                    continue;
+                }
+
                 const pts = entityToPoints(ent, scale);
                 if (!pts || pts.length < 2) continue;
                 const simplified = simplifyPoints(pts, 0.1);
@@ -237,6 +379,13 @@
                 const label = ent.type.charAt(0) + ent.type.slice(1).toLowerCase();
                 paths.push({ geom: simplified, name: label });
             }
+
+            buildStitchedLinePaths(lineEntities, scale).forEach(function(linePath) {
+                const simplified = simplifyPoints(linePath.geom, 0.1);
+                if (simplified.length >= 2) {
+                    paths.push({ geom: simplified, name: linePath.name });
+                }
+            });
 
             if (paths.length === 0) {
                 alert('No supported geometry found in DXF file.');
