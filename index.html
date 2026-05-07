@@ -47,8 +47,8 @@
 
         .toolbar-container {
             flex-shrink: 0;
-            height: 60px;
-            overflow: hidden;
+            height: 38px;
+            overflow: visible;
         }
 
         .canvas-container {
@@ -145,7 +145,7 @@
             <div class="right-panel">
                     <!-- Toolbar -->
                     <div class="toolbar-container">
-                        <nav id="toolbar" class="navbar navbar-light bg-light border-bottom p-2 h-100">
+                        <nav id="toolbar" class="navbar navbar-light bg-light border-bottom p-0 m-0 h-100">
                         </nav>
                     </div>
 
@@ -158,15 +158,6 @@
                             </li>
                             <li class="nav-item" role="presentation">
                                 <button class="nav-link" id="3d-tab" data-bs-toggle="tab" data-bs-target="#3d-view" type="button" role="tab" aria-controls="3d-view" aria-selected="false">3D View</button>
-                            </li>
-                            <li class="nav-item" role="presentation">
-                                <button class="nav-link" id="tools-tab" data-bs-toggle="tab" data-bs-target="#tools-view" type="button" role="tab" aria-controls="tools-view" aria-selected="false">Tools</button>
-                            </li>
-                            <li class="nav-item" role="presentation">
-                                <button class="nav-link" id="workpiece-tab" data-bs-toggle="tab" data-bs-target="#workpiece-view" type="button" role="tab" aria-controls="workpiece-view" aria-selected="false">Workpiece</button>
-                            </li>
-                            <li class="nav-item" role="presentation">
-                                <button class="nav-link" id="grbl-tab" data-bs-toggle="tab" data-bs-target="#grbl-view" type="button" role="tab" aria-controls="grbl-view" aria-selected="false">GRBL</button>
                             </li>
                             <li class="nav-item" style="position:absolute;left:50%;transform:translateX(-50%);display:flex;align-items:center;height:100%;pointer-events:none;">
                                 <span id="project-name-display" style="font-size:0.875rem;color:#6c757d;font-style:italic;"></span>
@@ -183,7 +174,7 @@
                                     <div id="2d-simulation-controls"></div>
                                 </div>
                             </div>
-
+ 
                             <!-- 3D View Tab -->
                             <div class="tab-pane fade h-100 position-relative" id="3d-view" role="tabpanel" aria-labelledby="3d-tab">
                                 <div id="3d-canvas-container" style="width: 100%; height: 100%;"></div>
@@ -192,33 +183,6 @@
                                     <div id="3d-simulation-controls"></div>
                                 </div>
                             </div>
-
-                            <!-- Tools Tab -->
-                            <div class="tab-pane fade h-100 d-flex flex-column overflow-auto" id="tools-view" role="tabpanel" aria-labelledby="tools-tab">
-                                <div id="tool-panel" class="p-3">
-                                </div>
-                            </div>
-
-                            <!-- Workpiece Tab -->
-                            <div class="tab-pane fade h-100 d-flex flex-column overflow-auto" id="workpiece-view" role="tabpanel" aria-labelledby="workpiece-tab">
-                                <div id="workpiece-panel" class="p-3">
-                                </div>
-                            </div>
-
-                            <!-- GRBL Tab -->
-                            <div class="tab-pane fade h-100 d-flex flex-column overflow-auto" id="grbl-view" role="tabpanel" aria-labelledby="grbl-tab">
-                                <div id="grbl-panel" class="p-3">
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Status Bar -->
-                    <div class="status-container">
-                        <div id="status"
-                            class="bg-light border-top p-2 text-muted d-flex align-items-center justify-content-between">
-                            <span>Tool: Select</span>
-                            <span class="small">Ver 2026-05-04</span>
                         </div>
                     </div>
                 </div>

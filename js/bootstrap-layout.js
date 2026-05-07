@@ -291,7 +291,9 @@ function loadTools() {
     if (tools.length > 0) {
         currentTool = tools[0];
     }
-    renderToolsTable();
+    if (document.getElementById('tool-table-body')) {
+        renderToolsTable();
+    }
 }
 // File input handlers
 var fileInput = document.createElement('input');
@@ -695,51 +697,97 @@ function initializeLayout() {
 function createToolbar() {
     const toolbar = document.getElementById('toolbar');
     toolbar.innerHTML = `
-        <div class="d-flex align-items-center w-100">
-            <div class="toolbar-section">
-                <button type="button" class="btn btn-outline-primary btn-sm btn-toolbar" data-action="new" data-bs-toggle="tooltip" data-bs-placement="bottom" title="New Project">
-                    <i data-lucide="file-plus"></i>New
+        <div class="app-menu-bar w-100" role="menubar" aria-label="Application menu">
+            <div class="dropdown app-menu-group">
+                <button type="button" class="btn app-menu-trigger dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                    File
                 </button>
-                <button type="button" class="btn btn-outline-primary btn-sm btn-toolbar" data-action="open" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Open Project">
-                    <i data-lucide="folder-open"></i>Open
-                </button>
-                <button type="button" class="btn btn-outline-primary btn-sm btn-toolbar" data-action="save" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Save Project">
-                    <i data-lucide="save"></i>Save
-                </button>
-                <button type="button" class="btn btn-outline-primary btn-sm btn-toolbar" data-action="import" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Import SVG, STL, G-code, or image files">
-                    <i data-lucide="import"></i>Import
-                </button>
-                <button type="button" class="btn btn-outline-success btn-sm btn-toolbar" data-action="gcode" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Save G-code">
-                    <i data-lucide="file-cog"></i>G-code
-                </button>
+                <div class="dropdown-menu app-menu-dropdown">
+                    <button type="button" class="dropdown-item app-menu-item" data-action="new" title="New Project">
+                        <i data-lucide="file-plus"></i>
+                        <span>New</span>
+                    </button>
+                    <button type="button" class="dropdown-item app-menu-item" data-action="open" title="Open Project">
+                        <i data-lucide="folder-open"></i>
+                        <span>Open</span>
+                    </button>
+                    <button type="button" class="dropdown-item app-menu-item" data-action="save" title="Save Project">
+                        <i data-lucide="save"></i>
+                        <span>Save</span>
+                    </button>
+                    <button type="button" class="dropdown-item app-menu-item" data-action="import" title="Import SVG, STL, G-code, or image files">
+                        <i data-lucide="import"></i>
+                        <span>Import</span>
+                    </button>
+                    <div class="dropdown-divider"></div>
+                    <button type="button" class="dropdown-item app-menu-item" data-action="gcode" title="Save G-code">
+                        <i data-lucide="file-cog"></i>
+                        <span>Export G-code</span>
+                    </button>
+                </div>
             </div>
-            <div class="toolbar-separator"></div>
-            <div class="toolbar-section">
-                <button type="button" class="btn btn-outline-secondary btn-sm btn-toolbar" data-action="undo" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Undo last action (Ctrl/Cmd+Z)">
-                    <i data-lucide="undo-2"></i>Undo
+            <div class="dropdown app-menu-group">
+                <button type="button" class="btn app-menu-trigger dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                    Edit
                 </button>
-                <button type="button" class="btn btn-outline-secondary btn-sm btn-toolbar" data-action="redo" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Redo last action (Ctrl/Cmd+Y)">
-                    <i data-lucide="redo-2"></i>Redo
-                </button>
+                <div class="dropdown-menu app-menu-dropdown">
+                    <button type="button" class="dropdown-item app-menu-item" data-action="undo" title="Undo last action (Ctrl/Cmd+Z)">
+                        <i data-lucide="undo-2"></i>
+                        <span>Undo</span>
+                        <span class="app-menu-shortcut">Ctrl/Cmd+Z</span>
+                    </button>
+                    <button type="button" class="dropdown-item app-menu-item" data-action="redo" title="Redo last action (Ctrl/Cmd+Y)">
+                        <i data-lucide="redo-2"></i>
+                        <span>Redo</span>
+                        <span class="app-menu-shortcut">Ctrl/Cmd+Y</span>
+                    </button>
+                </div>
             </div>
-            <div class="toolbar-separator"></div>
-            <div class="toolbar-section">
-                <button type="button" id="snap-toggle-btn" class="btn btn-sm btn-toolbar btn-outline-secondary" data-action="snap" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Snap to Grid (S)">
-                    <svg id="snap-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#6c757d" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;">
-                        <path d="m12 15 4 4"/>
-                        <path d="M2.352 10.648a1.205 1.205 0 0 0 0 1.704l2.296 2.296a1.205 1.205 0 0 0 1.704 0l6.029-6.029a1 1 0 1 1 3 3l-6.029 6.029a1.205 1.205 0 0 0 0 1.704l2.296 2.296a1.205 1.205 0 0 0 1.704 0l6.365-6.367A1 1 0 0 0 8.716 4.282z"/>
-                        <path d="m5 8 4 4"/>
-                        <path id="snap-pole-left" d="M5 8 L2.352 10.648 L2.352 12.352 L4.648 14.648 L6.352 14.648 L9 12 Z" stroke="none" fill="none"/>
-                        <path id="snap-pole-right" d="M12 15 L9.352 17.648 L9.352 19.352 L11.648 21.648 L13.352 21.648 L16 19 Z" stroke="none" fill="none"/>
-                    </svg>Snap
+            <div class="dropdown app-menu-group">
+                <button type="button" class="btn app-menu-trigger dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                    Project
                 </button>
+                <div class="dropdown-menu app-menu-dropdown">
+                    <button type="button" class="dropdown-item app-menu-item" data-action="project-tools" title="Open Tools">
+                        <i data-lucide="wrench"></i>
+                        <span>Tools</span>
+                    </button>
+                    <button type="button" class="dropdown-item app-menu-item" data-action="project-workpiece" title="Open Workpiece">
+                        <i data-lucide="package"></i>
+                        <span>Workpiece</span>
+                    </button>
+                    <button type="button" class="dropdown-item app-menu-item" data-action="project-grbl" title="Open GRBL">
+                        <i data-lucide="cpu"></i>
+                        <span>GRBL</span>
+                    </button>
+                </div>
             </div>
-            <div class="ms-auto toolbar-section">
-                <button type="button" class="btn btn-outline-info btn-sm btn-toolbar" data-action="options" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Application Options">
-                    <i data-lucide="settings"></i>Options
+            <div class="dropdown app-menu-group">
+                <button type="button" class="btn app-menu-trigger dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                    View
                 </button>
-                <button type="button" class="btn btn-outline-info btn-sm btn-toolbar" data-action="help" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Help">
-                    <i data-lucide="help-circle"></i>Help
+                <div class="dropdown-menu app-menu-dropdown">
+                    <button type="button" id="snap-toggle-btn" class="dropdown-item app-menu-item" data-action="snap" title="Snap to Grid (S)">
+                        <svg id="snap-icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6c757d" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;">
+                            <path d="m12 15 4 4"/>
+                            <path d="M2.352 10.648a1.205 1.205 0 0 0 0 1.704l2.296 2.296a1.205 1.205 0 0 0 1.704 0l6.029-6.029a1 1 0 1 1 3 3l-6.029 6.029a1.205 1.205 0 0 0 0 1.704l2.296 2.296a1.205 1.205 0 0 0 1.704 0l6.365-6.367A1 1 0 0 0 8.716 4.282z"/>
+                            <path d="m5 8 4 4"/>
+                            <path id="snap-pole-left" d="M5 8 L2.352 10.648 L2.352 12.352 L4.648 14.648 L6.352 14.648 L9 12 Z" stroke="none" fill="none"/>
+                            <path id="snap-pole-right" d="M12 15 L9.352 17.648 L9.352 19.352 L11.648 21.648 L13.352 21.648 L16 19 Z" stroke="none" fill="none"/>
+                        </svg>
+                        <span>Snap to Grid</span>
+                        <span class="app-menu-shortcut">S</span>
+                    </button>
+                    <button type="button" class="dropdown-item app-menu-item" data-action="options" title="Options">
+                        <i data-lucide="settings"></i>
+                        <span>Options</span>
+                    </button>
+                </div>
+            </div>
+            <div class="app-menu-group ms-auto">
+                <button type="button" class="btn app-menu-trigger app-menu-item" data-action="help" title="Help">
+                    <i data-lucide="help-circle"></i>
+                    <span>Help</span>
                 </button>
             </div>
         </div>
@@ -792,6 +840,15 @@ function createToolbar() {
                 break;
             case 'snap':
                 toggleSnap();
+                break;
+            case 'project-tools':
+                showToolsModal();
+                break;
+            case 'project-workpiece':
+                showWorkpieceModal();
+                break;
+            case 'project-grbl':
+                showGrblModal();
                 break;
             case 'options':
                 showOptionsModal();
@@ -2059,8 +2116,9 @@ function updateShapeInPlace(path, data) {
 
 // Tool panel creation
 // Create 2D simulation controls in overlay
-function createToolPanel() {
-    const toolPanel = document.getElementById('tool-panel');
+function createToolPanel(targetId) {
+    const toolPanel = document.getElementById(targetId || 'tool-panel');
+    if (!toolPanel) return;
     toolPanel.innerHTML = `
         <div class="tool-controls">
             <div class="d-flex gap-2 mb-3 align-items-center flex-wrap">
@@ -2091,24 +2149,17 @@ function createToolPanel() {
         </div>
     `;
 
-    // Add tool control event handlers
     document.getElementById('add-tool').addEventListener('click', addTool);
-
-    // Render tools table
     renderToolsTable();
-
-    // Create 2D simulation controls in overlay
     create2DSimulationControls();
-
-    // Create 3D simulation controls in overlay
     create3DSimulationControls();
 }
 
 function createCanvasSidePanels() {
-    createToolPanel();
-    createWorkpiecePanel();
-    createGrblPanel();
-    initializeGcodeProfilesUI();
+    // Project panels are now opened in dedicated modals from the Project menu.
+    // Keep simulation controls initialized even without embedded canvas tabs.
+    create2DSimulationControls();
+    create3DSimulationControls();
 }
 
 function getWorkpieceConfigController() {
@@ -2130,8 +2181,8 @@ function getWorkpieceConfigController() {
     return null;
 }
 
-function createWorkpiecePanel() {
-    const workpiecePanel = document.getElementById('workpiece-panel');
+function createWorkpiecePanel(targetId) {
+    const workpiecePanel = document.getElementById(targetId || 'workpiece-panel');
     if (!workpiecePanel) return;
 
     const workpieceController = getWorkpieceConfigController();
@@ -2171,8 +2222,8 @@ function createWorkpiecePanel() {
     });
 }
 
-function createGrblPanel() {
-    const grblPanel = document.getElementById('grbl-panel');
+function createGrblPanel(targetId) {
+    const grblPanel = document.getElementById(targetId || 'grbl-panel');
     if (!grblPanel) return;
 
     grblPanel.innerHTML = `
@@ -2207,6 +2258,7 @@ function createGrblPanel() {
 // Render tools table
 function renderToolsTable() {
     const tbody = document.getElementById('tool-table-body');
+    if (!tbody) return;
     tbody.innerHTML = '';
 
     tools.forEach((tool, index) => {
@@ -2448,8 +2500,10 @@ function getCurrentToolIndex() {
 
 // Function to refresh tools display when loaded from project
 function refreshToolsGrid() {
-    // Re-render the tools table to reflect loaded tools
-    renderToolsTable();
+    // Re-render the tools table to reflect loaded tools when the panel is mounted
+    if (document.getElementById('tool-table-body')) {
+        renderToolsTable();
+    }
 
     // Update currentTool if it exists in the loaded tools
     if (tools.length > 0) {
@@ -3396,17 +3450,10 @@ function freeToolId() {
 
 function setMode(m) {
     if (m != null) mode = m;
-    const statusEl = document.getElementById('status');
-    statusEl.innerHTML = `<span>Mode [${mode}]</span><span class="small version">${APP_VERSION}</span>`;
 }
 
 // Compatibility object for grid operations
 window.grid = {
-    status: function (text) {
-        // Update status bar with tool information
-        const statusEl = document.getElementById('status');
-        statusEl.innerHTML = `<span>Mode [${mode}]</span><span class="small version">${APP_VERSION}</span>`;
-    },
     get records() {
         return tools;
     }

@@ -262,52 +262,118 @@ html, body {
 }
 
 
-.toolbar-section {
+.app-menu-bar {
     display: flex;
-    align-items: center;
-    gap: 4px;
-    padding: 0 4px;
-    flex-wrap: nowrap;
-    flex-shrink: 1;
-    min-width: 0;
-    overflow: hidden;
+    align-items: stretch;
+    min-height: 100%;
+    padding: 0;
+    gap: 0;
+    background: linear-gradient(180deg, #f6f6f7 0%, #ececef 100%);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    user-select: none;
 }
 
-.toolbar-separator {
-    height: 30px;
-    width: 1px;
-    background-color: var(--color-gray-300);
-    margin: 0 8px;
+.app-menu-group {
+    display: flex;
+    align-items: stretch;
 }
 
-.btn-toolbar {
-    padding: 6px 12px;
-    font-size: 13px;
-    display: flex;
+.app-menu-trigger {
+    display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: 6px;
-    white-space: nowrap;
+    min-width: 64px;
+    height: 100%;
+    padding: 0 12px;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    color: var(--color-gray-600);
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1;
+    box-shadow: none !important;
+}
+
+.app-menu-trigger::after {
+    display: none;
+}
+
+.app-menu-trigger:hover,
+.app-menu-trigger:focus,
+.app-menu-group.show .app-menu-trigger {
+    background-color: rgba(255, 255, 255, 0.85);
+    color: #1f2328;
+}
+
+.app-menu-trigger:focus-visible {
+    outline: 2px solid rgba(13, 110, 253, 0.3);
+    outline-offset: -2px;
+}
+
+.app-menu-dropdown {
+    min-width: 220px;
+    margin-top: 2px;
+    padding: 6px;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: 10px;
+    background-color: rgba(252, 252, 253, 0.96);
+    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.14);
+    backdrop-filter: blur(10px);
+}
+
+.app-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 34px;
+    padding: 7px 10px;
+    border-radius: 7px;
+    color: var(--color-gray-600);
+    font-size: 13px;
+}
+
+.app-menu-item:hover,
+.app-menu-item:focus {
+    background-color: var(--color-primary-light);
+    color: var(--color-primary-dark);
+}
+
+.app-menu-item .lucide,
+.app-menu-item svg {
+    width: 16px;
+    height: 16px;
     flex-shrink: 0;
 }
 
-@media (max-width: 1200px) {
-    .btn-toolbar {
-        padding: 6px 8px;
-        font-size: 0;
-        gap: 0;
+.app-menu-shortcut {
+    margin-left: auto;
+    color: var(--color-gray-500);
+    font-size: 11px;
+    letter-spacing: 0.02em;
+}
+
+@media (max-width: 900px) {
+    .app-menu-trigger {
+        min-width: 0;
+        padding: 0 10px;
+        font-size: 12px;
     }
-    .toolbar-section {
-        gap: 2px;
-        padding: 0 2px;
-    }
-    .toolbar-separator {
-        margin: 0 4px;
+
+    .app-menu-dropdown {
+        min-width: 200px;
     }
 }
 
 .lucide {
     width:30px;
     height: 30px;
+}
+
+.app-menu-item .lucide {
+    width: 16px;
+    height: 16px;
 }
 
 
