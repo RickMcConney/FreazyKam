@@ -683,10 +683,11 @@ function initializeLayout() {
     loadGcodeProfiles();
     createToolbar();
     createSidebar();
+    cncController.operationManager.addOperations();
     createToolPanel();
+    createWorkpiecePanel();
     createModals();
     initializeGcodeView();
-    cncController.operationManager.addOperations();
     lucide.createIcons();
     updateSnapButton();
 }
@@ -1025,7 +1026,7 @@ function setupSidebarEventHandlers(sidebar) {
         const pathId = item.dataset.pathId;
 
         if (operation) {
-            const isDrawTool = ['Select', 'Workpiece', 'Move', 'Edit', 'Pen', 'Curve', 'Shape', 'Boolean', 'Gemini', 'Text', 'Tabs', 'Offset', 'Pattern'].includes(operation);
+            const isDrawTool = ['Select', 'Move', 'Edit', 'Pen', 'Curve', 'Shape', 'Boolean', 'Gemini', 'Text', 'Tabs', 'Offset', 'Pattern'].includes(operation);
 
             if (isDrawTool) {
                 showToolPropertiesEditor(operation);
@@ -2144,6 +2145,66 @@ function createToolPanel() {
 
     // Create 3D simulation controls in overlay
     create3DSimulationControls();
+}
+
+function getWorkpieceConfigController() {
+    if (window.workpieceConfigController) {
+        return window.workpieceConfigController;
+    }
+
+    const registeredOperation = window.cncController?.operationManager?.getOperation('Workpiece');
+    if (registeredOperation) {
+        window.workpieceConfigController = registeredOperation;
+        return registeredOperation;
+    }
+
+    if (typeof Workpiece === 'function') {
+        window.workpieceConfigController = new Workpiece();
+        return window.workpieceConfigController;
+    }
+
+    return null;
+}
+
+function createWorkpiecePanel() {
+    const workpiecePanel = document.getElementById('workpiece-panel');
+    if (!workpiecePanel) return;
+
+    const workpieceController = getWorkpieceConfigController();
+    if (!workpieceController || typeof workpieceController.getPropertiesHTML !== 'function') {
+        workpiecePanel.innerHTML = '<div class="alert alert-warning mb-0">Workpiece configuration is unavailable.</div>';
+        return;
+    }
+
+    if (workpieceController.fields) {
+        const saved = PropertiesManager.loadSaved(workpieceController.name);
+        if (Object.keys(saved).length > 0) {
+            workpieceController.properties = { ...workpieceController.properties, ...saved };
+        }
+    }
+
+    workpiecePanel.innerHTML = `
+        <div class="workpiece-panel-content">
+            ${workpieceController.getPropertiesHTML()}
+        </div>
+    `;
+
+    const inputs = workpiecePanel.querySelectorAll('input, select, textarea');
+    inputs.forEach(input => {
+        function handleInputChange() {
+            const data = collectOperationProperties(workpieceController);
+            workpieceController.updateFromProperties(data);
+            workpieceController.onPropertiesChanged(data);
+            if (workpieceController.fields) {
+                PropertiesManager.save(workpieceController.name, data, Object.values(workpieceController.fields));
+            }
+        }
+
+        input.addEventListener('change', handleInputChange);
+        if (input.type === 'text' || input.tagName === 'TEXTAREA') {
+            input.addEventListener('input', handleInputChange);
+        }
+    });
 }
 
 // Render tools table

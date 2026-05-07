@@ -11,7 +11,6 @@ class CncController {
     // Register all operations
     let select = Select.getInstance();
     this.operationManager.registerOperation(select);
-    this.operationManager.registerOperation(new Workpiece());
     this.operationManager.registerOperation(new Shape());
     this.operationManager.registerOperation(new Text());
     this.operationManager.registerOperation(new Pen());

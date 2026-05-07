@@ -172,6 +172,16 @@ html, body {
     margin-bottom: 20px;
 }
 
+#tool-panel,
+#workpiece-panel {
+    flex: 1;
+    min-height: 0;
+}
+
+.workpiece-panel-content {
+    max-width: 720px;
+}
+
 .tool-table {
     font-size: 12px;
 }
