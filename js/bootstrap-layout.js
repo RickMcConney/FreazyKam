@@ -2882,14 +2882,19 @@ function startRenameToolpath(pathId) {
 // Context menu for individual paths
 function showContextMenu(event, pathId) {
     const isToolpath = toolpaths.some(tp => tp.id === pathId);
+    const path = svgpaths.find(p => p.id === pathId) || toolpaths.find(tp => tp.id === pathId);
+    const isVisible = path ? path.visible !== false : true;
     const items = [];
     if (isToolpath) {
         items.push({ label: 'Move Up', icon: 'arrow-up', action: 'move-up' });
         items.push({ label: 'Move Down', icon: 'arrow-down', action: 'move-down' });
         items.push({ divider: true });
     }
-    items.push({ label: 'Show', icon: 'eye', action: 'show' });
-    items.push({ label: 'Hide', icon: 'eye-off', action: 'hide' });
+    items.push({
+        label: isVisible ? 'Hide' : 'Show',
+        icon: isVisible ? 'eye-off' : 'eye',
+        action: 'toggle-visibility'
+    });
     items.push({ divider: true });
     items.push({ label: 'Delete', icon: 'trash-2', action: 'delete', danger: true });
     createContextMenu(event, {
@@ -2906,11 +2911,8 @@ function showContextMenu(event, pathId) {
                 case 'move-down':
                     moveToolpathDown(pathId);
                     break;
-                case 'show':
-                    setVisibility(pathId, true);
-                    break;
-                case 'hide':
-                    setVisibility(pathId, false);
+                case 'toggle-visibility':
+                    setVisibility(pathId, !isVisible);
                     break;
                 case 'delete':
                     doRemoveToolPath(pathId);
