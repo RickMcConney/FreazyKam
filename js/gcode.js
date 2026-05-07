@@ -721,7 +721,7 @@ function emitPathNoZ(path, profile, useInches){
 	var output = '';
 	for (var j = 0; j < path.length; j++) {
 		var p = toGcodeUnits(path[j].x, path[j].y, useInches);
-		output += applyGcodeTemplate(profile.cutFormater, { x: p.x, y: p.y}) + '\n';
+		output += applyGcodeTemplate(profile.cutFormater, { x: p.x, y: p.y }) + '\n';
 	}
 	return output;
 }
@@ -1083,21 +1083,25 @@ function _generateSurfacingOperationGcode(toolpath, profile, useInches, settings
 		if (!path || path.length === 0) continue;
 
 		var start = toGcodeUnits(path[0].x, path[0].y, useInches);
+		var cutPath = path.slice(1);
 
 		if (firstLine) {
 			// Initial retract, rapid to start XY, then plunge once
 			output += applyGcodeTemplate(profile.rapidFormater, { z: safeHeight, f: feedZ }) + '\n';
 			output += applyGcodeTemplate(profile.rapidFormater, { x: start.x, y: start.y, f: feedXY }) + '\n';
 			output += applyGcodeTemplate(profile.cutFormater, { z: zCoord, f: feedZ }) + '\n';
+			// Feed changed from feedZ to feedXY — emit on first XY move only
+			if (cutPath.length > 0) {
+				var p0 = toGcodeUnits(cutPath[0].x, cutPath[0].y, useInches);
+				output += applyGcodeTemplate(profile.cutFormater, { x: p0.x, y: p0.y, f: feedXY }) + '\n';
+				output += emitPathNoZ(cutPath.slice(1), profile, useInches);
+			}
 			firstLine = false;
 		} else {
-			// Stay at cut depth — feed move to start of next pass (not rapid, as the
-			// workpiece may not be perfectly sized and the transition crosses the stock)
+			// Stay at cut depth — feed is already feedXY from previous pass
 			output += applyGcodeTemplate(profile.cutFormater, { x: start.x, y: start.y }) + '\n';
+			output += emitPathNoZ(cutPath, profile, useInches);
 		}
-
-		// Cut across the path
-		output += emitPathNoZ(path.slice(1), profile, useInches);
 	}
 
 	return output;
