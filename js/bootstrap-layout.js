@@ -784,9 +784,8 @@ function createToolbar() {
                     </button>
                 </div>
             </div>
-            <div class="app-menu-group ms-auto">
+            <div class="app-menu-group">
                 <button type="button" class="btn app-menu-trigger app-menu-item" data-action="help" title="Help">
-                    <i data-lucide="help-circle"></i>
                     <span>Help</span>
                 </button>
             </div>
