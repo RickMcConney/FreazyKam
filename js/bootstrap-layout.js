@@ -926,19 +926,6 @@ function createSidebar() {
                         </div>
                     </div>
                 </div>
-
-                <!-- SVG Paths Section -->
-                    <div class="sidebar-section mt-4">
-                        <div class="sidebar-section-header" data-bs-toggle="collapse" data-bs-target="#svg-paths-section" aria-expanded="true">
-                            <span>SVG Paths</span>
-                            <i data-lucide="chevron-down" class="collapse-chevron"></i>
-                        </div>
-                        <div class="collapse show" id="svg-paths-section">
-                            <!-- SVG paths will be added dynamically -->
-                        </div>
-                    </div>
-
-
             </div>
 
             <!-- Operations Tab -->
@@ -986,8 +973,25 @@ function createSidebar() {
                         </div>
                     </div>
                 </div>
-                    <!-- Tool Paths Section -->
-                    <div class="sidebar-section mt-4">
+            </div>
+        </div>
+
+        <aside id="right-hover-sidebar" class="right-hover-sidebar" aria-label="Paths sidebar">
+            <button type="button" id="right-hover-sidebar-toggle" class="right-hover-sidebar-toggle" aria-expanded="false" aria-controls="right-hover-sidebar-panel" title="Pin sidebar">
+                <i data-lucide="chevron-left"></i>
+            </button>
+            <div id="right-hover-sidebar-panel" class="right-hover-sidebar-panel">
+                <div class="right-hover-sidebar-content">
+                    <div class="sidebar-section">
+                        <div class="sidebar-section-header" data-bs-toggle="collapse" data-bs-target="#svg-paths-section" aria-expanded="true">
+                            <span>SVG Paths</span>
+                            <i data-lucide="chevron-down" class="collapse-chevron"></i>
+                        </div>
+                        <div class="collapse show" id="svg-paths-section">
+                            <!-- SVG paths will be added dynamically -->
+                        </div>
+                    </div>
+                    <div class="sidebar-section mt-4 mb-0">
                         <div class="sidebar-section-header" data-bs-toggle="collapse" data-bs-target="#tool-paths-section" aria-expanded="true">
                             <span>Tool Paths</span>
                             <i data-lucide="chevron-down" class="collapse-chevron"></i>
@@ -996,9 +1000,9 @@ function createSidebar() {
                             <!-- Tool paths will be added dynamically -->
                         </div>
                     </div>
-
+                </div>
             </div>
-        </div>
+        </aside>
 
         <!-- G-Code Viewer (shown during simulation) -->
         <div id="gcode-viewer" class="d-flex flex-column" style="display: none; visibility: hidden; height: 0; overflow: hidden; background-color: white;">
@@ -1012,8 +1016,66 @@ function createSidebar() {
     `;
 
     setupSidebarEventHandlers(sidebar);
+    setupRightHoverSidebar(sidebar);
     setupSidebarTabHandlers();
     setupCanvasTabHandlers();
+}
+
+function setupRightHoverSidebar(sidebar) {
+    const hoverSidebar = sidebar.querySelector('#right-hover-sidebar');
+    const toggleButton = sidebar.querySelector('#right-hover-sidebar-toggle');
+    if (!hoverSidebar || !toggleButton) return;
+
+    let isPinned = false;
+
+    function syncState(isOpen) {
+        hoverSidebar.classList.toggle('is-open', isOpen);
+        hoverSidebar.classList.toggle('is-pinned', isPinned);
+        toggleButton.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+        toggleButton.title = isPinned ? 'Unpin sidebar' : 'Pin sidebar';
+
+        const icon = toggleButton.querySelector('[data-lucide]');
+        if (icon) {
+            let iconName = 'chevron-left';
+            if (isOpen) {
+                iconName = 'chevron-right';
+            }
+            if (isPinned) {
+                iconName = 'pin';
+            } else if (isOpen) {
+                iconName = 'pin-off';
+            }
+            icon.setAttribute('data-lucide', iconName);
+        }
+
+        lucide.createIcons({
+            attrs: {
+                'stroke-width': 1.75
+            }
+        });
+    }
+
+    syncState(false);
+
+    hoverSidebar.addEventListener('mouseenter', function () {
+        syncState(true);
+    });
+
+    hoverSidebar.addEventListener('mouseleave', function () {
+        if (!isPinned) {
+            syncState(false);
+        }
+    });
+
+    toggleButton.addEventListener('click', function (event) {
+        event.preventDefault();
+        event.stopPropagation();
+        isPinned = !isPinned;
+        syncState(isPinned || !hoverSidebar.classList.contains('is-open'));
+        if (!isPinned && !hoverSidebar.matches(':hover')) {
+            syncState(false);
+        }
+    });
 }
 
 function setupSidebarEventHandlers(sidebar) {
