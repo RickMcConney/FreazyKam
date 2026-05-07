@@ -2787,6 +2787,11 @@ function handlePathClick(pathId) {
                 if (op) op.enterEditMode(path);
             }
 
+            const hoverSidebar = document.getElementById('right-hover-sidebar');
+            if (hoverSidebar) {
+                hoverSidebar.classList.add('is-open');
+            }
+
             showPathPropertiesEditor(path);
 
             // For Offset/Pattern: select generated paths first (red), source paths last (magenta)
@@ -3399,13 +3404,13 @@ function selectSidebarNode(id) {
     setTimeout(() => {
         const item = document.querySelector(`[data-path-id="${id}"]`);
         if (item) {
+            const hoverSidebar = document.getElementById('right-hover-sidebar');
+            if (hoverSidebar) {
+                hoverSidebar.classList.add('is-open');
+            }
+
             document.querySelectorAll('.sidebar-item.selected').forEach(el => el.classList.remove('selected'));
             item.classList.add('selected');
-            // Only scroll if the paths list is visible (not when tool properties editor is open)
-            const propertiesEditor = document.getElementById('tool-properties-editor');
-            if (!propertiesEditor || propertiesEditor.style.display === 'none') {
-                item.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-            }
         }
     }, 100);
 }
