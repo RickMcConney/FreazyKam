@@ -1418,9 +1418,48 @@ function getActiveToolpaths() {
     return toolpaths.filter(tp => tp.active === true);
 }
 
+function isSameToolpathSource(toolpath, selectedSvgIds) {
+    const toolpathSvgIds = Array.isArray(toolpath.svgIds) && toolpath.svgIds.length > 0
+        ? toolpath.svgIds.slice()
+        : (toolpath.svgId ? [toolpath.svgId] : []);
+
+    if (toolpathSvgIds.length !== selectedSvgIds.length) return false;
+
+    const normalizedToolpathIds = toolpathSvgIds.slice().sort();
+    const normalizedSelectedIds = selectedSvgIds.slice().sort();
+
+    for (let i = 0; i < normalizedToolpathIds.length; i++) {
+        if (normalizedToolpathIds[i] !== normalizedSelectedIds[i]) return false;
+    }
+
+    return true;
+}
+
+function findExistingToolpathsForSelection(operationName, selectedSvgIds) {
+    const normalizedOperation = operationName === 'Drill' ? 'HelicalDrill' : operationName;
+
+    return toolpaths.filter(toolpath => {
+        if (toolpath.operation !== normalizedOperation) return false;
+        return isSameToolpathSource(toolpath, selectedSvgIds);
+    });
+}
+
 function generateToolpathForSelection() {
     // Collect form data
     if (currentOperationName == null) return;
+
+    const selectedSvgIds = selectMgr.selectedPaths().map(path => path.id);
+    if (selectedSvgIds.length === 0) {
+        notify('Select a path first', 'info');
+        return null;
+    }
+
+    const existingToolpaths = findExistingToolpathsForSelection(currentOperationName, selectedSvgIds);
+    if (existingToolpaths.length > 0) {
+        setActiveToolpaths(existingToolpaths);
+        redraw();
+        return existingToolpaths;
+    }
 
     const data   = window.toolPathProperties.collectFormData(currentOperationName);
     const errors = window.toolPathProperties.validateFormData(currentOperationName, data);

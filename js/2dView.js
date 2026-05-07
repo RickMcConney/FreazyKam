@@ -7,7 +7,7 @@
 // Canvas Drawing Colors
 var lineColor = '#000000';              // SVG path stroke color (black)
 var selectColor = '#ff0000';            // Selected path color (red)
-var activeColor = '#ff00ff';        // Active elements (magenta)
+var activeColor = '#00ff00';        // Active elements (magenta)
 var highlightColor = '#00ff00';         // Highlighted elements (green)
 var toolColor = '#0000ff';              // Toolpath color (blue)
 var circleColor = toolColor;            // Circle/drill point color (same as toolpath)
