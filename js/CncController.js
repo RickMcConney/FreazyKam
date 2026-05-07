@@ -11,7 +11,6 @@ class CncController {
     // Register all operations
     let select = Select.getInstance();
     this.operationManager.registerOperation(select);
-    this.operationManager.registerOperation(new Workpiece());
     this.operationManager.registerOperation(new Shape());
     this.operationManager.registerOperation(new Text());
     this.operationManager.registerOperation(new Pen());
@@ -72,6 +71,24 @@ class CncController {
 
       this.operationManager.handleMouseEvent('Up', this.canvas, evt);
       redraw();
+    });
+
+    this.canvas.addEventListener('dblclick', (evt) => {
+      if (evt.button !== 0) {
+        return;
+      }
+
+      const mouse = this.operationManager.currentOperation.normalizeEvent(this.canvas, evt);
+      const clickedPath = Select.getInstance().pointInPath(mouse);
+
+      if (!clickedPath || !clickedPath.creationTool || !clickedPath.creationProperties) {
+        return;
+      }
+
+      if (clickedPath.creationTool === 'Text' || clickedPath.creationTool === 'Shape' || clickedPath.creationTool === 'Offset' || clickedPath.creationTool === 'Pattern' || clickedPath.creationTool === 'Curve' || clickedPath.creationTool === 'Pen') {
+        handlePathClick(clickedPath.id);
+        evt.preventDefault();
+      }
     });
 
     this.canvas.addEventListener('mousemove', (evt) => {

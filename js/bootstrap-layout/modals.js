@@ -52,6 +52,24 @@ function createModals() {
     `;
     body.appendChild(optionsModal);
 
+    const projectPanelsModal = document.createElement('div');
+    projectPanelsModal.innerHTML = `
+        <div class="modal fade" id="projectPanelModal" tabindex="-1">
+            <div class="modal-dialog modal-xl modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="project-panel-modal-title">Project</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div id="project-panel-modal-body"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    body.appendChild(projectPanelsModal);
+ 
     // Help modal
     const helpModal = document.createElement('div');
     helpModal.innerHTML = `
@@ -431,6 +449,40 @@ function showOptionsModal() {
     renderOptionsTable();
     const modal = new bootstrap.Modal(document.getElementById('optionsModal'));
     modal.show();
+}
+
+function showProjectPanelModal(title, renderCallback) {
+    const modalElement = document.getElementById('projectPanelModal');
+    const titleElement = document.getElementById('project-panel-modal-title');
+    const bodyElement = document.getElementById('project-panel-modal-body');
+    if (!modalElement || !titleElement || !bodyElement) return;
+
+    titleElement.textContent = title;
+    bodyElement.innerHTML = '<div id="project-panel-content"></div>';
+
+    if (typeof renderCallback === 'function') {
+        renderCallback('project-panel-content');
+    }
+
+    const modal = new bootstrap.Modal(modalElement);
+    modal.show();
+    lucide.createIcons();
+
+    if (title === 'GRBL' && typeof initializeGcodeProfilesUI === 'function') {
+        initializeGcodeProfilesUI();
+    }
+}
+
+function showToolsModal() {
+    showProjectPanelModal('Tools', createToolPanel);
+}
+
+function showWorkpieceModal() {
+    showProjectPanelModal('Workpiece', createWorkpiecePanel);
+}
+
+function showGrblModal() {
+    showProjectPanelModal('GRBL', createGrblPanel);
 }
 
 function showHelpModal() {

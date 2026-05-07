@@ -291,7 +291,9 @@ function loadTools() {
     if (tools.length > 0) {
         currentTool = tools[0];
     }
-    renderToolsTable();
+    if (document.getElementById('tool-table-body')) {
+        renderToolsTable();
+    }
 }
 // File input handlers
 var fileInput = document.createElement('input');
@@ -683,10 +685,10 @@ function initializeLayout() {
     loadGcodeProfiles();
     createToolbar();
     createSidebar();
-    createToolPanel();
+    cncController.operationManager.addOperations();
+    createCanvasSidePanels();
     createModals();
     initializeGcodeView();
-    cncController.operationManager.addOperations();
     lucide.createIcons();
     updateSnapButton();
 }
@@ -695,51 +697,96 @@ function initializeLayout() {
 function createToolbar() {
     const toolbar = document.getElementById('toolbar');
     toolbar.innerHTML = `
-        <div class="d-flex align-items-center w-100">
-            <div class="toolbar-section">
-                <button type="button" class="btn btn-outline-primary btn-sm btn-toolbar" data-action="new" data-bs-toggle="tooltip" data-bs-placement="bottom" title="New Project">
-                    <i data-lucide="file-plus"></i>New
+        <div class="app-menu-bar w-100" role="menubar" aria-label="Application menu">
+            <div class="dropdown app-menu-group">
+                <button type="button" class="btn app-menu-trigger dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                    File
                 </button>
-                <button type="button" class="btn btn-outline-primary btn-sm btn-toolbar" data-action="open" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Open Project">
-                    <i data-lucide="folder-open"></i>Open
-                </button>
-                <button type="button" class="btn btn-outline-primary btn-sm btn-toolbar" data-action="save" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Save Project">
-                    <i data-lucide="save"></i>Save
-                </button>
-                <button type="button" class="btn btn-outline-primary btn-sm btn-toolbar" data-action="import" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Import SVG, STL, G-code, or image files">
-                    <i data-lucide="import"></i>Import
-                </button>
-                <button type="button" class="btn btn-outline-success btn-sm btn-toolbar" data-action="gcode" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Save G-code">
-                    <i data-lucide="file-cog"></i>G-code
-                </button>
+                <div class="dropdown-menu app-menu-dropdown">
+                    <button type="button" class="dropdown-item app-menu-item" data-action="new" title="New Project">
+                        <i data-lucide="file-plus"></i>
+                        <span>New</span>
+                    </button>
+                    <button type="button" class="dropdown-item app-menu-item" data-action="open" title="Open Project">
+                        <i data-lucide="folder-open"></i>
+                        <span>Open</span>
+                    </button>
+                    <button type="button" class="dropdown-item app-menu-item" data-action="save" title="Save Project">
+                        <i data-lucide="save"></i>
+                        <span>Save</span>
+                    </button>
+                    <button type="button" class="dropdown-item app-menu-item" data-action="import" title="Import SVG, STL, G-code, or image files">
+                        <i data-lucide="import"></i>
+                        <span>Import</span>
+                    </button>
+                    <div class="dropdown-divider"></div>
+                    <button type="button" class="dropdown-item app-menu-item" data-action="gcode" title="Save G-code">
+                        <i data-lucide="file-cog"></i>
+                        <span>Export G-code</span>
+                    </button>
+                </div>
             </div>
-            <div class="toolbar-separator"></div>
-            <div class="toolbar-section">
-                <button type="button" class="btn btn-outline-secondary btn-sm btn-toolbar" data-action="undo" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Undo last action (Ctrl/Cmd+Z)">
-                    <i data-lucide="undo-2"></i>Undo
+            <div class="dropdown app-menu-group">
+                <button type="button" class="btn app-menu-trigger dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                    Edit
                 </button>
-                <button type="button" class="btn btn-outline-secondary btn-sm btn-toolbar" data-action="redo" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Redo last action (Ctrl/Cmd+Y)">
-                    <i data-lucide="redo-2"></i>Redo
-                </button>
+                <div class="dropdown-menu app-menu-dropdown">
+                    <button type="button" class="dropdown-item app-menu-item" data-action="undo" title="Undo last action (Ctrl/Cmd+Z)">
+                        <i data-lucide="undo-2"></i>
+                        <span>Undo</span>
+                        <span class="app-menu-shortcut">Ctrl/Cmd+Z</span>
+                    </button>
+                    <button type="button" class="dropdown-item app-menu-item" data-action="redo" title="Redo last action (Ctrl/Cmd+Y)">
+                        <i data-lucide="redo-2"></i>
+                        <span>Redo</span>
+                        <span class="app-menu-shortcut">Ctrl/Cmd+Y</span>
+                    </button>
+                </div>
             </div>
-            <div class="toolbar-separator"></div>
-            <div class="toolbar-section">
-                <button type="button" id="snap-toggle-btn" class="btn btn-sm btn-toolbar btn-outline-secondary" data-action="snap" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Snap to Grid (S)">
-                    <svg id="snap-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#6c757d" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;">
-                        <path d="m12 15 4 4"/>
-                        <path d="M2.352 10.648a1.205 1.205 0 0 0 0 1.704l2.296 2.296a1.205 1.205 0 0 0 1.704 0l6.029-6.029a1 1 0 1 1 3 3l-6.029 6.029a1.205 1.205 0 0 0 0 1.704l2.296 2.296a1.205 1.205 0 0 0 1.704 0l6.365-6.367A1 1 0 0 0 8.716 4.282z"/>
-                        <path d="m5 8 4 4"/>
-                        <path id="snap-pole-left" d="M5 8 L2.352 10.648 L2.352 12.352 L4.648 14.648 L6.352 14.648 L9 12 Z" stroke="none" fill="none"/>
-                        <path id="snap-pole-right" d="M12 15 L9.352 17.648 L9.352 19.352 L11.648 21.648 L13.352 21.648 L16 19 Z" stroke="none" fill="none"/>
-                    </svg>Snap
+            <div class="dropdown app-menu-group">
+                <button type="button" class="btn app-menu-trigger dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                    Project
                 </button>
+                <div class="dropdown-menu app-menu-dropdown">
+                    <button type="button" class="dropdown-item app-menu-item" data-action="project-tools" title="Open Tools">
+                        <i data-lucide="wrench"></i>
+                        <span>Tools</span>
+                    </button>
+                    <button type="button" class="dropdown-item app-menu-item" data-action="project-workpiece" title="Open Workpiece">
+                        <i data-lucide="package"></i>
+                        <span>Workpiece</span>
+                    </button>
+                    <button type="button" class="dropdown-item app-menu-item" data-action="project-grbl" title="Open GRBL">
+                        <i data-lucide="cpu"></i>
+                        <span>GRBL</span>
+                    </button>
+                </div>
             </div>
-            <div class="ms-auto toolbar-section">
-                <button type="button" class="btn btn-outline-info btn-sm btn-toolbar" data-action="options" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Application Options">
-                    <i data-lucide="settings"></i>Options
+            <div class="dropdown app-menu-group">
+                <button type="button" class="btn app-menu-trigger dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                    View
                 </button>
-                <button type="button" class="btn btn-outline-info btn-sm btn-toolbar" data-action="help" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Help">
-                    <i data-lucide="help-circle"></i>Help
+                <div class="dropdown-menu app-menu-dropdown">
+                    <button type="button" id="snap-toggle-btn" class="dropdown-item app-menu-item" data-action="snap" title="Snap to Grid (S)">
+                        <svg id="snap-icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6c757d" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;">
+                            <path d="m12 15 4 4"/>
+                            <path d="M2.352 10.648a1.205 1.205 0 0 0 0 1.704l2.296 2.296a1.205 1.205 0 0 0 1.704 0l6.029-6.029a1 1 0 1 1 3 3l-6.029 6.029a1.205 1.205 0 0 0 0 1.704l2.296 2.296a1.205 1.205 0 0 0 1.704 0l6.365-6.367A1 1 0 0 0 8.716 4.282z"/>
+                            <path d="m5 8 4 4"/>
+                            <path id="snap-pole-left" d="M5 8 L2.352 10.648 L2.352 12.352 L4.648 14.648 L6.352 14.648 L9 12 Z" stroke="none" fill="none"/>
+                            <path id="snap-pole-right" d="M12 15 L9.352 17.648 L9.352 19.352 L11.648 21.648 L13.352 21.648 L16 19 Z" stroke="none" fill="none"/>
+                        </svg>
+                        <span>Snap to Grid</span>
+                        <span class="app-menu-shortcut">S</span>
+                    </button>
+                    <button type="button" class="dropdown-item app-menu-item" data-action="options" title="Options">
+                        <i data-lucide="settings"></i>
+                        <span>Options</span>
+                    </button>
+                </div>
+            </div>
+            <div class="app-menu-group">
+                <button type="button" class="btn app-menu-trigger app-menu-item" data-action="help" title="Help">
+                    <span>Help</span>
                 </button>
             </div>
         </div>
@@ -792,6 +839,15 @@ function createToolbar() {
                 break;
             case 'snap':
                 toggleSnap();
+                break;
+            case 'project-tools':
+                showToolsModal();
+                break;
+            case 'project-workpiece':
+                showWorkpieceModal();
+                break;
+            case 'project-grbl':
+                showGrblModal();
                 break;
             case 'options':
                 showOptionsModal();
@@ -869,19 +925,6 @@ function createSidebar() {
                         </div>
                     </div>
                 </div>
-
-                <!-- SVG Paths Section -->
-                    <div class="sidebar-section mt-4">
-                        <div class="sidebar-section-header" data-bs-toggle="collapse" data-bs-target="#svg-paths-section" aria-expanded="true">
-                            <span>SVG Paths</span>
-                            <i data-lucide="chevron-down" class="collapse-chevron"></i>
-                        </div>
-                        <div class="collapse show" id="svg-paths-section">
-                            <!-- SVG paths will be added dynamically -->
-                        </div>
-                    </div>
-
-
             </div>
 
             <!-- Operations Tab -->
@@ -929,8 +972,25 @@ function createSidebar() {
                         </div>
                     </div>
                 </div>
-                    <!-- Tool Paths Section -->
-                    <div class="sidebar-section mt-4">
+            </div>
+        </div>
+
+        <aside id="right-hover-sidebar" class="right-hover-sidebar" aria-label="Paths sidebar">
+            <button type="button" id="right-hover-sidebar-toggle" class="right-hover-sidebar-toggle" aria-expanded="false" aria-controls="right-hover-sidebar-panel" title="Pin sidebar">
+                <i data-lucide="chevron-left"></i>
+            </button>
+            <div id="right-hover-sidebar-panel" class="right-hover-sidebar-panel">
+                <div class="right-hover-sidebar-content">
+                    <div class="sidebar-section">
+                        <div class="sidebar-section-header" data-bs-toggle="collapse" data-bs-target="#svg-paths-section" aria-expanded="true">
+                            <span>SVG Paths</span>
+                            <i data-lucide="chevron-down" class="collapse-chevron"></i>
+                        </div>
+                        <div class="collapse show" id="svg-paths-section">
+                            <!-- SVG paths will be added dynamically -->
+                        </div>
+                    </div>
+                    <div class="sidebar-section mt-4 mb-0">
                         <div class="sidebar-section-header" data-bs-toggle="collapse" data-bs-target="#tool-paths-section" aria-expanded="true">
                             <span>Tool Paths</span>
                             <i data-lucide="chevron-down" class="collapse-chevron"></i>
@@ -939,46 +999,9 @@ function createSidebar() {
                             <!-- Tool paths will be added dynamically -->
                         </div>
                     </div>
-
-                    <!-- Gcodes Section -->
-                    <div class="sidebar-section mt-4">
-                        <div class="sidebar-section-header" data-bs-toggle="collapse" data-bs-target="#gcodes-section" aria-expanded="false">
-                            <span id="gcode-section-title">G-code Post Processor</span>
-                            <i data-lucide="chevron-down" class="collapse-chevron"></i>
-                        </div>
-                        <div class="collapse" id="gcodes-section">
-                            <div class="p-2">
-                                <!-- Profile Selector -->
-                                <div class="mb-3">
-                                    <label for="gcode-profile-select" class="form-label small">Profile</label>
-                                    <div class="d-flex gap-1">
-                                        <select class="form-select form-select-sm" id="gcode-profile-select">
-                                            <!-- Profiles will be populated dynamically -->
-                                        </select>
-                                        <button type="button" class="btn btn-outline-primary btn-sm" id="new-gcode-profile" data-bs-toggle="tooltip" title="New Profile">
-                                            <i data-lucide="plus" style="width: 14px; height: 14px;"></i>
-                                        </button>
-                                        <button type="button" class="btn btn-outline-danger btn-sm" id="delete-gcode-profile" data-bs-toggle="tooltip" title="Delete Profile">
-                                            <i data-lucide="trash-2" style="width: 14px; height: 14px;"></i>
-                                        </button>
-                                    </div>
-                                </div>
-
-                                <!-- G-code Settings Form (generated by PropertiesManager) -->
-                                <form id="gcode-profile-form">
-                                    <div id="gcode-profile-fields"></div>
-                                    <button type="button" class="btn btn-primary btn-sm w-100" id="save-gcode-profile">
-                                        <i data-lucide="save"></i> Save Profile
-                                    </button>
-                                </form>
-                            </div>
-                        </div>
-                    </div>
-
-
-
+                </div>
             </div>
-        </div>
+        </aside>
 
         <!-- G-Code Viewer (shown during simulation) -->
         <div id="gcode-viewer" class="d-flex flex-column" style="display: none; visibility: hidden; height: 0; overflow: hidden; background-color: white;">
@@ -992,9 +1015,66 @@ function createSidebar() {
     `;
 
     setupSidebarEventHandlers(sidebar);
+    setupRightHoverSidebar(sidebar);
     setupSidebarTabHandlers();
     setupCanvasTabHandlers();
-    initializeGcodeProfilesUI();
+}
+
+function setupRightHoverSidebar(sidebar) {
+    const hoverSidebar = sidebar.querySelector('#right-hover-sidebar');
+    const toggleButton = sidebar.querySelector('#right-hover-sidebar-toggle');
+    if (!hoverSidebar || !toggleButton) return;
+
+    let isPinned = false;
+
+    function syncState(isOpen) {
+        hoverSidebar.classList.toggle('is-open', isOpen);
+        hoverSidebar.classList.toggle('is-pinned', isPinned);
+        toggleButton.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+        toggleButton.title = isPinned ? 'Unpin sidebar' : 'Pin sidebar';
+
+        const icon = toggleButton.querySelector('[data-lucide]');
+        if (icon) {
+            let iconName = 'chevron-left';
+            if (isOpen) {
+                iconName = 'chevron-right';
+            }
+            if (isPinned) {
+                iconName = 'pin';
+            } else if (isOpen) {
+                iconName = 'pin-off';
+            }
+            icon.setAttribute('data-lucide', iconName);
+        }
+
+        lucide.createIcons({
+            attrs: {
+                'stroke-width': 1.75
+            }
+        });
+    }
+
+    syncState(false);
+
+    hoverSidebar.addEventListener('mouseenter', function () {
+        syncState(true);
+    });
+
+    hoverSidebar.addEventListener('mouseleave', function () {
+        if (!isPinned) {
+            syncState(false);
+        }
+    });
+
+    toggleButton.addEventListener('click', function (event) {
+        event.preventDefault();
+        event.stopPropagation();
+        isPinned = !isPinned;
+        syncState(isPinned || !hoverSidebar.classList.contains('is-open'));
+        if (!isPinned && !hoverSidebar.matches(':hover')) {
+            syncState(false);
+        }
+    });
 }
 
 function setupSidebarEventHandlers(sidebar) {
@@ -1025,7 +1105,7 @@ function setupSidebarEventHandlers(sidebar) {
         const pathId = item.dataset.pathId;
 
         if (operation) {
-            const isDrawTool = ['Select', 'Workpiece', 'Move', 'Edit', 'Pen', 'Curve', 'Shape', 'Boolean', 'Gemini', 'Text', 'Tabs', 'Offset', 'Pattern'].includes(operation);
+            const isDrawTool = ['Select', 'Move', 'Edit', 'Pen', 'Curve', 'Shape', 'Boolean', 'Gemini', 'Text', 'Tabs', 'Offset', 'Pattern'].includes(operation);
 
             if (isDrawTool) {
                 showToolPropertiesEditor(operation);
@@ -1337,9 +1417,48 @@ function getActiveToolpaths() {
     return toolpaths.filter(tp => tp.active === true);
 }
 
+function isSameToolpathSource(toolpath, selectedSvgIds) {
+    const toolpathSvgIds = Array.isArray(toolpath.svgIds) && toolpath.svgIds.length > 0
+        ? toolpath.svgIds.slice()
+        : (toolpath.svgId ? [toolpath.svgId] : []);
+
+    if (toolpathSvgIds.length !== selectedSvgIds.length) return false;
+
+    const normalizedToolpathIds = toolpathSvgIds.slice().sort();
+    const normalizedSelectedIds = selectedSvgIds.slice().sort();
+
+    for (let i = 0; i < normalizedToolpathIds.length; i++) {
+        if (normalizedToolpathIds[i] !== normalizedSelectedIds[i]) return false;
+    }
+
+    return true;
+}
+
+function findExistingToolpathsForSelection(operationName, selectedSvgIds) {
+    const normalizedOperation = operationName === 'Drill' ? 'HelicalDrill' : operationName;
+
+    return toolpaths.filter(toolpath => {
+        if (toolpath.operation !== normalizedOperation) return false;
+        return isSameToolpathSource(toolpath, selectedSvgIds);
+    });
+}
+
 function generateToolpathForSelection() {
     // Collect form data
     if (currentOperationName == null) return;
+
+    const selectedSvgIds = selectMgr.selectedPaths().map(path => path.id);
+    if (selectedSvgIds.length === 0) {
+        notify('Select a path first', 'info');
+        return null;
+    }
+
+    const existingToolpaths = findExistingToolpathsForSelection(currentOperationName, selectedSvgIds);
+    if (existingToolpaths.length > 0) {
+        setActiveToolpaths(existingToolpaths);
+        redraw();
+        return existingToolpaths;
+    }
 
     const data   = window.toolPathProperties.collectFormData(currentOperationName);
     const errors = window.toolPathProperties.validateFormData(currentOperationName, data);
@@ -2097,16 +2216,14 @@ function updateShapeInPlace(path, data) {
 
 // Tool panel creation
 // Create 2D simulation controls in overlay
-function createToolPanel() {
-    const toolPanel = document.getElementById('tool-panel');
+function createToolPanel(targetId) {
+    const toolPanel = document.getElementById(targetId || 'tool-panel');
+    if (!toolPanel) return;
     toolPanel.innerHTML = `
         <div class="tool-controls">
             <div class="d-flex gap-2 mb-3 align-items-center flex-wrap">
                 <button type="button" class="btn btn-outline-success btn-sm" id="add-tool">
                     <i data-lucide="plus"></i> Add Tool
-                </button>
-                <button type="button" class="btn btn-outline-danger btn-sm" id="delete-tool" disabled>
-                    <i data-lucide="trash-2"></i> Delete
                 </button>
             </div>
         </div>
@@ -2132,23 +2249,116 @@ function createToolPanel() {
         </div>
     `;
 
-    // Add tool control event handlers
     document.getElementById('add-tool').addEventListener('click', addTool);
-    document.getElementById('delete-tool').addEventListener('click', deleteTool);
-
-    // Render tools table
     renderToolsTable();
-
-    // Create 2D simulation controls in overlay
     create2DSimulationControls();
-
-    // Create 3D simulation controls in overlay
     create3DSimulationControls();
+}
+
+function createCanvasSidePanels() {
+    // Project panels are now opened in dedicated modals from the Project menu.
+    // Keep simulation controls initialized even without embedded canvas tabs.
+    create2DSimulationControls();
+    create3DSimulationControls();
+}
+
+function getWorkpieceConfigController() {
+    if (window.workpieceConfigController) {
+        return window.workpieceConfigController;
+    }
+
+    const registeredOperation = window.cncController?.operationManager?.getOperation('Workpiece');
+    if (registeredOperation) {
+        window.workpieceConfigController = registeredOperation;
+        return registeredOperation;
+    }
+
+    if (typeof Workpiece === 'function') {
+        window.workpieceConfigController = new Workpiece();
+        return window.workpieceConfigController;
+    }
+
+    return null;
+}
+
+function createWorkpiecePanel(targetId) {
+    const workpiecePanel = document.getElementById(targetId || 'workpiece-panel');
+    if (!workpiecePanel) return;
+
+    const workpieceController = getWorkpieceConfigController();
+    if (!workpieceController || typeof workpieceController.getPropertiesHTML !== 'function') {
+        workpiecePanel.innerHTML = '<div class="alert alert-warning mb-0">Workpiece configuration is unavailable.</div>';
+        return;
+    }
+
+    if (workpieceController.fields) {
+        const saved = PropertiesManager.loadSaved(workpieceController.name);
+        if (Object.keys(saved).length > 0) {
+            workpieceController.properties = { ...workpieceController.properties, ...saved };
+        }
+    }
+
+    workpiecePanel.innerHTML = `
+        <div class="workpiece-panel-content">
+            ${workpieceController.getPropertiesHTML()}
+        </div>
+    `;
+
+    const inputs = workpiecePanel.querySelectorAll('input, select, textarea');
+    inputs.forEach(input => {
+        function handleInputChange() {
+            const data = collectOperationProperties(workpieceController);
+            workpieceController.updateFromProperties(data);
+            workpieceController.onPropertiesChanged(data);
+            if (workpieceController.fields) {
+                PropertiesManager.save(workpieceController.name, data, Object.values(workpieceController.fields));
+            }
+        }
+
+        input.addEventListener('change', handleInputChange);
+        if (input.type === 'text' || input.tagName === 'TEXTAREA') {
+            input.addEventListener('input', handleInputChange);
+        }
+    });
+}
+
+function createGrblPanel(targetId) {
+    const grblPanel = document.getElementById(targetId || 'grbl-panel');
+    if (!grblPanel) return;
+
+    grblPanel.innerHTML = `
+    <div class="sidebar-section">
+            <div class="p-2">
+                <div class="mb-3">
+                    <label for="gcode-profile-select" class="form-label small">Profile</label>
+                    <div class="d-flex gap-1">
+                        <select class="form-select form-select-sm" id="gcode-profile-select">
+                            <!-- Profiles will be populated dynamically -->
+                        </select>
+                        <button type="button" class="btn btn-outline-primary btn-sm" id="new-gcode-profile" data-bs-toggle="tooltip" title="New Profile">
+                            <i data-lucide="plus" style="width: 14px; height: 14px;"></i>
+                        </button>
+                        <button type="button" class="btn btn-outline-danger btn-sm" id="delete-gcode-profile" data-bs-toggle="tooltip" title="Delete Profile">
+                            <i data-lucide="trash-2" style="width: 14px; height: 14px;"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <form id="gcode-profile-form">
+                    <div id="gcode-profile-fields"></div>
+                    <button type="button" class="btn btn-primary btn-sm w-100" id="save-gcode-profile">
+                        <i data-lucide="save"></i> Save Profile
+                    </button>
+                </form>
+            </div>
+        </div>
+    `;
 }
 
 // Render tools table
 function renderToolsTable() {
     const tbody = document.getElementById('tool-table-body');
+    if (!tbody) return;
     tbody.innerHTML = '';
 
     tools.forEach((tool, index) => {
@@ -2203,7 +2413,14 @@ function createToolRow(tool, index) {
         <td><input type="number" value="${tool.rpm || 18000}" data-field="rpm" min="1000" max="30000" step="100" data-bs-toggle="tooltip" title="Spindle speed (RPM)"></td>
         <td><input type="number" value="${displayFeed}" data-field="feed" min="${feedMin}" max="${feedMax}" step="${feedStep}" data-unit-type="${useInches ? 'inches' : 'mm'}"></td>
         <td><input type="number" value="${displayZFeed}" data-field="zfeed" min="${feedMin}" max="${feedMax}" step="${feedStep}" data-unit-type="${useInches ? 'inches' : 'mm'}"></td>
-        <td><input type="number" value="${tool.angle}" data-field="angle" min="0" max="90" step="5"></td>
+        <td>
+            <div class="tool-angle-actions">
+                <input type="number" value="${tool.angle}" data-field="angle" min="0" max="90" step="5">
+                <button type="button" class="btn btn-outline-danger btn-sm tool-row-delete" data-bs-toggle="tooltip" title="Delete this tool">
+                    <i data-lucide="trash-2"></i>
+                </button>
+            </div>
+        </td>
     `;
 
     // Add event handlers for row selection and editing
@@ -2224,6 +2441,14 @@ function createToolRow(tool, index) {
         }
     });
 
+    const deleteButton = row.querySelector('.tool-row-delete');
+    if (deleteButton) {
+        deleteButton.addEventListener('click', (e) => {
+            e.stopPropagation();
+            deleteTool(index);
+        });
+    }
+
     return row;
 }
 
@@ -2239,9 +2464,6 @@ function selectTool(index) {
         row.classList.add('selected');
         currentTool = tools[index];
         setMode(null);
-
-        // Enable/disable buttons
-        document.getElementById('delete-tool').disabled = false;
 
     }
 }
@@ -2312,8 +2534,8 @@ function addTool() {
     selectTool(tools.length - 1);
 }
 
-function deleteTool() {
-    const selectedIndex = getCurrentToolIndex();
+function deleteTool(index = null) {
+    const selectedIndex = index !== null ? index : getCurrentToolIndex();
 
     if (selectedIndex < 0) {
         notify('Please select a tool to delete', 'error');
@@ -2378,8 +2600,10 @@ function getCurrentToolIndex() {
 
 // Function to refresh tools display when loaded from project
 function refreshToolsGrid() {
-    // Re-render the tools table to reflect loaded tools
-    renderToolsTable();
+    // Re-render the tools table to reflect loaded tools when the panel is mounted
+    if (document.getElementById('tool-table-body')) {
+        renderToolsTable();
+    }
 
     // Update currentTool if it exists in the loaded tools
     if (tools.length > 0) {
@@ -2562,6 +2786,11 @@ function handlePathClick(pathId) {
                 if (op) op.enterEditMode(path);
             }
 
+            const hoverSidebar = document.getElementById('right-hover-sidebar');
+            if (hoverSidebar) {
+                hoverSidebar.classList.add('is-open');
+            }
+
             showPathPropertiesEditor(path);
 
             // For Offset/Pattern: select generated paths first (red), source paths last (magenta)
@@ -2696,14 +2925,19 @@ function startRenameToolpath(pathId) {
 // Context menu for individual paths
 function showContextMenu(event, pathId) {
     const isToolpath = toolpaths.some(tp => tp.id === pathId);
+    const path = svgpaths.find(p => p.id === pathId) || toolpaths.find(tp => tp.id === pathId);
+    const isVisible = path ? path.visible !== false : true;
     const items = [];
     if (isToolpath) {
         items.push({ label: 'Move Up', icon: 'arrow-up', action: 'move-up' });
         items.push({ label: 'Move Down', icon: 'arrow-down', action: 'move-down' });
         items.push({ divider: true });
     }
-    items.push({ label: 'Show', icon: 'eye', action: 'show' });
-    items.push({ label: 'Hide', icon: 'eye-off', action: 'hide' });
+    items.push({
+        label: isVisible ? 'Hide' : 'Show',
+        icon: isVisible ? 'eye-off' : 'eye',
+        action: 'toggle-visibility'
+    });
     items.push({ divider: true });
     items.push({ label: 'Delete', icon: 'trash-2', action: 'delete', danger: true });
     createContextMenu(event, {
@@ -2720,11 +2954,8 @@ function showContextMenu(event, pathId) {
                 case 'move-down':
                     moveToolpathDown(pathId);
                     break;
-                case 'show':
-                    setVisibility(pathId, true);
-                    break;
-                case 'hide':
-                    setVisibility(pathId, false);
+                case 'toggle-visibility':
+                    setVisibility(pathId, !isVisible);
                     break;
                 case 'delete':
                     doRemoveToolPath(pathId);
@@ -3172,13 +3403,13 @@ function selectSidebarNode(id) {
     setTimeout(() => {
         const item = document.querySelector(`[data-path-id="${id}"]`);
         if (item) {
+            const hoverSidebar = document.getElementById('right-hover-sidebar');
+            if (hoverSidebar) {
+                hoverSidebar.classList.add('is-open');
+            }
+
             document.querySelectorAll('.sidebar-item.selected').forEach(el => el.classList.remove('selected'));
             item.classList.add('selected');
-            // Only scroll if the paths list is visible (not when tool properties editor is open)
-            const propertiesEditor = document.getElementById('tool-properties-editor');
-            if (!propertiesEditor || propertiesEditor.style.display === 'none') {
-                item.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-            }
         }
     }, 100);
 }
@@ -3326,17 +3557,10 @@ function freeToolId() {
 
 function setMode(m) {
     if (m != null) mode = m;
-    const statusEl = document.getElementById('status');
-    statusEl.innerHTML = `<span>Mode [${mode}]</span><span class="small version">${APP_VERSION}</span>`;
 }
 
 // Compatibility object for grid operations
 window.grid = {
-    status: function (text) {
-        // Update status bar with tool information
-        const statusEl = document.getElementById('status');
-        statusEl.innerHTML = `<span>Mode [${mode}]</span><span class="small version">${APP_VERSION}</span>`;
-    },
     get records() {
         return tools;
     }

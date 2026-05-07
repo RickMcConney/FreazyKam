@@ -172,11 +172,13 @@ function setVisibility(id, visible) {
 }
 
 function doRemoveToolPath(id) {
+	var removedSvgPath = null;
 	for (var i = 0; i < svgpaths.length; i++) {
 		if (svgpaths[i].id == id) {
+			removedSvgPath = svgpaths[i];
 			// If this svgpath references an STL model, clean it up
-			if (svgpaths[i].creationProperties && svgpaths[i].creationProperties.stlModelId) {
-				var stlId = svgpaths[i].creationProperties.stlModelId;
+			if (removedSvgPath.creationProperties && removedSvgPath.creationProperties.stlModelId) {
+				var stlId = removedSvgPath.creationProperties.stlModelId;
 				if (typeof window.removeSTLMesh3D === 'function') window.removeSTLMesh3D(stlId);
 				if (window.stlModels) {
 					window.stlModels = window.stlModels.filter(function(m) { return m.id !== stlId; });
@@ -188,9 +190,12 @@ function doRemoveToolPath(id) {
 		}
 	}
 	for (var i = toolpaths.length - 1; i >= 0; i--) {
-		if (toolpaths[i].id == id || toolpaths[i].tool.name == id) {
+		var toolpath = toolpaths[i];
+		var toolpathSvgIds = toolpath.svgIds || (toolpath.svgId ? [toolpath.svgId] : []);
+		var isLinkedToRemovedPath = removedSvgPath && toolpathSvgIds.includes(removedSvgPath.id);
+		if (toolpath.id == id || toolpath.tool.name == id || isLinkedToRemovedPath) {
 			toolpaths.splice(i, 1);
-			removeToolPath(id);
+			removeToolPath(toolpath.id);
 		}
 	}
 
@@ -207,8 +212,8 @@ function deleteSelected() {
 	const selectedPaths = selectMgr.selectedPaths();
 	if (selectedPaths.length === 0) return;
 
-	// Add undo point before deleting
-	addUndo(false, true, false);
+	// Add undo point before deleting svg paths and linked toolpaths
+	addUndo(true, true, false);
 
 	// Delete each selected path
 	selectedPaths.forEach(path => {
