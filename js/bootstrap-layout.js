@@ -2067,9 +2067,6 @@ function createToolPanel() {
                 <button type="button" class="btn btn-outline-success btn-sm" id="add-tool">
                     <i data-lucide="plus"></i> Add Tool
                 </button>
-                <button type="button" class="btn btn-outline-danger btn-sm" id="delete-tool" disabled>
-                    <i data-lucide="trash-2"></i> Delete
-                </button>
             </div>
         </div>
 
@@ -2096,7 +2093,6 @@ function createToolPanel() {
 
     // Add tool control event handlers
     document.getElementById('add-tool').addEventListener('click', addTool);
-    document.getElementById('delete-tool').addEventListener('click', deleteTool);
 
     // Render tools table
     renderToolsTable();
@@ -2265,7 +2261,14 @@ function createToolRow(tool, index) {
         <td><input type="number" value="${tool.rpm || 18000}" data-field="rpm" min="1000" max="30000" step="100" data-bs-toggle="tooltip" title="Spindle speed (RPM)"></td>
         <td><input type="number" value="${displayFeed}" data-field="feed" min="${feedMin}" max="${feedMax}" step="${feedStep}" data-unit-type="${useInches ? 'inches' : 'mm'}"></td>
         <td><input type="number" value="${displayZFeed}" data-field="zfeed" min="${feedMin}" max="${feedMax}" step="${feedStep}" data-unit-type="${useInches ? 'inches' : 'mm'}"></td>
-        <td><input type="number" value="${tool.angle}" data-field="angle" min="0" max="90" step="5"></td>
+        <td>
+            <div class="tool-angle-actions">
+                <input type="number" value="${tool.angle}" data-field="angle" min="0" max="90" step="5">
+                <button type="button" class="btn btn-outline-danger btn-sm tool-row-delete" data-bs-toggle="tooltip" title="Delete this tool">
+                    <i data-lucide="trash-2"></i>
+                </button>
+            </div>
+        </td>
     `;
 
     // Add event handlers for row selection and editing
@@ -2286,6 +2289,14 @@ function createToolRow(tool, index) {
         }
     });
 
+    const deleteButton = row.querySelector('.tool-row-delete');
+    if (deleteButton) {
+        deleteButton.addEventListener('click', (e) => {
+            e.stopPropagation();
+            deleteTool(index);
+        });
+    }
+
     return row;
 }
 
@@ -2301,9 +2312,6 @@ function selectTool(index) {
         row.classList.add('selected');
         currentTool = tools[index];
         setMode(null);
-
-        // Enable/disable buttons
-        document.getElementById('delete-tool').disabled = false;
 
     }
 }
@@ -2374,8 +2382,8 @@ function addTool() {
     selectTool(tools.length - 1);
 }
 
-function deleteTool() {
-    const selectedIndex = getCurrentToolIndex();
+function deleteTool(index = null) {
+    const selectedIndex = index !== null ? index : getCurrentToolIndex();
 
     if (selectedIndex < 0) {
         notify('Please select a tool to delete', 'error');

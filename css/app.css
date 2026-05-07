@@ -238,6 +238,29 @@ html, body {
     background-color: var(--color-primary-light);
 }
 
+.tool-angle-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.tool-angle-actions input {
+    flex: 1;
+}
+
+.tool-row-delete {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    padding: 2px 6px;
+}
+
+.tool-row-delete .lucide {
+    width: 14px;
+    height: 14px;
+}
+
 
 .toolbar-section {
     display: flex;
