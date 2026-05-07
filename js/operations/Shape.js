@@ -295,6 +295,17 @@ class Shape extends Operation {
     }
 
     onMouseDown(canvas, evt) {
+        if (this.currentPath) {
+            const mouse = this.normalizeEvent(canvas, evt);
+            const clickedPath = Select.getInstance().pointInPath(mouse);
+
+            if (clickedPath !== this.currentPath) {
+                this.stop();
+                showToolsList();
+            }
+            return;
+        }
+
         var mouse = this.normalizeEvent(canvas, evt);
         let shape = this.getShape();
         this.makeShape(shape, mouse.x, mouse.y, null, null);
@@ -302,6 +313,11 @@ class Shape extends Operation {
 
     setEditPath(path) {
         this.currentPath = path;
+
+        if (path) {
+            selectMgr.unselectAll();
+            selectMgr.selectPath(path);
+        }
     }
 
     update(path) {

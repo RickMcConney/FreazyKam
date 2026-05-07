@@ -73,6 +73,24 @@ class CncController {
       redraw();
     });
 
+    this.canvas.addEventListener('dblclick', (evt) => {
+      if (evt.button !== 0) {
+        return;
+      }
+
+      const mouse = this.operationManager.currentOperation.normalizeEvent(this.canvas, evt);
+      const clickedPath = Select.getInstance().pointInPath(mouse);
+
+      if (!clickedPath || !clickedPath.creationTool || !clickedPath.creationProperties) {
+        return;
+      }
+
+      if (clickedPath.creationTool === 'Text' || clickedPath.creationTool === 'Shape' || clickedPath.creationTool === 'Offset' || clickedPath.creationTool === 'Pattern' || clickedPath.creationTool === 'Curve' || clickedPath.creationTool === 'Pen') {
+        handlePathClick(clickedPath.id);
+        evt.preventDefault();
+      }
+    });
+
     this.canvas.addEventListener('mousemove', (evt) => {
       // Handle middle mouse button panning
       if (this.isPanning) {
