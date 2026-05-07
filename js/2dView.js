@@ -60,6 +60,12 @@ var ctx = canvas.getContext('2d');
 var staticCanvas = null;
 var staticCtx = null;
 var staticDirty = true;
+var minimapCanvas = document.getElementById('canvas-minimap');
+var minimapCtx = minimapCanvas ? minimapCanvas.getContext('2d') : null;
+var minimapState = {
+	isDragging: false,
+	pointerId: null
+};
 
 // Mousewheel zoom (standard 'wheel' event works across all browsers including Safari)
 canvas.addEventListener('wheel', function (evt) {
@@ -82,7 +88,9 @@ window.addEventListener('resize', function () {
 });
 
 
-var ZOOM_STEP_FACTOR = 1.1; // Multiplier per scroll tick
+var ZOOM_STEP_FACTOR = 1.05; // Multiplier per scroll tick
+var MIN_ZOOM_LEVEL = 0.15;
+var MAX_ZOOM_LEVEL = 20;
 
 // Function to handle zooming in and out, centered on given screen coordinates
 function newZoom(delta, centerX, centerY) {
@@ -91,7 +99,7 @@ function newZoom(delta, centerX, centerY) {
 	var world = screenToWorld(centerX, centerY);
 	// Update zoom level multiplicatively
 	var zoomFactor = (delta > 0) ? ZOOM_STEP_FACTOR : 1 / ZOOM_STEP_FACTOR;
-	var newZoom = Math.max(0.05, Math.min(50, zoomLevel * zoomFactor));
+	var newZoom = Math.max(MIN_ZOOM_LEVEL, Math.min(MAX_ZOOM_LEVEL, zoomLevel * zoomFactor));
 	// Adjust pan so the world coordinate stays under the mouse
 	panX = centerX - world.x * newZoom;
 	panY = centerY - world.y * newZoom;
@@ -127,6 +135,189 @@ function centerWorkpiece() {
 	panY = canvasCenter.y - (workpieceLength / 2) * zoomLevel;
 
 }
+
+function handleCenterView() {
+	centerWorkpiece();
+	redraw();
+}
+
+function handleMinimapDoubleClick(evt) {
+	if (!minimapCanvas) return;
+	handleCenterView();
+	evt.preventDefault();
+}
+
+function getMinimapMetrics() {
+	if (!minimapCanvas) return null;
+
+	var workpieceWidth = getOption("workpieceWidth") * viewScale;
+	var workpieceLength = getOption("workpieceLength") * viewScale;
+	var viewportTopLeft = screenToWorld(0, 0);
+	var viewportBottomRight = screenToWorld(canvas.width, canvas.height);
+	var visibleWidth = viewportBottomRight.x - viewportTopLeft.x;
+	var visibleHeight = viewportBottomRight.y - viewportTopLeft.y;
+	var contentMinX = Math.min(0, viewportTopLeft.x);
+	var contentMinY = Math.min(0, viewportTopLeft.y);
+	var contentMaxX = Math.max(workpieceWidth, viewportBottomRight.x);
+	var contentMaxY = Math.max(workpieceLength, viewportBottomRight.y);
+	var contentWidth = Math.max(workpieceWidth, contentMaxX - contentMinX, visibleWidth);
+	var contentHeight = Math.max(workpieceLength, contentMaxY - contentMinY, visibleHeight);
+	var padding = 10;
+	var drawableWidth = minimapCanvas.width - padding * 2;
+	var drawableHeight = minimapCanvas.height - padding * 2;
+	var scale = Math.min(drawableWidth / contentWidth, drawableHeight / contentHeight);
+	var drawWidth = contentWidth * scale;
+	var drawHeight = contentHeight * scale;
+	var offsetX = (minimapCanvas.width - drawWidth) / 2;
+	var offsetY = (minimapCanvas.height - drawHeight) / 2;
+
+	return {
+		workpieceWidth: workpieceWidth,
+		workpieceLength: workpieceLength,
+		contentMinX: contentMinX,
+		contentMinY: contentMinY,
+		contentMaxX: contentMaxX,
+		contentMaxY: contentMaxY,
+		contentWidth: contentWidth,
+		contentHeight: contentHeight,
+		viewportTopLeft: viewportTopLeft,
+		viewportBottomRight: viewportBottomRight,
+		scale: scale,
+		offsetX: offsetX,
+		offsetY: offsetY,
+		drawWidth: drawWidth,
+		drawHeight: drawHeight
+	};
+}
+
+function updateViewFromMinimapPointer(evt) {
+	if (!minimapCanvas) return;
+
+	var metrics = getMinimapMetrics();
+	if (!metrics) return;
+
+	var rect = minimapCanvas.getBoundingClientRect();
+	var localX = evt.clientX - rect.left;
+	var localY = evt.clientY - rect.top;
+	var worldX = metrics.contentMinX + (localX - metrics.offsetX) / metrics.scale;
+	var worldY = metrics.contentMinY + (localY - metrics.offsetY) / metrics.scale;
+
+	worldX = Math.max(metrics.contentMinX, Math.min(metrics.contentMaxX, worldX));
+	worldY = Math.max(metrics.contentMinY, Math.min(metrics.contentMaxY, worldY));
+
+	panX = canvas.width / 2 - worldX * zoomLevel;
+	panY = canvas.height / 2 - worldY * zoomLevel;
+	redraw();
+}
+
+function handleMinimapPointerDown(evt) {
+	if (!minimapCanvas) return;
+
+	minimapState.isDragging = true;
+	minimapState.pointerId = evt.pointerId;
+	minimapCanvas.classList.add('dragging');
+	minimapCanvas.setPointerCapture(evt.pointerId);
+	updateViewFromMinimapPointer(evt);
+	evt.preventDefault();
+}
+
+function handleMinimapPointerMove(evt) {
+	if (!minimapState.isDragging) return;
+	if (minimapState.pointerId !== null && evt.pointerId !== minimapState.pointerId) return;
+
+	updateViewFromMinimapPointer(evt);
+	evt.preventDefault();
+}
+
+function handleMinimapPointerUp(evt) {
+	if (!minimapCanvas) return;
+	if (minimapState.pointerId !== null && evt.pointerId !== minimapState.pointerId) return;
+
+	minimapState.isDragging = false;
+	minimapState.pointerId = null;
+	minimapCanvas.classList.remove('dragging');
+	if (minimapCanvas.hasPointerCapture(evt.pointerId)) {
+		minimapCanvas.releasePointerCapture(evt.pointerId);
+	}
+	evt.preventDefault();
+}
+
+function drawMinimap() {
+	if (!minimapCanvas || !minimapCtx) return;
+
+	var metrics = getMinimapMetrics();
+	if (!metrics) return;
+
+	minimapCtx.clearRect(0, 0, minimapCanvas.width, minimapCanvas.height);
+	minimapCtx.fillStyle = 'rgba(255, 255, 255, 0.96)';
+	minimapCtx.fillRect(0, 0, minimapCanvas.width, minimapCanvas.height);
+
+	var workpieceX = metrics.offsetX + (0 - metrics.contentMinX) * metrics.scale;
+	var workpieceY = metrics.offsetY + (0 - metrics.contentMinY) * metrics.scale;
+	var workpieceDrawWidth = metrics.workpieceWidth * metrics.scale;
+	var workpieceDrawHeight = metrics.workpieceLength * metrics.scale;
+
+	minimapCtx.fillStyle = getOption("showWorkpiece") ? workpieceColor : '#f3f3f3';
+	minimapCtx.strokeStyle = workpieceBorderColor;
+	minimapCtx.lineWidth = 1;
+	minimapCtx.fillRect(workpieceX, workpieceY, workpieceDrawWidth, workpieceDrawHeight);
+	minimapCtx.strokeRect(workpieceX, workpieceY, workpieceDrawWidth, workpieceDrawHeight);
+
+	if (svgpaths && svgpaths.length) {
+		minimapCtx.save();
+		minimapCtx.beginPath();
+		minimapCtx.rect(metrics.offsetX, metrics.offsetY, metrics.drawWidth, metrics.drawHeight);
+		minimapCtx.clip();
+		minimapCtx.translate(metrics.offsetX - metrics.contentMinX * metrics.scale, metrics.offsetY - metrics.contentMinY * metrics.scale);
+		minimapCtx.scale(metrics.scale, metrics.scale);
+		minimapCtx.lineJoin = 'round';
+		minimapCtx.lineCap = 'round';
+
+		for (var i = 0; i < svgpaths.length; i++) {
+			var path = svgpaths[i];
+			if (!path.visible || path.type === 'image' || !path.path || !path.path.length) continue;
+
+			minimapCtx.beginPath();
+			minimapCtx.moveTo(path.path[0].x, path.path[0].y);
+			for (var j = 1; j < path.path.length; j++) {
+				minimapCtx.lineTo(path.path[j].x, path.path[j].y);
+			}
+			minimapCtx.strokeStyle = selectMgr.isSelected(path) ? activeColor : lineColor;
+			minimapCtx.lineWidth = Math.max(1 / metrics.scale, 0.75);
+			minimapCtx.stroke();
+		}
+		minimapCtx.restore();
+	}
+
+	var viewportX = metrics.offsetX + (metrics.viewportTopLeft.x - metrics.contentMinX) * metrics.scale;
+	var viewportY = metrics.offsetY + (metrics.viewportTopLeft.y - metrics.contentMinY) * metrics.scale;
+	var viewportWidth = (metrics.viewportBottomRight.x - metrics.viewportTopLeft.x) * metrics.scale;
+	var viewportHeight = (metrics.viewportBottomRight.y - metrics.viewportTopLeft.y) * metrics.scale;
+
+	var clampedX = Math.max(metrics.offsetX, Math.min(metrics.offsetX + metrics.drawWidth, viewportX));
+	var clampedY = Math.max(metrics.offsetY, Math.min(metrics.offsetY + metrics.drawHeight, viewportY));
+	var clampedWidth = Math.max(8, Math.min(metrics.offsetX + metrics.drawWidth - clampedX, viewportWidth));
+	var clampedHeight = Math.max(8, Math.min(metrics.offsetY + metrics.drawHeight - clampedY, viewportHeight));
+
+	minimapCtx.fillStyle = 'rgba(13, 110, 253, 0.14)';
+	minimapCtx.strokeStyle = 'rgba(13, 110, 253, 0.9)';
+	minimapCtx.lineWidth = 1.5;
+	minimapCtx.fillRect(clampedX, clampedY, clampedWidth, clampedHeight);
+	minimapCtx.strokeRect(clampedX, clampedY, clampedWidth, clampedHeight);
+}
+
+function initializeCanvasOverlayControls() {
+	if (minimapCanvas && minimapCanvas.dataset.initialized !== 'true') {
+		minimapCanvas.addEventListener('pointerdown', handleMinimapPointerDown);
+		minimapCanvas.addEventListener('pointermove', handleMinimapPointerMove);
+		minimapCanvas.addEventListener('pointerup', handleMinimapPointerUp);
+		minimapCanvas.addEventListener('pointercancel', handleMinimapPointerUp);
+		minimapCanvas.addEventListener('dblclick', handleMinimapDoubleClick);
+		minimapCanvas.dataset.initialized = 'true';
+	}
+}
+
+initializeCanvasOverlayControls();
 
 // Calculate dynamic center based on viewport dimensions and coordinate system
 function getCanvasCenter() {
@@ -432,6 +623,7 @@ function redrawCore() {
 	// Blit static layer then draw dynamic operation overlay
 	ctx.drawImage(staticCanvas, 0, 0);
 	cncController.draw();
+	drawMinimap();
 }
 
 // Full redraw — marks static layer dirty and queues a frame
