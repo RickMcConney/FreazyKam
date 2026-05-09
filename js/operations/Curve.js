@@ -15,10 +15,10 @@ class Curve extends Operation {
                 key: 'curveFit', label: 'Curve Fitting', type: 'choice',
                 default: 'catmull-rom',
                 options: [
-                    { value: 'catmull-rom',  label: 'Catmull-Rom' },
-                    { value: 'bezier',       label: 'Bezier' },
+                    { value: 'catmull-rom', label: 'Catmull-Rom' },
+                    { value: 'bezier', label: 'Bezier' },
                     { value: 'cubic-spline', label: 'Cubic Spline' },
-                    { value: 'arc-fit',      label: 'Arc Fit' },
+                    { value: 'arc-fit', label: 'Arc Fit' },
                 ],
                 help: 'Controls how anchor points are interpolated.',
             }
@@ -119,9 +119,9 @@ class Curve extends Operation {
     tessellate(nodes, closed, curveFit) {
         if (nodes.length < 2) return nodes.map(n => ({ x: n.x, y: n.y }));
         curveFit = curveFit || 'catmull-rom';
-        if (curveFit === 'bezier')       return this._tessBezier(nodes, closed);
+        if (curveFit === 'bezier') return this._tessBezier(nodes, closed);
         if (curveFit === 'cubic-spline') return this._tessCubicSpline(nodes, closed);
-        if (curveFit === 'arc-fit')      return this._tessArcFit(nodes, closed);
+        if (curveFit === 'arc-fit') return this._tessArcFit(nodes, closed);
         return this._tessCatmullRom(nodes, closed);
     }
 
@@ -129,15 +129,15 @@ class Curve extends Operation {
 
     _tessSegment(pts, p1, p2, cp) {
         const polyLen =
-            Math.hypot(cp.cp1x - p1.x,  cp.cp1y - p1.y) +
+            Math.hypot(cp.cp1x - p1.x, cp.cp1y - p1.y) +
             Math.hypot(cp.cp2x - cp.cp1x, cp.cp2y - cp.cp1y) +
-            Math.hypot(p2.x - cp.cp2x,  p2.y - cp.cp2y);
+            Math.hypot(p2.x - cp.cp2x, p2.y - cp.cp2y);
         const res = Math.max(2, Math.min(30, Math.ceil(polyLen / 40)));
         for (let t = 1; t <= res; t++) {
             const u = t / res, v = 1 - u;
             pts.push({
-                x: v*v*v*p1.x + 3*v*v*u*cp.cp1x + 3*v*u*u*cp.cp2x + u*u*u*p2.x,
-                y: v*v*v*p1.y + 3*v*v*u*cp.cp1y + 3*v*u*u*cp.cp2y + u*u*u*p2.y
+                x: v * v * v * p1.x + 3 * v * v * u * cp.cp1x + 3 * v * u * u * cp.cp2x + u * u * u * p2.x,
+                y: v * v * v * p1.y + 3 * v * v * u * cp.cp1y + 3 * v * u * u * cp.cp2y + u * u * u * p2.y
             });
         }
     }
@@ -177,18 +177,18 @@ class Curve extends Operation {
             p0 = nodes[(i - 1 + n) % n];
             p3 = nodes[(i + 2) % n];
         } else {
-            p0 = i > 0 ? nodes[i - 1] : { x: 2*p1.x - p2.x, y: 2*p1.y - p2.y };
-            p3 = (i + 2 < n) ? nodes[i + 2] : { x: 2*p2.x - p1.x, y: 2*p2.y - p1.y };
+            p0 = i > 0 ? nodes[i - 1] : { x: 2 * p1.x - p2.x, y: 2 * p1.y - p2.y };
+            p3 = (i + 2 < n) ? nodes[i + 2] : { x: 2 * p2.x - p1.x, y: 2 * p2.y - p1.y };
         }
 
         const d1x = p2.x - p0.x, d1y = p2.y - p0.y, len1 = Math.hypot(d1x, d1y);
         const d2x = p3.x - p1.x, d2y = p3.y - p1.y, len2 = Math.hypot(d2x, d2y);
 
         return {
-            cp1x: p1.x + (len1 > 1e-9 ? d1x/len1 * h : 0),
-            cp1y: p1.y + (len1 > 1e-9 ? d1y/len1 * h : 0),
-            cp2x: p2.x - (len2 > 1e-9 ? d2x/len2 * h : 0),
-            cp2y: p2.y - (len2 > 1e-9 ? d2y/len2 * h : 0),
+            cp1x: p1.x + (len1 > 1e-9 ? d1x / len1 * h : 0),
+            cp1y: p1.y + (len1 > 1e-9 ? d1y / len1 * h : 0),
+            cp2x: p2.x - (len2 > 1e-9 ? d2x / len2 * h : 0),
+            cp2y: p2.y - (len2 > 1e-9 ? d2y / len2 * h : 0),
         };
     }
 
@@ -222,12 +222,12 @@ class Curve extends Operation {
         const b = new Float64Array(n).fill(4); b[0] = 2; b[n - 1] = 2;
         const c = new Float64Array(n).fill(1); c[n - 1] = 0;
         const drx = new Float64Array(n), dry = new Float64Array(n);
-        drx[0] = 3*(pts[1].x - pts[0].x); dry[0] = 3*(pts[1].y - pts[0].y);
+        drx[0] = 3 * (pts[1].x - pts[0].x); dry[0] = 3 * (pts[1].y - pts[0].y);
         for (let i = 1; i < n - 1; i++) {
-            drx[i] = 3*(pts[i+1].x - pts[i-1].x);
-            dry[i] = 3*(pts[i+1].y - pts[i-1].y);
+            drx[i] = 3 * (pts[i + 1].x - pts[i - 1].x);
+            dry[i] = 3 * (pts[i + 1].y - pts[i - 1].y);
         }
-        drx[n-1] = 3*(pts[n-1].x - pts[n-2].x); dry[n-1] = 3*(pts[n-1].y - pts[n-2].y);
+        drx[n - 1] = 3 * (pts[n - 1].x - pts[n - 2].x); dry[n - 1] = 3 * (pts[n - 1].y - pts[n - 2].y);
         return { mx: this._thomas(n, b, c, drx), my: this._thomas(n, b, c, dry) };
     }
 
@@ -240,12 +240,12 @@ class Curve extends Operation {
         const drx = new Float64Array(n), dry = new Float64Array(n);
         for (let i = 0; i < n; i++) {
             const prev = (i - 1 + n) % n, next = (i + 1) % n;
-            drx[i] = 3*(pts[next].x - pts[prev].x);
-            dry[i] = 3*(pts[next].y - pts[prev].y);
+            drx[i] = 3 * (pts[next].x - pts[prev].x);
+            dry[i] = 3 * (pts[next].y - pts[prev].y);
         }
         const u = new Float64Array(n); u[0] = gamma; u[n - 1] = alpha;
         const yx = this._thomas(n, b, c, drx), yy = this._thomas(n, b, c, dry);
-        const z  = this._thomas(n, b, c, u);
+        const z = this._thomas(n, b, c, u);
         const bOverG = beta / gamma;
         const vdotz = z[0] + bOverG * z[n - 1];
         const factor = 1 / (1 + vdotz);
@@ -365,7 +365,7 @@ class Curve extends Operation {
             let θ2 = Math.atan2(p2.y - cy, p2.x - cx);
 
             if (r > 0) { if (θ2 < θ1) θ2 += 2 * Math.PI; }
-            else       { if (θ2 > θ1) θ2 -= 2 * Math.PI; }
+            else { if (θ2 > θ1) θ2 -= 2 * Math.PI; }
 
             const arcLen = absR * Math.abs(θ2 - θ1);
             const res = Math.max(2, Math.min(30, Math.ceil(arcLen / 40)));
@@ -404,22 +404,67 @@ class Curve extends Operation {
 
     // ── Drawing ───────────────────────────────────────────────────────────────
 
+    drawLengthLabel(ctx, p1, p2) {
+        if (p1 && p2) {
+            ctx.save();
+            const length = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+            const midPoint = { x: (p2.x + p1.x) / 2, y: (p2.y + p1.y) / 2 };
+            ctx.font = "14px Arial";
+            ctx.fillStyle = '#000000';
+            ctx.textAlign = "center";
+            ctx.fillText(`${formatDimension(length, true)}`, worldToScreen(midPoint.x, midPoint.y).x + 10, worldToScreen(midPoint.x, midPoint.y).y - 10);           
+            ctx.restore(); 
+        }
+    }
+
+    pathLength(p1,p2){
+        if (p1 && p2) {
+            return Math.hypot(p2.x - p1.x, p2.y - p1.y);
+        }
+        return null;
+    }
+
     draw(ctx) {
         ctx.save();
 
         if (this.editPath !== null) {
-            if (!this.alwaysCorner) this._drawTangentArms(ctx);
+            //if (!this.alwaysCorner) this._drawTangentArms(ctx);
             this._drawAnchorHandles(ctx, this.editPath.creationProperties.nodes, this.activeHandle, this.hoveredHandle);
             if (this.insertPreviewPoint) {
-                const sp = worldToScreen(this.insertPreviewPoint.x, this.insertPreviewPoint.y);
-                this.drawHandle(ctx, sp.x, sp.y, this.handleSize, insertPreviewColor, insertPreviewStroke);
+                let sp = worldToScreen(this.insertPreviewPoint.x, this.insertPreviewPoint.y);
+                let len1 = this.pathLength({ x: this.editPath.creationProperties.nodes[this.insertPreviewPoint.anchorSegIdx].x, y: this.editPath.creationProperties.nodes[this.insertPreviewPoint.anchorSegIdx].y }, this.insertPreviewPoint);
+                let len2 = this.pathLength({ x: this.editPath.creationProperties.nodes[(this.insertPreviewPoint.anchorSegIdx + 1) % this.editPath.creationProperties.nodes.length].x, y: this.editPath.creationProperties.nodes[(this.insertPreviewPoint.anchorSegIdx + 1) % this.editPath.creationProperties.nodes.length].y }, this.insertPreviewPoint);
+                if (len1 !== null && len2 !== null && Math.abs(len1 - len2)<5) {
+                    if(this.alwaysCorner){
+                        this.insertPreviewPoint.x = (this.editPath.creationProperties.nodes[this.insertPreviewPoint.anchorSegIdx].x + this.editPath.creationProperties.nodes[(this.insertPreviewPoint.anchorSegIdx + 1) % this.editPath.creationProperties.nodes.length].x) / 2;
+                        this.insertPreviewPoint.y = (this.editPath.creationProperties.nodes[this.insertPreviewPoint.anchorSegIdx].y + this.editPath.creationProperties.nodes[(this.insertPreviewPoint.anchorSegIdx + 1) % this.editPath.creationProperties.nodes.length].y) / 2;
+                        sp = worldToScreen(this.insertPreviewPoint.x, this.insertPreviewPoint.y);
+                    }
+                    this.drawHandle(ctx, sp.x, sp.y, this.handleSize, '#ff0000', insertPreviewStroke);
+                } else {
+                    this.drawHandle(ctx, sp.x, sp.y, this.handleSize, insertPreviewColor, insertPreviewStroke);
+                }
+                this.drawLengthLabel(ctx, { x: this.editPath.creationProperties.nodes[this.insertPreviewPoint.anchorSegIdx].x, y: this.editPath.creationProperties.nodes[this.insertPreviewPoint.anchorSegIdx].y }, 
+                                          { x: this.editPath.creationProperties.nodes[(this.insertPreviewPoint.anchorSegIdx + 1) % this.editPath.creationProperties.nodes.length].x, y: this.editPath.creationProperties.nodes[(this.insertPreviewPoint.anchorSegIdx + 1) % this.editPath.creationProperties.nodes.length].y });
                 this.drawCrosshair(ctx, sp.x, sp.y, 3, insertPreviewStroke, 1);
+            }
+            else if (this.editPath.creationProperties.nodes.length > 0) {
+                if (this.mouseDown && this.activeHandle !== null) {
+                    this.drawLengthLabel(ctx, this.editPath.creationProperties.nodes[this.activeHandle], 
+                    this.editPath.creationProperties.nodes[this.activeHandle+1 < this.editPath.creationProperties.nodes.length ? this.activeHandle+1 : 0]);
+                this.drawLengthLabel(ctx, this.editPath.creationProperties.nodes[this.activeHandle], 
+                    this.editPath.creationProperties.nodes[this.activeHandle-1 >= 0 ? this.activeHandle-1 : this.editPath.creationProperties.nodes.length - 1]);
+
+                }
             }
             ctx.restore();
             return;
         }
 
         if (this.nodes.length === 0) { ctx.restore(); return; }
+
+        const previousPoint = this.nodes[this.nodes.length - 1];
+        this.drawLengthLabel(ctx, previousPoint, this.mousePos);
 
         // Curve built so far + preview to mouse
         const previewNodes = (!this.nearFirstPoint && this.mousePos)
@@ -574,9 +619,9 @@ class Curve extends Operation {
             } else {
                 const cp = this._segmentCP(nodes, i, closed);
                 const polyLen =
-                    Math.hypot(cp.cp1x - p1.x,  cp.cp1y - p1.y) +
+                    Math.hypot(cp.cp1x - p1.x, cp.cp1y - p1.y) +
                     Math.hypot(cp.cp2x - cp.cp1x, cp.cp2y - cp.cp1y) +
-                    Math.hypot(p2.x - cp.cp2x,  p2.y - cp.cp2y);
+                    Math.hypot(p2.x - cp.cp2x, p2.y - cp.cp2y);
                 segPts = Math.max(2, Math.min(30, Math.ceil(polyLen / 40)));
             }
             if (closestK < tessIdx + segPts) { anchorSegIdx = i; break; }
@@ -722,7 +767,9 @@ class Curve extends Operation {
                 nodes[this.activeHandle].y = mouse.y;
                 this.editPath.path = this.tessellate(nodes, this.editPath.closed, this.editPath.creationProperties.curveFit);
                 this.editPath.bbox = boundingBox(this.editPath.path);
+                
                 redraw();
+                
             } else {
                 const h = this._getHandleAt(mouse);
                 const oldHover = this.hoveredHandle;

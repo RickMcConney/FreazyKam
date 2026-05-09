@@ -7,11 +7,11 @@ const ARC_POINTS_PER_RADIAN = 3;
 
 class PathEdit extends Select {
     constructor() {
-        super('Edit','edit');
+        super('Edit', 'edit');
         this.name = 'Edit';
         this.icon = 'edit';
         this.tooltip = 'Edit individual points of a path (move, add, delete)';
- 
+
 
         this.unselectOnMouseDown = false; // Don't auto-deselect when clicking
         this.handleSize = 8; // Size of point handles (in pixels)
@@ -34,9 +34,9 @@ class PathEdit extends Select {
             cornerStyle: {
                 key: 'cornerStyle', label: 'Corner Style', type: 'choice', default: 'outer',
                 options: [
-                    { value: 'outer',   label: 'Radius (outer)' },
-                    { value: 'inner',   label: 'Radius (inner)' },
-                    { value: 'miter',   label: 'Miter (chamfer)' },
+                    { value: 'outer', label: 'Radius (outer)' },
+                    { value: 'inner', label: 'Radius (inner)' },
+                    { value: 'miter', label: 'Miter (chamfer)' },
                     { value: 'dogbone', label: 'Dogbone' },
                 ]
             },
@@ -121,7 +121,7 @@ class PathEdit extends Select {
         }
 
         // Check if Alt key is held for adding a point
-        if (evt.altKey && this.selectedPath && this.insertPreviewPoint) {
+        if (this.selectedPath && this.insertPreviewPoint) {
             // Add a new point at the preview location
             addUndo(false, true, false);
 
@@ -156,7 +156,7 @@ class PathEdit extends Select {
 
                 // hasDuplicateEndpoint is the canonical check — SVG-imported closed paths
                 // have a duplicate endpoint but no `closed` flag, so checking `closed` alone misses them.
-                if (this.hasDuplicateEndpoint(path) && (this.activeHandle === 0 || this.activeHandle === n-1)) {
+                if (this.hasDuplicateEndpoint(path) && (this.activeHandle === 0 || this.activeHandle === n - 1)) {
                     this.syncFirstLast = true;
                 }
 
@@ -214,11 +214,11 @@ class PathEdit extends Select {
 
                 // If dragging first point, also update last point
                 if (this.activeHandle === 0) {
-                    path[n-1].x = mouse.x;
-                    path[n-1].y = mouse.y;
+                    path[n - 1].x = mouse.x;
+                    path[n - 1].y = mouse.y;
                 }
                 // If dragging last point, also update first point
-                else if (this.activeHandle === n-1) {
+                else if (this.activeHandle === n - 1) {
                     path[0].x = mouse.x;
                     path[0].y = mouse.y;
                 }
@@ -236,31 +236,22 @@ class PathEdit extends Select {
             this.hoveredHandle = hoverHandle;
 
             // Check if Alt key is held for adding points
-            if (evt.altKey) {
-                // Find closest segment for insertion preview
-                const segment = this.findClosestSegment(mouseHit);
-                if (segment && hoverHandle === null) {
-                    // Show preview for adding a point
-                    this.insertPreviewPoint = {
-                        x: segment.point.x,
-                        y: segment.point.y,
-                        segmentIndex: segment.segmentIndex
-                    };
-                    canvas.style.cursor = 'copy';
-                } else {
-                    this.insertPreviewPoint = null;
-                    canvas.style.cursor = hoverHandle !== null ? 'pointer' : 'default';
-                }
-            } else {
-                // Not holding Alt - clear preview
-                this.insertPreviewPoint = null;
 
-                if (hoverHandle !== null) {
-                    canvas.style.cursor = 'pointer';
-                } else {
-                    canvas.style.cursor = 'default';
-                }
+            // Find closest segment for insertion preview
+            const segment = this.findClosestSegment(mouseHit);
+            if (segment && hoverHandle === null) {
+                // Show preview for adding a point
+                this.insertPreviewPoint = {
+                    x: segment.point.x,
+                    y: segment.point.y,
+                    segmentIndex: segment.segmentIndex
+                };
+                canvas.style.cursor = 'copy';
+            } else {
+                this.insertPreviewPoint = null;
+                canvas.style.cursor = hoverHandle !== null ? 'pointer' : 'default';
             }
+
 
             // Only redraw if hover state changed
             if (oldHover !== this.hoveredHandle || oldPreview !== this.insertPreviewPoint) {
@@ -331,9 +322,27 @@ class PathEdit extends Select {
         }
     }
 
-    draw(ctx) {
-        super.draw(ctx);
+    pathLength(p1,p2){
+        if (p1 && p2) {
+            return Math.hypot(p2.x - p1.x, p2.y - p1.y);
+        }
+        return null;
+    }
 
+    drawLengthLabel(ctx, p1, p2) {
+        if (p1 && p2) {
+            ctx.save();
+            const length = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+            const midPoint = { x: (p2.x + p1.x) / 2, y: (p2.y + p1.y) / 2 };
+            ctx.font = "14px Arial";
+            ctx.fillStyle = '#000000';
+            ctx.textAlign = "center";
+            ctx.fillText(`${formatDimension(length, true)}`, worldToScreen(midPoint.x, midPoint.y).x + 10, worldToScreen(midPoint.x, midPoint.y).y - 10);
+            ctx.restore();
+        }
+    }
+
+    draw(ctx) {
         const selectedPath = this.selectedPath;
 
         // Draw point handles for selected path
@@ -369,18 +378,32 @@ class PathEdit extends Select {
                     fillColor = handleNormalColor;
                     strokeColor = handleNormalStroke;
                 }
-
+                if (this.activeHandle === i) {
+                    this.drawLengthLabel(ctx, pt, path[(i + 1) % n]);
+                    this.drawLengthLabel(ctx, pt, path[(i - 1 + drawCount  ) % drawCount]);
+                }
                 this.drawHandle(ctx, screenPt.x, screenPt.y, this.handleSize, fillColor, strokeColor);
             }
             ctx.restore();
 
-            // Draw preview point when Alt is held
+            // Draw preview point 
             if (this.insertPreviewPoint) {
-                const screenPt = worldToScreen(this.insertPreviewPoint.x, this.insertPreviewPoint.y);
-
+                let screenPt = worldToScreen(this.insertPreviewPoint.x, this.insertPreviewPoint.y);
+                let len1 = this.pathLength({ x: selectedPath.path[this.insertPreviewPoint.segmentIndex].x, y: selectedPath.path[this.insertPreviewPoint.segmentIndex].y }, this.insertPreviewPoint);
+                let len2 = this.pathLength({ x: selectedPath.path[(this.insertPreviewPoint.segmentIndex + 1) % selectedPath.path.length].x, y: selectedPath.path[(this.insertPreviewPoint.segmentIndex + 1) % selectedPath.path.length].y }, this.insertPreviewPoint);
                 ctx.save();
-                this.drawHandle(ctx, screenPt.x, screenPt.y, this.handleSize, insertPreviewColor, insertPreviewStroke);
+                if (len1 !== null && len2 !== null && Math.abs(len1 - len2)<5) {
+                    this.insertPreviewPoint.x = (selectedPath.path[this.insertPreviewPoint.segmentIndex].x + selectedPath.path[(this.insertPreviewPoint.segmentIndex + 1) % selectedPath.path.length].x) / 2;
+                    this.insertPreviewPoint.y = (selectedPath.path[this.insertPreviewPoint.segmentIndex].y + selectedPath.path[(this.insertPreviewPoint.segmentIndex + 1) % selectedPath.path.length].y) / 2;
+                    screenPt = worldToScreen(this.insertPreviewPoint.x, this.insertPreviewPoint.y);
+                    this.drawHandle(ctx, screenPt.x, screenPt.y, this.handleSize, '#ff0000', insertPreviewStroke);
+                }
+                else {
+                    this.drawHandle(ctx, screenPt.x, screenPt.y, this.handleSize, insertPreviewColor, insertPreviewStroke);
+                }
                 this.drawCrosshair(ctx, screenPt.x, screenPt.y, 3, insertPreviewStroke, 1);
+                this.drawLengthLabel(ctx, { x: this.selectedPath.path[this.insertPreviewPoint.segmentIndex].x, y: this.selectedPath.path[this.insertPreviewPoint.segmentIndex].y },
+                    { x: this.selectedPath.path[(this.insertPreviewPoint.segmentIndex + 1) % this.selectedPath.path.length].x, y: this.selectedPath.path[(this.insertPreviewPoint.segmentIndex + 1) % this.selectedPath.path.length].y });
                 ctx.restore();
             }
         }
@@ -491,7 +514,7 @@ class PathEdit extends Select {
         const minPoints = this.selectedPath.closed ? 3 : 2;
 
         // Check if we have enough points to delete one
-        if (path.length <= minPoints) {
+        if (path.length-1 <= minPoints) {
             notify(`Cannot delete point: minimum ${minPoints} points required`);
             return;
         }
@@ -501,6 +524,13 @@ class PathEdit extends Select {
 
         // Remove the point
         path.splice(this.hoveredHandle, 1);
+
+        if(this.hoveredHandle === 0 && this.selectedPath.closed) {
+            // If we deleted the first point of a closed path, we need to update the last point to match the new first point
+            const n = path.length;
+            path[n - 1].x = path[0].x;
+            path[n - 1].y = path[0].y;
+        }
 
         // Recalculate bounding box
         this.selectedPath.bbox = boundingBox(path);
@@ -618,7 +648,6 @@ class PathEdit extends Select {
                     • <strong>Click</strong> a point to select for radius (purple)<br>
                     • <strong>Drag</strong> handles to move points<br>
                     • <strong>Shift+Click</strong> a point to set as first point (green)<br>
-                    • <strong>Alt+Click</strong> on a line segment to add a point<br>
                     • <strong>Hover + Delete</strong> key to remove a point (min ${minPoints} points)<br>
                     • Click on a different path to edit it
                 </small>
@@ -667,8 +696,8 @@ class PathEdit extends Select {
 
         // Check if this is a closed path with duplicate first/last point
         const hasDuplicateEndpoint = closed && path.length > 1 &&
-                                      path[0].x === path[path.length - 1].x &&
-                                      path[0].y === path[path.length - 1].y;
+            path[0].x === path[path.length - 1].x &&
+            path[0].y === path[path.length - 1].y;
 
         for (let i = 0; i < path.length; i++) {
             const current = path[i];

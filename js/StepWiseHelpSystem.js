@@ -211,7 +211,7 @@ class StepWiseHelpSystem {
             'Edit': [
                 'Click on a path to select it for editing',
                 'Drag the circular handles to move individual points',
-                'Hold Alt and click on a line segment to add a new point',
+                'Click on a line segment to add a new point',
                 'Hover over a point and press Delete/Backspace to remove it',
                 'Click on a different path to edit it, or click empty space to deselect'
             ],
