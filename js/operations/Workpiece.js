@@ -41,7 +41,6 @@ class Workpiece extends Operation {
         const currentWidth     = getOption("workpieceWidth")     || 300;
         const currentLength    = getOption("workpieceLength")    || 200;
         const currentThickness = getOption("workpieceThickness") || 19;
-        const currentGridSize  = getOption("gridSize")           || 10;
         const currentSpecies   = getOption("woodSpecies")        || 'Pine';
 
         // Build dynamic species options
@@ -64,18 +63,6 @@ class Workpiece extends Operation {
                 <div class="col-6">${fh(this.fields.workpieceThickness, formatDimension(currentThickness, true))}</div>
                 <div class="col-6">${fh(speciesField, currentSpecies)}</div>
             </div>
-
-            ${fh(this.fields.gridSize, formatDimension(currentGridSize, true))}
-
-            <div class="row g-2">
-                <div class="col-6">${fh(this.fields.showGrid,      getOption("showGrid")      !== false)}</div>
-            </div>
-            <div class="row g-2">
-                <div class="col-6">${fh(this.fields.showOrigin,    getOption("showOrigin")    !== false)}</div>
-                <div class="col-6">${fh(this.fields.showWorkpiece, getOption("showWorkpiece") !== false)}</div>
-            </div>
-
-            ${fh(this.fields.originPosition, getOption("originPosition") || 'middle-center')}
 
             <div class="alert alert-light">
                 <small class="text-muted">
@@ -245,8 +232,7 @@ class Workpiece extends Operation {
         return [
             'Configure your workpiece dimensions: width, length, and thickness.',
             'Select your wood species from the dropdown to optimize cutting parameters.',
-            'Set the grid size and toggle display options (grid, origin, workpiece outline).',
-            'Choose the origin position by clicking on the 3x3 grid - this sets where (0,0) will be located.',
+            'Use the Options popup to configure grid size, display toggles, and workpiece origin position.',
             'All changes update the canvas immediately and are saved automatically.'
         ];
     }

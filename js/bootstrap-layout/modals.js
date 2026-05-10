@@ -25,6 +25,7 @@ function createModals() {
                         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                     </div>
                     <div class="modal-body">
+                        <div id="options-workpiece-settings"></div>
                         <div class="table-responsive">
                             <table class="table options-table" id="options-table">
                                 <thead>
@@ -451,6 +452,59 @@ function showOptionsModal() {
     modal.show();
 }
 
+function renderOptionsWorkpieceSettings() {
+    const container = document.getElementById('options-workpiece-settings');
+    if (!container) return;
+
+    const workpieceController = typeof getWorkpieceConfigController === 'function'
+        ? getWorkpieceConfigController()
+        : null;
+
+    const optionKeys = ['gridSize', 'showGrid', 'showOrigin', 'showWorkpiece', 'originPosition'];
+    const fields = optionKeys
+        .map(key => workpieceController?.fields?.[key])
+        .filter(Boolean);
+
+    if (!workpieceController || fields.length !== optionKeys.length) {
+        container.innerHTML = '';
+        return;
+    }
+
+    const fh = (field, value) => PropertiesManager.fieldHTML(field, value);
+    container.innerHTML = `
+        <div class="alert alert-info mb-3">
+            <strong>Display & Origin</strong><br>
+            Configure the grid, visibility toggles, and workpiece origin from this popup.
+        </div>
+        ${fh(workpieceController.fields.gridSize, formatDimension(getOption('gridSize') || 10, true))}
+        <div class="row g-2">
+            <div class="col-md-4">${fh(workpieceController.fields.showGrid, getOption('showGrid') !== false)}</div>
+            <div class="col-md-4">${fh(workpieceController.fields.showOrigin, getOption('showOrigin') !== false)}</div>
+            <div class="col-md-4">${fh(workpieceController.fields.showWorkpiece, getOption('showWorkpiece') !== false)}</div>
+        </div>
+        ${fh(workpieceController.fields.originPosition, getOption('originPosition') || 'middle-center')}
+        <hr class="mt-4 mb-3">
+    `;
+
+    const inputs = container.querySelectorAll('input, select, textarea');
+    inputs.forEach(input => {
+        function handleInputChange() {
+            const data = collectOperationProperties(workpieceController);
+            workpieceController.updateFromProperties(data);
+            workpieceController.onPropertiesChanged(data);
+
+            if (workpieceController.fields) {
+                PropertiesManager.save(workpieceController.name, data, Object.values(workpieceController.fields));
+            }
+        }
+
+        input.addEventListener('change', handleInputChange);
+        if (input.type === 'text' || input.tagName === 'TEXTAREA') {
+            input.addEventListener('input', handleInputChange);
+        }
+    });
+}
+
 function showProjectPanelModal(title, renderCallback) {
     const modalElement = document.getElementById('projectPanelModal');
     const titleElement = document.getElementById('project-panel-modal-title');
@@ -681,8 +735,9 @@ function showDxfUnitsModal(defaultUnits) {
 function renderOptionsTable() {
     const tbody = document.getElementById('options-table-body');
     tbody.innerHTML = '';
+    renderOptionsWorkpieceSettings();
 
-    // These options are managed by the Workpiece panel — always exclude from Options panel
+    // These options are rendered in the dedicated section above the generic options table.
     const workpieceManaged = new Set([
         'showGrid', 'showOrigin', 'workpieceWidth', 'workpieceLength', 'workpieceThickness',
         'woodSpecies', 'originPosition', 'gridSize', 'showWorkpiece', 'snapGrid'
