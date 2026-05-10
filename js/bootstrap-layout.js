@@ -1337,6 +1337,7 @@ function getActiveToolpaths() {
     return toolpaths.filter(tp => tp.active === true);
 }
 
+
 function generateToolpathForSelection() {
     // Collect form data
     if (currentOperationName == null) return;

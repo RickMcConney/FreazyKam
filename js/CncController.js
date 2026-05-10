@@ -74,6 +74,33 @@ class CncController {
       redraw();
     });
 
+    this.canvas.addEventListener('dblclick', (evt) => {
+      if (evt.button !== 0) {
+        return;
+      }
+
+      const mouse = this.operationManager.currentOperation.normalizeEvent(this.canvas, evt);
+      const clickedPath = Select.getInstance().pointInPath(mouse);
+
+      if (!clickedPath || !clickedPath.creationTool || !clickedPath.creationProperties) {
+        return;
+      }
+
+      if (clickedPath.creationTool === 'Shape' || clickedPath.creationTool === 'Offset' || clickedPath.creationTool === 'Pattern' || clickedPath.creationTool === 'Curve' || clickedPath.creationTool === 'Pen') {
+        handlePathClick(clickedPath.id);
+        evt.preventDefault();
+      }
+      if (clickedPath.creationTool === 'Text') {
+        let groupId = clickedPath.textGroupId;
+        const textPaths = svgpaths.filter(p => p.textGroupId === groupId);
+        if (textPaths.length === 0) return;
+        selectMgr.unselectAll();
+        textPaths.forEach(p => selectMgr.selectPath(p));
+        showPathPropertiesEditor(clickedPath);
+        evt.preventDefault();
+      }
+    });
+
     this.canvas.addEventListener('mousemove', (evt) => {
       // Handle middle mouse button panning
       if (this.isPanning) {
@@ -220,8 +247,8 @@ class CncController {
       ctrlKey: false,
       metaKey: false,
       altKey: false,
-      preventDefault() {},
-      stopPropagation() {}
+      preventDefault() { },
+      stopPropagation() { }
     };
     this._lastTouchMouse = mouseEvt;
     return mouseEvt;
@@ -230,7 +257,7 @@ class CncController {
   setMode(mode) {
     setMode(mode);
     this.operationManager.setCurrentOperation(mode);
-    
+
   }
 
   draw() {

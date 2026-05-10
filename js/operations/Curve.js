@@ -671,6 +671,7 @@ class Curve extends Operation {
 
         // ── Edit mode ──
         if (this.editPath !== null) {
+          
             this.activeHandle = this._getHandleAt(mouse);
             if (this.activeHandle !== null) {
                 if (evt.altKey && !this.alwaysCorner) {
@@ -751,7 +752,7 @@ class Curve extends Operation {
                 return;
             }
         }
-
+ 
         this.nodes.push({ x: mouse.x, y: mouse.y, corner: this.alwaysCorner || evt.altKey });
         redrawOverlay();
     }

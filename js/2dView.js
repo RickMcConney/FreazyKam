@@ -16,7 +16,7 @@ var canvasBackgroundColor = '#eee';    // Canvas background color
 var pointFillColor = 'black';           // Point/marker fill color
 var pointStrokeColor = '#888';          // Point/marker stroke color
 var originMarkerColor = '#ff0000'         // Origin (0,0) marker color
-var axisColor = '#666';           // Axis number labels color
+var axisColor = '#888';           // Axis number labels color
 
 // Grid and Workpiece Colors
 var gridColor = '#888';                 // Grid lines (gray)
@@ -297,7 +297,7 @@ function drawGrid() {
 		ctx.lineTo(x, bottomRight.y);
 	}
 	ctx.lineWidth = 0.25;
-	ctx.strokeStyle = lineColor;
+	ctx.strokeStyle = gridColor;
 	ctx.stroke();
 
 }

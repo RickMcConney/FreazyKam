@@ -71,15 +71,15 @@ class Shape extends Operation {
                 m[0].value = 5; m[1].value = 40; m[2].value = 20;
                 return m;
             })(),
-            Belt:          makerjs.models.Belt.metaParameters,
-            Circle:        [{ title: 'radius', value: 20, min: 1, max: 100 }],
-            Ellipse:       makerjs.models.Ellipse.metaParameters,
-            Polygon:       (() => {
+            Belt: makerjs.models.Belt.metaParameters,
+            Circle: [{ title: 'radius', value: 20, min: 1, max: 100 }],
+            Ellipse: makerjs.models.Ellipse.metaParameters,
+            Polygon: (() => {
                 const m = makerjs.models.Polygon.metaParameters.slice(0, 3);
                 m[1].value = 20;
                 return m;
             })(),
-            Rectangle:     (() => {
+            Rectangle: (() => {
                 const m = makerjs.models.Rectangle.metaParameters;
                 m[0].value = 100; m[1].value = 50;
                 return m;
@@ -89,14 +89,14 @@ class Shape extends Operation {
                 m[0].value = 100; m[1].value = 50;
                 return m;
             })(),
-            Sign:          (() => {
+            Sign: (() => {
                 const m = makerjs.models.RoundRectangle.metaParameters;
                 m[0].value = 100; m[1].value = 50;
                 return m;
             })(),
-            Heart:         [
+            Heart: [
                 { title: 'radius', value: 20, min: 1, max: 100 },
-                { title: 'angle',  value: 90, min: 60, max: 120 }
+                { title: 'angle', value: 90, min: 60, max: 120 }
             ]
         };
 
@@ -295,6 +295,16 @@ class Shape extends Operation {
     }
 
     onMouseDown(canvas, evt) {
+        if (this.currentPath) {
+            const mouse = this.normalizeEvent(canvas, evt);
+            const clickedPath = Select.getInstance().pointInPath(mouse);
+
+            if (clickedPath !== this.currentPath) {
+                this.stop();
+                showToolsList();
+            }
+            return;
+        }
         var mouse = this.normalizeEvent(canvas, evt);
         let shape = this.getShape();
         this.makeShape(shape, mouse.x, mouse.y, null, null);
@@ -302,6 +312,10 @@ class Shape extends Operation {
 
     setEditPath(path) {
         this.currentPath = path;
+        if (path) {
+            selectMgr.unselectAll();
+            selectMgr.selectPath(path);
+        }
     }
 
     update(path) {

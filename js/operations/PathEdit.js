@@ -511,12 +511,19 @@ class PathEdit extends Select {
         if (!this.selectedPath || this.hoveredHandle === null) return;
 
         const path = this.selectedPath.path;
-        const minPoints = this.selectedPath.closed ? 3 : 2;
 
         // Check if we have enough points to delete one
-        if (path.length-1 <= minPoints) {
-            notify(`Cannot delete point: minimum ${minPoints} points required`);
-            return;
+        if (this.selectedPath.closed){
+            if (path.length <= 4) {
+                notify(`Cannot delete point: minimum 3 points required`);
+                return;
+            }
+        }
+        else {
+            if (path.length <= 2) {
+                notify(`Cannot delete point: minimum 2 points required`);
+                return;
+            }
         }
 
         // Add undo before deletion
