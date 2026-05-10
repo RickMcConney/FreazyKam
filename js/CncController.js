@@ -100,8 +100,11 @@ class CncController {
         var dy = y - this.panStartY;
 
         if (typeof panX !== 'undefined' && typeof panY !== 'undefined') {
-          panX = this.startPanX + dx;
-          panY = this.startPanY + dy;
+          var clampedPan = typeof clampPanToWorkpiece === 'function'
+            ? clampPanToWorkpiece(this.startPanX + dx, this.startPanY + dy)
+            : { panX: this.startPanX + dx, panY: this.startPanY + dy };
+          panX = clampedPan.panX;
+          panY = clampedPan.panY;
         }
         redraw();
         evt.preventDefault();
@@ -170,8 +173,11 @@ class CncController {
         const midX = (t0.clientX + t1.clientX) / 2;
         const midY = (t0.clientY + t1.clientY) / 2;
         if (typeof panX !== 'undefined' && typeof panY !== 'undefined') {
-          panX = this.startPanX + (midX - this.panStartX);
-          panY = this.startPanY + (midY - this.panStartY);
+          var clampedPan = typeof clampPanToWorkpiece === 'function'
+            ? clampPanToWorkpiece(this.startPanX + (midX - this.panStartX), this.startPanY + (midY - this.panStartY))
+            : { panX: this.startPanX + (midX - this.panStartX), panY: this.startPanY + (midY - this.panStartY) };
+          panX = clampedPan.panX;
+          panY = clampedPan.panY;
         }
         redraw();
         evt.preventDefault();
