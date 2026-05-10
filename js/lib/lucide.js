@@ -1,5 +1,5 @@
 /**
- * @license lucide v0.542.0 - ISC
+ * @license lucide v1.14.0 - ISC
  *
  * This source code is licensed under the ISC license.
  * See the LICENSE file in the root directory of this source tree.
@@ -45,6 +45,29 @@
     return createSVGElement([tag, attrs, iconNode]);
   };
 
+  const hasA11yProp = (props) => {
+    for (const prop in props) {
+      if (prop.startsWith("aria-") || prop === "role" || prop === "title") {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  const mergeClasses = (...classes) => classes.filter((className, index, array) => {
+    return Boolean(className) && className.trim() !== "" && array.indexOf(className) === index;
+  }).join(" ").trim();
+
+  const toCamelCase = (string) => string.replace(
+    /^([A-Z])|[\s-_]+(\w)/g,
+    (match, p1, p2) => p2 ? p2.toUpperCase() : p1.toLowerCase()
+  );
+
+  const toPascalCase = (string) => {
+    const camelCase = toCamelCase(string);
+    return camelCase.charAt(0).toUpperCase() + camelCase.slice(1);
+  };
+
   const getAttrs = (element) => Array.from(element.attributes).reduce((attrs, attr) => {
     attrs[attr.name] = attr.value;
     return attrs;
@@ -60,11 +83,6 @@
     }
     return "";
   };
-  const combineClassNames = (arrayOfClassnames) => {
-    const classNameArray = arrayOfClassnames.flatMap(getClassNames);
-    return classNameArray.map((classItem) => classItem.trim()).filter(Boolean).filter((value, index, self) => self.indexOf(value) === index).join(" ");
-  };
-  const toPascalCase = (string) => string.replace(/(\w)(\w*)(_|-|\s*)/g, (g0, g1, g2) => g1.toUpperCase() + g2.toLowerCase());
   const replaceElement = (element, { nameAttr, icons, attrs }) => {
     const iconName = element.getAttribute(nameAttr);
     if (iconName == null) return;
@@ -76,13 +94,22 @@
       );
     }
     const elementAttrs = getAttrs(element);
+    const ariaProps = hasA11yProp(elementAttrs) ? {} : { "aria-hidden": "true" };
     const iconAttrs = {
       ...defaultAttributes,
       "data-lucide": iconName,
+      ...ariaProps,
       ...attrs,
       ...elementAttrs
     };
-    const classNames = combineClassNames(["lucide", `lucide-${iconName}`, elementAttrs, attrs]);
+    const elementClassNames = getClassNames(elementAttrs);
+    const className = getClassNames(attrs);
+    const classNames = mergeClasses(
+      "lucide",
+      `lucide-${iconName}`,
+      ...elementClassNames,
+      ...className
+    );
     if (classNames) {
       Object.assign(iconAttrs, {
         class: classNames
@@ -217,22 +244,10 @@
     ["path", { d: "M16 14h1a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2h-1" }]
   ];
 
-  const AlignCenter = [
-    ["path", { d: "M17 12H7" }],
-    ["path", { d: "M19 18H5" }],
-    ["path", { d: "M21 6H3" }]
-  ];
-
   const AlignEndHorizontal = [
     ["rect", { width: "6", height: "16", x: "4", y: "2", rx: "2" }],
     ["rect", { width: "6", height: "9", x: "14", y: "9", rx: "2" }],
     ["path", { d: "M22 22H2" }]
-  ];
-
-  const AlignEndVertical = [
-    ["rect", { width: "16", height: "6", x: "2", y: "4", rx: "2" }],
-    ["rect", { width: "9", height: "6", x: "9", y: "14", rx: "2" }],
-    ["path", { d: "M22 22V2" }]
   ];
 
   const AlignHorizontalDistributeCenter = [
@@ -242,6 +257,12 @@
     ["path", { d: "M17 7V2" }],
     ["path", { d: "M7 22v-3" }],
     ["path", { d: "M7 5V2" }]
+  ];
+
+  const AlignEndVertical = [
+    ["rect", { width: "16", height: "6", x: "2", y: "4", rx: "2" }],
+    ["rect", { width: "9", height: "6", x: "9", y: "14", rx: "2" }],
+    ["path", { d: "M22 22V2" }]
   ];
 
   const AlignHorizontalDistributeEnd = [
@@ -264,47 +285,22 @@
     ["path", { d: "M12 2v20" }]
   ];
 
-  const AlignHorizontalJustifyStart = [
-    ["rect", { width: "6", height: "14", x: "6", y: "5", rx: "2" }],
-    ["rect", { width: "6", height: "10", x: "16", y: "7", rx: "2" }],
-    ["path", { d: "M2 2v20" }]
-  ];
-
   const AlignHorizontalJustifyEnd = [
     ["rect", { width: "6", height: "14", x: "2", y: "5", rx: "2" }],
     ["rect", { width: "6", height: "10", x: "12", y: "7", rx: "2" }],
     ["path", { d: "M22 2v20" }]
   ];
 
+  const AlignHorizontalJustifyStart = [
+    ["rect", { width: "6", height: "14", x: "6", y: "5", rx: "2" }],
+    ["rect", { width: "6", height: "10", x: "16", y: "7", rx: "2" }],
+    ["path", { d: "M2 2v20" }]
+  ];
+
   const AlignHorizontalSpaceAround = [
     ["rect", { width: "6", height: "10", x: "9", y: "7", rx: "2" }],
     ["path", { d: "M4 22V2" }],
     ["path", { d: "M20 22V2" }]
-  ];
-
-  const AlignHorizontalSpaceBetween = [
-    ["rect", { width: "6", height: "14", x: "3", y: "5", rx: "2" }],
-    ["rect", { width: "6", height: "10", x: "15", y: "7", rx: "2" }],
-    ["path", { d: "M3 2v20" }],
-    ["path", { d: "M21 2v20" }]
-  ];
-
-  const AlignJustify = [
-    ["path", { d: "M3 12h18" }],
-    ["path", { d: "M3 18h18" }],
-    ["path", { d: "M3 6h18" }]
-  ];
-
-  const AlignLeft = [
-    ["path", { d: "M15 12H3" }],
-    ["path", { d: "M17 18H3" }],
-    ["path", { d: "M21 6H3" }]
-  ];
-
-  const AlignRight = [
-    ["path", { d: "M21 12H9" }],
-    ["path", { d: "M21 18H7" }],
-    ["path", { d: "M21 6H3" }]
   ];
 
   const AlignStartHorizontal = [
@@ -317,6 +313,13 @@
     ["rect", { width: "9", height: "6", x: "6", y: "14", rx: "2" }],
     ["rect", { width: "16", height: "6", x: "6", y: "4", rx: "2" }],
     ["path", { d: "M2 2v20" }]
+  ];
+
+  const AlignHorizontalSpaceBetween = [
+    ["rect", { width: "6", height: "14", x: "3", y: "5", rx: "2" }],
+    ["rect", { width: "6", height: "10", x: "15", y: "7", rx: "2" }],
+    ["path", { d: "M3 2v20" }],
+    ["path", { d: "M21 2v20" }]
   ];
 
   const AlignVerticalDistributeCenter = [
@@ -388,25 +391,6 @@
     ["circle", { cx: "7", cy: "18", r: "2" }]
   ];
 
-  const Ampersand = [
-    [
-      "path",
-      {
-        d: "M17.5 12c0 4.4-3.6 8-8 8A4.5 4.5 0 0 1 5 15.5c0-6 8-4 8-8.5a3 3 0 1 0-6 0c0 3 2.5 8.5 12 13"
-      }
-    ],
-    ["path", { d: "M16 12h3" }]
-  ];
-
-  const Amphora = [
-    ["path", { d: "M10 2v5.632c0 .424-.272.795-.653.982A6 6 0 0 0 6 14c.006 4 3 7 5 8" }],
-    ["path", { d: "M10 5H8a2 2 0 0 0 0 4h.68" }],
-    ["path", { d: "M14 2v5.632c0 .424.272.795.652.982A6 6 0 0 1 18 14c0 4-3 7-5 8" }],
-    ["path", { d: "M14 5h2a2 2 0 0 1 0 4h-.68" }],
-    ["path", { d: "M18 22H6" }],
-    ["path", { d: "M9 2h6" }]
-  ];
-
   const Ampersands = [
     [
       "path",
@@ -418,10 +402,30 @@
     ]
   ];
 
+  const Ampersand = [
+    ["path", { d: "M16 12h3" }],
+    [
+      "path",
+      {
+        d: "M17.5 12a8 8 0 0 1-8 8A4.5 4.5 0 0 1 5 15.5c0-6 8-4 8-8.5a3 3 0 1 0-6 0c0 3 2.5 8.5 12 13"
+      }
+    ]
+  ];
+
+  const Amphora = [
+    ["path", { d: "M10 2v5.632c0 .424-.272.795-.653.982A6 6 0 0 0 6 14c.006 4 3 7 5 8" }],
+    ["path", { d: "M10 5H8a2 2 0 0 0 0 4h.68" }],
+    ["path", { d: "M14 2v5.632c0 .424.272.795.652.982A6 6 0 0 1 18 14c0 4-3 7-5 8" }],
+    ["path", { d: "M14 5h2a2 2 0 0 1 0 4h-.68" }],
+    ["path", { d: "M18 22H6" }],
+    ["path", { d: "M9 2h6" }]
+  ];
+
   const Anchor = [
-    ["path", { d: "M12 22V8" }],
-    ["path", { d: "M5 12H2a10 10 0 0 0 20 0h-3" }],
-    ["circle", { cx: "12", cy: "5", r: "3" }]
+    ["path", { d: "M12 6v16" }],
+    ["path", { d: "m19 13 2-1a9 9 0 0 1-18 0l2 1" }],
+    ["path", { d: "M9 11h6" }],
+    ["circle", { cx: "12", cy: "4", r: "2" }]
   ];
 
   const Angry = [
@@ -481,6 +485,14 @@
     ["path", { d: "M6 4v4" }]
   ];
 
+  const ArchiveRestore = [
+    ["rect", { width: "20", height: "5", x: "2", y: "3", rx: "1" }],
+    ["path", { d: "M4 8v11a2 2 0 0 0 2 2h2" }],
+    ["path", { d: "M20 8v11a2 2 0 0 1-2 2h-2" }],
+    ["path", { d: "m9 15 3-3 3 3" }],
+    ["path", { d: "M12 12v9" }]
+  ];
+
   const Apple = [
     ["path", { d: "M12 6.528V3a1 1 0 0 1 1-1h0" }],
     [
@@ -491,25 +503,11 @@
     ]
   ];
 
-  const ArchiveRestore = [
-    ["rect", { width: "20", height: "5", x: "2", y: "3", rx: "1" }],
-    ["path", { d: "M4 8v11a2 2 0 0 0 2 2h2" }],
-    ["path", { d: "M20 8v11a2 2 0 0 1-2 2h-2" }],
-    ["path", { d: "m9 15 3-3 3 3" }],
-    ["path", { d: "M12 12v9" }]
-  ];
-
   const ArchiveX = [
     ["rect", { width: "20", height: "5", x: "2", y: "3", rx: "1" }],
     ["path", { d: "M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" }],
     ["path", { d: "m9.5 17 5-5" }],
     ["path", { d: "m9.5 12 5 5" }]
-  ];
-
-  const Archive = [
-    ["rect", { width: "20", height: "5", x: "2", y: "3", rx: "1" }],
-    ["path", { d: "M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" }],
-    ["path", { d: "M10 12h4" }]
   ];
 
   const Armchair = [
@@ -524,11 +522,17 @@
     ["path", { d: "M19 18v2" }]
   ];
 
+  const Archive = [
+    ["rect", { width: "20", height: "5", x: "2", y: "3", rx: "1" }],
+    ["path", { d: "M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" }],
+    ["path", { d: "M10 12h4" }]
+  ];
+
   const ArrowBigDownDash = [
     [
       "path",
       {
-        d: "M15 11a1 1 0 0 0 1 1h2.939a1 1 0 0 1 .75 1.811l-6.835 6.836a1.207 1.207 0 0 1-1.707 0L4.31 13.81a1 1 0 0 1 .75-1.811H8a1 1 0 0 0 1-1V9a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1z"
+        d: "M14 8a1 1 0 0 1 1 1v2a1 1 0 0 0 1 1h3.293a.707.707 0 0 1 .5 1.207l-6.939 6.939a1.207 1.207 0 0 1-1.708 0l-6.94-6.94a.707.707 0 0 1 .5-1.206H8a1 1 0 0 0 1-1V9a1 1 0 0 1 1-1z"
       }
     ],
     ["path", { d: "M9 4h6" }]
@@ -538,7 +542,16 @@
     [
       "path",
       {
-        d: "M15 11a1 1 0 0 0 1 1h2.939a1 1 0 0 1 .75 1.811l-6.835 6.836a1.207 1.207 0 0 1-1.707 0L4.31 13.81a1 1 0 0 1 .75-1.811H8a1 1 0 0 0 1-1V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1z"
+        d: "M9 5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v6a1 1 0 0 0 1 1h3.293a.707.707 0 0 1 .5 1.207l-7.086 7.086a1 1 0 0 1-1.414 0l-7.086-7.086a.707.707 0 0 1 .5-1.207H8a1 1 0 0 0 1-1z"
+      }
+    ]
+  ];
+
+  const ArrowBigLeft = [
+    [
+      "path",
+      {
+        d: "M10.793 19.793a.707.707 0 0 0 1.207-.5V16a1 1 0 0 1 1-1h6a1 1 0 0 0 1-1v-4a1 1 0 0 0-1-1h-6a1 1 0 0 1-1-1V4.707a.707.707 0 0 0-1.207-.5l-6.94 6.94a1.207 1.207 0 0 0 0 1.707z"
       }
     ]
   ];
@@ -547,26 +560,17 @@
     [
       "path",
       {
-        d: "M13 9a1 1 0 0 1-1-1V5.061a1 1 0 0 0-1.811-.75l-6.835 6.836a1.207 1.207 0 0 0 0 1.707l6.835 6.835a1 1 0 0 0 1.811-.75V16a1 1 0 0 1 1-1h2a1 1 0 0 0 1-1v-4a1 1 0 0 0-1-1z"
+        d: "M13 9a1 1 0 0 1-1-1V4.707a.707.707 0 0 0-1.207-.5l-6.94 6.94a1.207 1.207 0 0 0 0 1.707l6.94 6.94a.707.707 0 0 0 1.207-.5V16a1 1 0 0 1 1-1h2a1 1 0 0 0 1-1v-4a1 1 0 0 0-1-1z"
       }
     ],
     ["path", { d: "M20 9v6" }]
-  ];
-
-  const ArrowBigLeft = [
-    [
-      "path",
-      {
-        d: "M13 9a1 1 0 0 1-1-1V5.061a1 1 0 0 0-1.811-.75l-6.835 6.836a1.207 1.207 0 0 0 0 1.707l6.835 6.835a1 1 0 0 0 1.811-.75V16a1 1 0 0 1 1-1h6a1 1 0 0 0 1-1v-4a1 1 0 0 0-1-1z"
-      }
-    ]
   ];
 
   const ArrowBigRightDash = [
     [
       "path",
       {
-        d: "M11 9a1 1 0 0 0 1-1V5.061a1 1 0 0 1 1.811-.75l6.836 6.836a1.207 1.207 0 0 1 0 1.707l-6.836 6.835a1 1 0 0 1-1.811-.75V16a1 1 0 0 0-1-1H9a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1z"
+        d: "M11 9a1 1 0 0 0 1-1V4.707a.707.707 0 0 1 1.207-.5l6.94 6.94a1.207 1.207 0 0 1 0 1.707l-6.94 6.94a.707.707 0 0 1-1.207-.5V16a1 1 0 0 0-1-1H9a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1z"
       }
     ],
     ["path", { d: "M4 9v6" }]
@@ -576,7 +580,7 @@
     [
       "path",
       {
-        d: "M11 9a1 1 0 0 0 1-1V5.061a1 1 0 0 1 1.811-.75l6.836 6.836a1.207 1.207 0 0 1 0 1.707l-6.836 6.835a1 1 0 0 1-1.811-.75V16a1 1 0 0 0-1-1H5a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1z"
+        d: "M13.207 19.793a.707.707 0 0 1-1.207-.5V16a1 1 0 0 0-1-1H5a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1h6a1 1 0 0 0 1-1V4.707a.707.707 0 0 1 1.207-.5l6.94 6.94a1.207 1.207 0 0 1 0 1.707z"
       }
     ]
   ];
@@ -585,7 +589,7 @@
     [
       "path",
       {
-        d: "M9 13a1 1 0 0 0-1-1H5.061a1 1 0 0 1-.75-1.811l6.836-6.835a1.207 1.207 0 0 1 1.707 0l6.835 6.835a1 1 0 0 1-.75 1.811H16a1 1 0 0 0-1 1v2a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1z"
+        d: "M14 16a1 1 0 0 0 1-1v-2a1 1 0 0 1 1-1h3.293a.707.707 0 0 0 .5-1.207l-6.939-6.939a1.207 1.207 0 0 0-1.708 0l-6.94 6.94a.707.707 0 0 0 .5 1.206H8a1 1 0 0 1 1 1v2a1 1 0 0 0 1 1z"
       }
     ],
     ["path", { d: "M9 20h6" }]
@@ -595,7 +599,7 @@
     [
       "path",
       {
-        d: "M9 13a1 1 0 0 0-1-1H5.061a1 1 0 0 1-.75-1.811l6.836-6.835a1.207 1.207 0 0 1 1.707 0l6.835 6.835a1 1 0 0 1-.75 1.811H16a1 1 0 0 0-1 1v6a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1z"
+        d: "M9 19a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1v-6a1 1 0 0 1 1-1h3.293a.707.707 0 0 0 .5-1.207l-7.086-7.086a1 1 0 0 0-1.414 0l-7.086 7.086a.707.707 0 0 0 .5 1.207H8a1 1 0 0 1 1 1z"
       }
     ]
   ];
@@ -616,18 +620,18 @@
     ["rect", { x: "15", y: "14", width: "4", height: "6", ry: "2" }]
   ];
 
+  const ArrowDownFromLine = [
+    ["path", { d: "M19 3H5" }],
+    ["path", { d: "M12 21V7" }],
+    ["path", { d: "m6 15 6 6 6-6" }]
+  ];
+
   const ArrowDownAZ = [
     ["path", { d: "m3 16 4 4 4-4" }],
     ["path", { d: "M7 20V4" }],
     ["path", { d: "M20 8h-5" }],
     ["path", { d: "M15 10V6.5a2.5 2.5 0 0 1 5 0V10" }],
     ["path", { d: "M15 14h5l-5 6h5" }]
-  ];
-
-  const ArrowDownFromLine = [
-    ["path", { d: "M19 3H5" }],
-    ["path", { d: "M12 21V7" }],
-    ["path", { d: "m6 15 6 6 6-6" }]
   ];
 
   const ArrowDownLeft = [
@@ -654,17 +658,17 @@
     ["circle", { cx: "12", cy: "21", r: "1" }]
   ];
 
-  const ArrowDownToLine = [
-    ["path", { d: "M12 17V3" }],
-    ["path", { d: "m6 11 6 6 6-6" }],
-    ["path", { d: "M19 21H5" }]
-  ];
-
   const ArrowDownUp = [
     ["path", { d: "m3 16 4 4 4-4" }],
     ["path", { d: "M7 20V4" }],
     ["path", { d: "m21 8-4-4-4 4" }],
     ["path", { d: "M17 4v16" }]
+  ];
+
+  const ArrowDownToLine = [
+    ["path", { d: "M12 17V3" }],
+    ["path", { d: "m6 11 6 6 6-6" }],
+    ["path", { d: "M19 21H5" }]
   ];
 
   const ArrowDownWideNarrow = [
@@ -707,15 +711,15 @@
     ["path", { d: "M7 12h14" }]
   ];
 
-  const ArrowLeft = [
-    ["path", { d: "m12 19-7-7 7-7" }],
-    ["path", { d: "M19 12H5" }]
-  ];
-
   const ArrowRightFromLine = [
     ["path", { d: "M3 5v14" }],
     ["path", { d: "M21 12H7" }],
     ["path", { d: "m15 18 6-6-6-6" }]
+  ];
+
+  const ArrowLeft = [
+    ["path", { d: "m12 19-7-7 7-7" }],
+    ["path", { d: "M19 12H5" }]
   ];
 
   const ArrowRightLeft = [
@@ -736,20 +740,20 @@
     ["path", { d: "m12 5 7 7-7 7" }]
   ];
 
-  const ArrowUp01 = [
-    ["path", { d: "m3 8 4-4 4 4" }],
-    ["path", { d: "M7 4v16" }],
-    ["rect", { x: "15", y: "4", width: "4", height: "6", ry: "2" }],
-    ["path", { d: "M17 20v-6h-2" }],
-    ["path", { d: "M15 20h4" }]
-  ];
-
   const ArrowUp10 = [
     ["path", { d: "m3 8 4-4 4 4" }],
     ["path", { d: "M7 4v16" }],
     ["path", { d: "M17 10V4h-2" }],
     ["path", { d: "M15 10h4" }],
     ["rect", { x: "15", y: "14", width: "4", height: "6", ry: "2" }]
+  ];
+
+  const ArrowUp01 = [
+    ["path", { d: "m3 8 4-4 4 4" }],
+    ["path", { d: "M7 4v16" }],
+    ["rect", { x: "15", y: "4", width: "4", height: "6", ry: "2" }],
+    ["path", { d: "M17 20v-6h-2" }],
+    ["path", { d: "M15 20h4" }]
   ];
 
   const ArrowUpAZ = [
@@ -797,18 +801,23 @@
     ["path", { d: "M7 17 17 7" }]
   ];
 
-  const ArrowUpToLine = [
-    ["path", { d: "M5 3h14" }],
-    ["path", { d: "m18 13-6-6-6 6" }],
-    ["path", { d: "M12 7v14" }]
-  ];
-
   const ArrowUpWideNarrow = [
     ["path", { d: "m3 8 4-4 4 4" }],
     ["path", { d: "M7 4v16" }],
     ["path", { d: "M11 12h10" }],
     ["path", { d: "M11 16h7" }],
     ["path", { d: "M11 20h4" }]
+  ];
+
+  const ArrowUpToLine = [
+    ["path", { d: "M5 3h14" }],
+    ["path", { d: "m18 13-6-6-6 6" }],
+    ["path", { d: "M12 7v14" }]
+  ];
+
+  const ArrowUp = [
+    ["path", { d: "m5 12 7-7 7 7" }],
+    ["path", { d: "M12 19V5" }]
   ];
 
   const ArrowUpZA = [
@@ -819,9 +828,10 @@
     ["path", { d: "M20 18h-5" }]
   ];
 
-  const ArrowUp = [
-    ["path", { d: "m5 12 7-7 7 7" }],
-    ["path", { d: "M12 19V5" }]
+  const Asterisk = [
+    ["path", { d: "M12 6v12" }],
+    ["path", { d: "M17.196 9 6.804 15" }],
+    ["path", { d: "m6.804 9 10.392 6" }]
   ];
 
   const ArrowsUpFromLine = [
@@ -832,10 +842,13 @@
     ["path", { d: "M4 21h16" }]
   ];
 
-  const Asterisk = [
-    ["path", { d: "M12 6v12" }],
-    ["path", { d: "M17.196 9 6.804 15" }],
-    ["path", { d: "m6.804 9 10.392 6" }]
+  const Astroid = [
+    [
+      "path",
+      {
+        d: "M12.983 21.186a1 1 0 0 1-1.966 0 10 10 0 0 0-8.203-8.203 1 1 0 0 1 0-1.966 10 10 0 0 0 8.203-8.203 1 1 0 0 1 1.966 0 10 10 0 0 0 8.203 8.203 1 1 0 0 1 0 1.966 10 10 0 0 0-8.203 8.203"
+      }
+    ]
   ];
 
   const AtSign = [
@@ -897,13 +910,6 @@
     ]
   ];
 
-  const Axis3d = [
-    ["path", { d: "M13.5 10.5 15 9" }],
-    ["path", { d: "M4 4v15a1 1 0 0 0 1 1h15" }],
-    ["path", { d: "M4.293 19.707 6 18" }],
-    ["path", { d: "m9 15 1.5-1.5" }]
-  ];
-
   const Baby = [
     ["path", { d: "M10 16c.5.3 1.2.5 2 .5s1.5-.2 2-.5" }],
     ["path", { d: "M15 12h.01" }],
@@ -914,6 +920,13 @@
       }
     ],
     ["path", { d: "M9 12h.01" }]
+  ];
+
+  const Axis3d = [
+    ["path", { d: "M13.5 10.5 15 9" }],
+    ["path", { d: "M4 4v15a1 1 0 0 0 1 1h15" }],
+    ["path", { d: "M4.293 19.707 6 18" }],
+    ["path", { d: "m9 15 1.5-1.5" }]
   ];
 
   const Backpack = [
@@ -1059,15 +1072,15 @@
     ["path", { d: "M8 16h7" }]
   ];
 
-  const BadgeRussianRuble = [
+  const BadgeQuestionMark = [
     [
       "path",
       {
         d: "M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"
       }
     ],
-    ["path", { d: "M9 16h5" }],
-    ["path", { d: "M9 12h5a2 2 0 1 0 0-4h-3v9" }]
+    ["path", { d: "M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" }],
+    ["line", { x1: "12", x2: "12.01", y1: "17", y2: "17" }]
   ];
 
   const BadgeSwissFranc = [
@@ -1082,15 +1095,15 @@
     ["path", { d: "M9 16h4" }]
   ];
 
-  const BadgeQuestionMark = [
+  const BadgeRussianRuble = [
     [
       "path",
       {
         d: "M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"
       }
     ],
-    ["path", { d: "M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" }],
-    ["line", { x1: "12", x2: "12.01", y1: "17", y2: "17" }]
+    ["path", { d: "M9 16h5" }],
+    ["path", { d: "M9 12h5a2 2 0 1 0 0-4h-3v9" }]
   ];
 
   const BadgeTurkishLira = [
@@ -1132,6 +1145,17 @@
     ["circle", { cx: "9", cy: "20", r: "2" }]
   ];
 
+  const Ban = [
+    ["circle", { cx: "12", cy: "12", r: "10" }],
+    ["path", { d: "M4.929 4.929 19.07 19.071" }]
+  ];
+
+  const Balloon = [
+    ["path", { d: "M12 16v1a2 2 0 0 0 2 2h1a2 2 0 0 1 2 2v1" }],
+    ["path", { d: "M12 6a2 2 0 0 1 2 2" }],
+    ["path", { d: "M18 8c0 4-3.5 8-6 8s-6-4-6-8a6 6 0 0 1 12 0" }]
+  ];
+
   const Banana = [
     ["path", { d: "M4 13c3.5-2 8-2 10 2a5.5 5.5 0 0 1 8 5" }],
     [
@@ -1142,28 +1166,14 @@
     ]
   ];
 
-  const Ban = [
-    ["path", { d: "M4.929 4.929 19.07 19.071" }],
-    ["circle", { cx: "12", cy: "12", r: "10" }]
-  ];
-
   const Bandage = [
     ["path", { d: "M10 10.01h.01" }],
     ["path", { d: "M10 14.01h.01" }],
     ["path", { d: "M14 10.01h.01" }],
     ["path", { d: "M14 14.01h.01" }],
-    ["path", { d: "M18 6v11.5" }],
+    ["path", { d: "M18 6v12" }],
     ["path", { d: "M6 6v12" }],
     ["rect", { x: "2", y: "6", width: "20", height: "12", rx: "2" }]
-  ];
-
-  const BanknoteArrowDown = [
-    ["path", { d: "M12 18H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5" }],
-    ["path", { d: "m16 19 3 3 3-3" }],
-    ["path", { d: "M18 12h.01" }],
-    ["path", { d: "M19 16v6" }],
-    ["path", { d: "M6 12h.01" }],
-    ["circle", { cx: "12", cy: "12", r: "2" }]
   ];
 
   const BanknoteArrowUp = [
@@ -1171,6 +1181,15 @@
     ["path", { d: "M18 12h.01" }],
     ["path", { d: "M19 22v-6" }],
     ["path", { d: "m22 19-3-3-3 3" }],
+    ["path", { d: "M6 12h.01" }],
+    ["circle", { cx: "12", cy: "12", r: "2" }]
+  ];
+
+  const BanknoteArrowDown = [
+    ["path", { d: "M12 18H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5" }],
+    ["path", { d: "m16 19 3 3 3-3" }],
+    ["path", { d: "M18 12h.01" }],
+    ["path", { d: "M19 16v6" }],
     ["path", { d: "M6 12h.01" }],
     ["circle", { cx: "12", cy: "12", r: "2" }]
   ];
@@ -1198,12 +1217,6 @@
     ["path", { d: "M21 5v14" }]
   ];
 
-  const Baseline = [
-    ["path", { d: "M4 20h16" }],
-    ["path", { d: "m6 16 6-12 6 12" }],
-    ["path", { d: "M8 12h8" }]
-  ];
-
   const Barrel = [
     ["path", { d: "M10 3a41 41 0 0 0 0 18" }],
     ["path", { d: "M14 3a41 41 0 0 1 0 18" }],
@@ -1215,6 +1228,12 @@
     ],
     ["path", { d: "M3.84 17h16.32" }],
     ["path", { d: "M3.84 7h16.32" }]
+  ];
+
+  const Baseline = [
+    ["path", { d: "M4 20h16" }],
+    ["path", { d: "m6 16 6-12 6 12" }],
+    ["path", { d: "M8 12h8" }]
   ];
 
   const Bath = [
@@ -1274,17 +1293,24 @@
     ["rect", { x: "2", y: "6", width: "16", height: "12", rx: "2" }]
   ];
 
+  const BeanOff = [
+    ["path", { d: "M9 9c-.64.64-1.521.954-2.402 1.165A6 6 0 0 0 8 22a13.96 13.96 0 0 0 9.9-4.1" }],
+    ["path", { d: "M10.75 5.093A6 6 0 0 1 22 8c0 2.411-.61 4.68-1.683 6.66" }],
+    ["path", { d: "M5.341 10.62a4 4 0 0 0 6.487 1.208M10.62 5.341a4.015 4.015 0 0 1 2.039 2.04" }],
+    ["line", { x1: "2", x2: "22", y1: "2", y2: "22" }]
+  ];
+
   const Beaker = [
     ["path", { d: "M4.5 3h15" }],
     ["path", { d: "M6 3v16a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V3" }],
     ["path", { d: "M6 14h12" }]
   ];
 
-  const BeanOff = [
-    ["path", { d: "M9 9c-.64.64-1.521.954-2.402 1.165A6 6 0 0 0 8 22a13.96 13.96 0 0 0 9.9-4.1" }],
-    ["path", { d: "M10.75 5.093A6 6 0 0 1 22 8c0 2.411-.61 4.68-1.683 6.66" }],
-    ["path", { d: "M5.341 10.62a4 4 0 0 0 6.487 1.208M10.62 5.341a4.015 4.015 0 0 1 2.039 2.04" }],
-    ["line", { x1: "2", x2: "22", y1: "2", y2: "22" }]
+  const BedDouble = [
+    ["path", { d: "M2 20v-8a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v8" }],
+    ["path", { d: "M4 10V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v4" }],
+    ["path", { d: "M12 4v6" }],
+    ["path", { d: "M2 18h20" }]
   ];
 
   const Bean = [
@@ -1297,17 +1323,24 @@
     ["path", { d: "M5.341 10.62a4 4 0 1 0 5.279-5.28" }]
   ];
 
-  const BedDouble = [
-    ["path", { d: "M2 20v-8a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v8" }],
-    ["path", { d: "M4 10V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v4" }],
-    ["path", { d: "M12 4v6" }],
-    ["path", { d: "M2 18h20" }]
-  ];
-
   const BedSingle = [
     ["path", { d: "M3 20v-8a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v8" }],
     ["path", { d: "M5 10V6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v4" }],
     ["path", { d: "M3 18h18" }]
+  ];
+
+  const BeefOff = [
+    ["path", { d: "M11.771 6.109a2.5 2.5 0 0 1 3.12 3.12" }],
+    ["path", { d: "M17.852 12.185a6.5 6.5 0 0 0-9.035-9.04" }],
+    ["path", { d: "M18.013 18.013C15.029 20.349 10.831 22 7 22a3 3 0 0 1-2.68-1.66L2.4 16.5" }],
+    ["path", { d: "m18.5 6 2.19 4.5a6.48 6.48 0 0 1-.139 4.393" }],
+    ["path", { d: "m2 2 20 20" }],
+    [
+      "path",
+      {
+        d: "M6.355 6.37a7 7 0 0 0-.075.23c-1.1 3.13-.78 3.9-3.18 6.08A3 3 0 0 0 5 18c3.356 0 6.993-1.267 9.85-3.151"
+      }
+    ]
   ];
 
   const Bed = [
@@ -1362,15 +1395,27 @@
     ["path", { d: "M5 8v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V8" }]
   ];
 
+  const BellCheck = [
+    ["path", { d: "M10.268 21a2 2 0 0 0 3.464 0" }],
+    ["path", { d: "m15 8 2 2 4-4" }],
+    ["path", { d: "M16.8607 4.4824A6 6 0 0 0 6 8C6 12.499 4.589 13.956 3.262 15.326" }],
+    [
+      "path",
+      {
+        d: "M3.262 15.326A1 1 0 0 0 4 17H20A1 1 0 0 0 20.74 15.327C20.209 14.779 19.665 14.218 19.203 13.454"
+      }
+    ]
+  ];
+
   const BellDot = [
     ["path", { d: "M10.268 21a2 2 0 0 0 3.464 0" }],
     [
       "path",
       {
-        d: "M13.916 2.314A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.74 7.327A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673 9 9 0 0 1-.585-.665"
+        d: "M11.68 2.009A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673c-.824-.85-1.678-1.731-2.21-3.348"
       }
     ],
-    ["circle", { cx: "18", cy: "8", r: "3" }]
+    ["circle", { cx: "18", cy: "5", r: "3" }]
   ];
 
   const BellElectric = [
@@ -1382,6 +1427,13 @@
     ["rect", { x: "4", y: "16", width: "10", height: "6", rx: "2" }]
   ];
 
+  const BellOff = [
+    ["path", { d: "M10.268 21a2 2 0 0 0 3.464 0" }],
+    ["path", { d: "M17 17H4a1 1 0 0 1-.74-1.673C4.59 13.956 6 12.499 6 8a6 6 0 0 1 .258-1.742" }],
+    ["path", { d: "m2 2 20 20" }],
+    ["path", { d: "M8.668 3.01A6 6 0 0 1 18 8c0 2.687.77 4.653 1.707 6.05" }]
+  ];
+
   const BellMinus = [
     ["path", { d: "M10.268 21a2 2 0 0 0 3.464 0" }],
     ["path", { d: "M15 8h6" }],
@@ -1391,13 +1443,6 @@
         d: "M16.243 3.757A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673A9.4 9.4 0 0 1 18.667 12"
       }
     ]
-  ];
-
-  const BellOff = [
-    ["path", { d: "M10.268 21a2 2 0 0 0 3.464 0" }],
-    ["path", { d: "M17 17H4a1 1 0 0 1-.74-1.673C4.59 13.956 6 12.499 6 8a6 6 0 0 1 .258-1.742" }],
-    ["path", { d: "m2 2 20 20" }],
-    ["path", { d: "M8.668 3.01A6 6 0 0 1 18 8c0 2.687.77 4.653 1.707 6.05" }]
   ];
 
   const BellPlus = [
@@ -1446,16 +1491,16 @@
     ["rect", { width: "13", height: "7", x: "8", y: "14", rx: "1" }]
   ];
 
-  const BetweenVerticalStart = [
-    ["rect", { width: "7", height: "13", x: "3", y: "8", rx: "1" }],
-    ["path", { d: "m15 2-3 3-3-3" }],
-    ["rect", { width: "7", height: "13", x: "14", y: "8", rx: "1" }]
-  ];
-
   const BetweenVerticalEnd = [
     ["rect", { width: "7", height: "13", x: "3", y: "3", rx: "1" }],
     ["path", { d: "m9 22 3-3 3 3" }],
     ["rect", { width: "7", height: "13", x: "14", y: "3", rx: "1" }]
+  ];
+
+  const BetweenVerticalStart = [
+    ["rect", { width: "7", height: "13", x: "3", y: "8", rx: "1" }],
+    ["path", { d: "m15 2-3 3-3-3" }],
+    ["rect", { width: "7", height: "13", x: "14", y: "8", rx: "1" }]
   ];
 
   const BicepsFlexed = [
@@ -1526,6 +1571,15 @@
     ["path", { d: "M7 18a6 6 0 0 0 3.84-10.61" }]
   ];
 
+  const Birdhouse = [
+    ["path", { d: "M12 18v4" }],
+    ["path", { d: "m17 18 1.956-11.468" }],
+    ["path", { d: "m3 8 7.82-5.615a2 2 0 0 1 2.36 0L21 8" }],
+    ["path", { d: "M4 18h16" }],
+    ["path", { d: "M7 18 5.044 6.532" }],
+    ["circle", { cx: "12", cy: "10", r: "2" }]
+  ];
+
   const Bitcoin = [
     [
       "path",
@@ -1572,16 +1626,25 @@
     ["path", { d: "M14.5 9.5 17 7l-5-5v4.5" }]
   ];
 
+  const Bluetooth = [["path", { d: "m7 7 10 10-5 5V2l5 5L7 17" }]];
+
   const BluetoothSearching = [
     ["path", { d: "m7 7 10 10-5 5V2l5 5L7 17" }],
     ["path", { d: "M20.83 14.83a4 4 0 0 0 0-5.66" }],
     ["path", { d: "M18 12h.01" }]
   ];
 
-  const Bluetooth = [["path", { d: "m7 7 10 10-5 5V2l5 5L7 17" }]];
-
   const Bold = [
     ["path", { d: "M6 12h9a4 4 0 0 1 0 8H7a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h7a4 4 0 0 1 0 8" }]
+  ];
+
+  const Bomb = [
+    ["circle", { cx: "11", cy: "13", r: "9" }],
+    [
+      "path",
+      { d: "M14.35 4.65 16.3 2.7a2.41 2.41 0 0 1 3.4 0l1.6 1.6a2.4 2.4 0 0 1 0 3.4l-1.95 1.95" }
+    ],
+    ["path", { d: "m22 2-1.5 1.5" }]
   ];
 
   const Bolt = [
@@ -1592,15 +1655,6 @@
       }
     ],
     ["circle", { cx: "12", cy: "12", r: "4" }]
-  ];
-
-  const Bomb = [
-    ["circle", { cx: "11", cy: "13", r: "9" }],
-    [
-      "path",
-      { d: "M14.35 4.65 16.3 2.7a2.41 2.41 0 0 1 3.4 0l1.6 1.6a2.4 2.4 0 0 1 0 3.4l-1.95 1.95" }
-    ],
-    ["path", { d: "m22 2-1.5 1.5" }]
   ];
 
   const Bone = [
@@ -1713,18 +1767,11 @@
   ];
 
   const BookKey = [
-    ["path", { d: "m19 3 1 1" }],
-    ["path", { d: "m20 2-4.5 4.5" }],
-    ["path", { d: "M20 7.898V21a1 1 0 0 1-1 1H6.5a1 1 0 0 1 0-5H20" }],
-    ["path", { d: "M4 19.5v-15A2.5 2.5 0 0 1 6.5 2h7.844" }],
-    ["circle", { cx: "14", cy: "8", r: "2" }]
-  ];
-
-  const BookLock = [
-    ["path", { d: "M18 6V4a2 2 0 1 0-4 0v2" }],
-    ["path", { d: "M20 15v6a1 1 0 0 1-1 1H6.5a1 1 0 0 1 0-5H20" }],
-    ["path", { d: "M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H10" }],
-    ["rect", { x: "12", y: "6", width: "8", height: "5", rx: "1" }]
+    ["path", { d: "M13 2H6.5A2.5 2.5 0 0 0 4 4.5v15" }],
+    ["path", { d: "M17 2v6" }],
+    ["path", { d: "M17 4h2" }],
+    ["path", { d: "M20 15.2V21a1 1 0 0 1-1 1H6.5a1 1 0 0 1 0-5H20" }],
+    ["circle", { cx: "17", cy: "10", r: "2" }]
   ];
 
   const BookMarked = [
@@ -1733,6 +1780,13 @@
       "path",
       { d: "M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H19a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H6.5a1 1 0 0 1 0-5H20" }
     ]
+  ];
+
+  const BookLock = [
+    ["path", { d: "M18 6V4a2 2 0 1 0-4 0v2" }],
+    ["path", { d: "M20 15v6a1 1 0 0 1-1 1H6.5a1 1 0 0 1 0-5H20" }],
+    ["path", { d: "M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H10" }],
+    ["rect", { x: "12", y: "6", width: "8", height: "5", rx: "1" }]
   ];
 
   const BookMinus = [
@@ -1768,6 +1822,13 @@
     ["path", { d: "M6 8h2" }]
   ];
 
+  const BookSearch = [
+    ["path", { d: "M11 22H5.5a1 1 0 0 1 0-5h4.501" }],
+    ["path", { d: "m21 22-1.879-1.878" }],
+    ["path", { d: "M3 19.5v-15A2.5 2.5 0 0 1 5.5 2H18a1 1 0 0 1 1 1v8" }],
+    ["circle", { cx: "17", cy: "18", r: "3" }]
+  ];
+
   const BookOpen = [
     ["path", { d: "M12 7v14" }],
     [
@@ -1796,16 +1857,6 @@
     ["path", { d: "M8 7h6" }]
   ];
 
-  const BookType = [
-    ["path", { d: "M10 13h4" }],
-    ["path", { d: "M12 6v7" }],
-    ["path", { d: "M16 8V6H8v2" }],
-    [
-      "path",
-      { d: "M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H19a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H6.5a1 1 0 0 1 0-5H20" }
-    ]
-  ];
-
   const BookUp2 = [
     ["path", { d: "M12 13V7" }],
     ["path", { d: "M18 2h1a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H6.5a1 1 0 0 1 0-5H20" }],
@@ -1821,6 +1872,16 @@
       { d: "M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H19a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H6.5a1 1 0 0 1 0-5H20" }
     ],
     ["path", { d: "m9 10 3-3 3 3" }]
+  ];
+
+  const BookType = [
+    ["path", { d: "M10 13h4" }],
+    ["path", { d: "M12 6v7" }],
+    ["path", { d: "M16 8V6H8v2" }],
+    [
+      "path",
+      { d: "M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H19a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H6.5a1 1 0 0 1 0-5H20" }
+    ]
   ];
 
   const BookUser = [
@@ -1849,28 +1910,76 @@
   ];
 
   const BookmarkCheck = [
-    ["path", { d: "m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2Z" }],
+    [
+      "path",
+      {
+        d: "M17 3a2 2 0 0 1 2 2v15a1 1 0 0 1-1.496.868l-4.512-2.578a2 2 0 0 0-1.984 0l-4.512 2.578A1 1 0 0 1 5 20V5a2 2 0 0 1 2-2z"
+      }
+    ],
     ["path", { d: "m9 10 2 2 4-4" }]
   ];
 
   const BookmarkMinus = [
-    ["path", { d: "m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z" }],
-    ["line", { x1: "15", x2: "9", y1: "10", y2: "10" }]
+    ["path", { d: "M15 10H9" }],
+    [
+      "path",
+      {
+        d: "M17 3a2 2 0 0 1 2 2v15a1 1 0 0 1-1.496.868l-4.512-2.578a2 2 0 0 0-1.984 0l-4.512 2.578A1 1 0 0 1 5 20V5a2 2 0 0 1 2-2z"
+      }
+    ]
+  ];
+
+  const BookmarkOff = [
+    [
+      "path",
+      {
+        d: "M19 19v1a1 1 0 0 1-1.496.868l-4.512-2.578a2 2 0 0 0-1.984 0l-4.512 2.578A1 1 0 0 1 5 20V5"
+      }
+    ],
+    ["path", { d: "m2 2 20 20" }],
+    ["path", { d: "M8.656 3H17a2 2 0 0 1 2 2v8.344" }]
   ];
 
   const BookmarkPlus = [
-    ["path", { d: "m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z" }],
-    ["line", { x1: "12", x2: "12", y1: "7", y2: "13" }],
-    ["line", { x1: "15", x2: "9", y1: "10", y2: "10" }]
+    ["path", { d: "M12 7v6" }],
+    ["path", { d: "M15 10H9" }],
+    [
+      "path",
+      {
+        d: "M17 3a2 2 0 0 1 2 2v15a1 1 0 0 1-1.496.868l-4.512-2.578a2 2 0 0 0-1.984 0l-4.512 2.578A1 1 0 0 1 5 20V5a2 2 0 0 1 2-2z"
+      }
+    ]
   ];
 
   const BookmarkX = [
-    ["path", { d: "m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2Z" }],
     ["path", { d: "m14.5 7.5-5 5" }],
+    [
+      "path",
+      {
+        d: "M17 3a2 2 0 0 1 2 2v15a1 1 0 0 1-1.496.868l-4.512-2.578a2 2 0 0 0-1.984 0l-4.512 2.578A1 1 0 0 1 5 20V5a2 2 0 0 1 2-2z"
+      }
+    ],
     ["path", { d: "m9.5 7.5 5 5" }]
   ];
 
-  const Bookmark = [["path", { d: "m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z" }]];
+  const Bookmark = [
+    [
+      "path",
+      {
+        d: "M17 3a2 2 0 0 1 2 2v15a1 1 0 0 1-1.496.868l-4.512-2.578a2 2 0 0 0-1.984 0l-4.512 2.578A1 1 0 0 1 5 20V5a2 2 0 0 1 2-2z"
+      }
+    ]
+  ];
+
+  const BoomBox = [
+    ["path", { d: "M4 9V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v4" }],
+    ["path", { d: "M8 8v1" }],
+    ["path", { d: "M12 8v1" }],
+    ["path", { d: "M16 8v1" }],
+    ["rect", { width: "20", height: "12", x: "2", y: "9", rx: "2" }],
+    ["circle", { cx: "8", cy: "15", r: "2" }],
+    ["circle", { cx: "16", cy: "15", r: "2" }]
+  ];
 
   const BotMessageSquare = [
     ["path", { d: "M12 6V2H8" }],
@@ -1884,16 +1993,6 @@
       }
     ],
     ["path", { d: "M9 11v2" }]
-  ];
-
-  const BoomBox = [
-    ["path", { d: "M4 9V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v4" }],
-    ["path", { d: "M8 8v1" }],
-    ["path", { d: "M12 8v1" }],
-    ["path", { d: "M16 8v1" }],
-    ["rect", { width: "20", height: "12", x: "2", y: "9", rx: "2" }],
-    ["circle", { cx: "8", cy: "15", r: "2" }],
-    ["circle", { cx: "16", cy: "15", r: "2" }]
   ];
 
   const BotOff = [
@@ -1915,16 +2014,6 @@
     ["path", { d: "M9 13v2" }]
   ];
 
-  const BottleWine = [
-    [
-      "path",
-      {
-        d: "M10 3a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a6 6 0 0 0 1.2 3.6l.6.8A6 6 0 0 1 17 13v8a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1v-8a6 6 0 0 1 1.2-3.6l.6-.8A6 6 0 0 0 10 5z"
-      }
-    ],
-    ["path", { d: "M17 13h-4a1 1 0 0 0-1 1v3a1 1 0 0 0 1 1h4" }]
-  ];
-
   const BowArrow = [
     ["path", { d: "M17 3h4v4" }],
     ["path", { d: "M18.575 11.082a13 13 0 0 1 1.048 9.027 1.17 1.17 0 0 1-1.914.597L14 17" }],
@@ -1936,6 +2025,16 @@
       }
     ],
     ["path", { d: "M9.707 14.293 21 3" }]
+  ];
+
+  const BottleWine = [
+    [
+      "path",
+      {
+        d: "M10 3a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a6 6 0 0 0 1.2 3.6l.6.8A6 6 0 0 1 17 13v8a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1v-8a6 6 0 0 1 1.2-3.6l.6-.8A6 6 0 0 0 10 5z"
+      }
+    ],
+    ["path", { d: "M17 13h-4a1 1 0 0 0-1 1v3a1 1 0 0 0 1 1h4" }]
   ];
 
   const Box = [
@@ -2034,17 +2133,6 @@
     ["circle", { cx: "12", cy: "12", r: "3" }]
   ];
 
-  const Brain = [
-    ["path", { d: "M12 18V5" }],
-    ["path", { d: "M15 13a4.17 4.17 0 0 1-3-4 4.17 4.17 0 0 1-3 4" }],
-    ["path", { d: "M17.598 6.5A3 3 0 1 0 12 5a3 3 0 1 0-5.598 1.5" }],
-    ["path", { d: "M17.997 5.125a4 4 0 0 1 2.526 5.77" }],
-    ["path", { d: "M18 18a4 4 0 0 0 2-7.464" }],
-    ["path", { d: "M19.967 17.483A4 4 0 1 1 12 18a4 4 0 1 1-7.967-.517" }],
-    ["path", { d: "M6 18a4 4 0 0 1-2-7.464" }],
-    ["path", { d: "M6.003 5.125a4 4 0 0 0-2.526 5.77" }]
-  ];
-
   const BrickWallFire = [
     ["path", { d: "M16 3v2.107" }],
     [
@@ -2058,6 +2146,17 @@
     ["path", { d: "M3 9h8.228" }],
     ["path", { d: "M8 15v6" }],
     ["path", { d: "M8 3v6" }]
+  ];
+
+  const Brain = [
+    ["path", { d: "M12 18V5" }],
+    ["path", { d: "M15 13a4.17 4.17 0 0 1-3-4 4.17 4.17 0 0 1-3 4" }],
+    ["path", { d: "M17.598 6.5A3 3 0 1 0 12 5a3 3 0 1 0-5.598 1.5" }],
+    ["path", { d: "M17.997 5.125a4 4 0 0 1 2.526 5.77" }],
+    ["path", { d: "M18 18a4 4 0 0 0 2-7.464" }],
+    ["path", { d: "M19.967 17.483A4 4 0 1 1 12 18a4 4 0 1 1-7.967-.517" }],
+    ["path", { d: "M6 18a4 4 0 0 1-2-7.464" }],
+    ["path", { d: "M6.003 5.125a4 4 0 0 0-2.526 5.77" }]
   ];
 
   const BrickWallShield = [
@@ -2087,6 +2186,13 @@
     ["path", { d: "M8 3v6" }]
   ];
 
+  const BriefcaseBusiness = [
+    ["path", { d: "M12 12h.01" }],
+    ["path", { d: "M16 6V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2" }],
+    ["path", { d: "M22 13a18.15 18.15 0 0 1-20 0" }],
+    ["rect", { width: "20", height: "14", x: "2", y: "6", rx: "2" }]
+  ];
+
   const BriefcaseConveyorBelt = [
     ["path", { d: "M10 20v2" }],
     ["path", { d: "M14 20v2" }],
@@ -2095,13 +2201,6 @@
     ["path", { d: "M6 20v2" }],
     ["path", { d: "M8 16V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v12" }],
     ["rect", { x: "4", y: "6", width: "16", height: "10", rx: "2" }]
-  ];
-
-  const BriefcaseBusiness = [
-    ["path", { d: "M12 12h.01" }],
-    ["path", { d: "M16 6V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2" }],
-    ["path", { d: "M22 13a18.15 18.15 0 0 1-20 0" }],
-    ["rect", { width: "20", height: "14", x: "2", y: "6", rx: "2" }]
   ];
 
   const BriefcaseMedical = [
@@ -2129,10 +2228,10 @@
     [
       "path",
       {
-        d: "M19 13.99a1 1 0 0 0 1-1V12a2 2 0 0 0-2-2h-3a1 1 0 0 1-1-1V4a2 2 0 0 0-4 0v5a1 1 0 0 1-1 1H6a2 2 0 0 0-2 2v.99a1 1 0 0 0 1 1"
+        d: "M19 14a1 1 0 0 0 1-1v-1a2 2 0 0 0-2-2h-3a1 1 0 0 1-1-1V4a2 2 0 0 0-4 0v5a1 1 0 0 1-1 1H6a2 2 0 0 0-2 2v1a1 1 0 0 0 1 1"
       }
     ],
-    ["path", { d: "M5 14h14l1.973 6.767A1 1 0 0 1 20 22H4a1 1 0 0 1-.973-1.233z" }],
+    ["path", { d: "M19 14H5l-1.973 6.767A1 1 0 0 0 4 22h16a1 1 0 0 0 .973-1.233z" }],
     ["path", { d: "m8 22 1-4" }]
   ];
 
@@ -2142,23 +2241,26 @@
     ["path", { d: "M9.969 17.031 21.378 5.624a1 1 0 0 0-3.002-3.002L6.967 14.031" }]
   ];
 
+  const BugOff = [
+    ["path", { d: "M12 20v-8" }],
+    ["path", { d: "M12.656 7H14a4 4 0 0 1 4 4v1.344" }],
+    ["path", { d: "M14.12 3.88 16 2" }],
+    ["path", { d: "M17.123 17.123A6 6 0 0 1 6 14v-3a4 4 0 0 1 1.72-3.287" }],
+    ["path", { d: "m2 2 20 20" }],
+    ["path", { d: "M21 5a4 4 0 0 1-3.55 3.97" }],
+    ["path", { d: "M22 13h-3.344" }],
+    ["path", { d: "M3 21a4 4 0 0 1 3.81-4" }],
+    ["path", { d: "M3 5a4 4 0 0 0 3.55 3.97" }],
+    ["path", { d: "M6 13H2" }],
+    ["path", { d: "m8 2 1.88 1.88" }],
+    ["path", { d: "M9.712 4.06A3 3 0 0 1 15 6v1.13" }]
+  ];
+
   const Bubbles = [
-    ["path", { d: "M7.2 14.8a2 2 0 0 1 2 2" }],
+    ["path", { d: "M7.001 15.085A1.5 1.5 0 0 1 9 16.5" }],
     ["circle", { cx: "18.5", cy: "8.5", r: "3.5" }],
     ["circle", { cx: "7.5", cy: "16.5", r: "5.5" }],
     ["circle", { cx: "7.5", cy: "4.5", r: "2.5" }]
-  ];
-
-  const BugOff = [
-    ["path", { d: "M15 7.13V6a3 3 0 0 0-5.14-2.1L8 2" }],
-    ["path", { d: "M14.12 3.88 16 2" }],
-    ["path", { d: "M22 13h-4v-2a4 4 0 0 0-4-4h-1.3" }],
-    ["path", { d: "M20.97 5c0 2.1-1.6 3.8-3.5 4" }],
-    ["path", { d: "m2 2 20 20" }],
-    ["path", { d: "M7.7 7.7A4 4 0 0 0 6 11v3a6 6 0 0 0 11.13 3.13" }],
-    ["path", { d: "M12 20v-8" }],
-    ["path", { d: "M6 13H2" }],
-    ["path", { d: "M3 21c0-2.1 1.7-3.9 3.8-4" }]
   ];
 
   const BugPlay = [
@@ -2170,26 +2272,26 @@
       }
     ],
     ["path", { d: "M14.12 3.88 16 2" }],
-    ["path", { d: "M20.97 5c0 2.1-1.6 3.8-3.5 4" }],
-    ["path", { d: "M3 21c0-2.1 1.7-3.9 3.8-4" }],
+    ["path", { d: "M21 5a4 4 0 0 1-3.55 3.97" }],
+    ["path", { d: "M3 21a4 4 0 0 1 3.81-4" }],
+    ["path", { d: "M3 5a4 4 0 0 0 3.55 3.97" }],
     ["path", { d: "M6 13H2" }],
-    ["path", { d: "M6.53 9C4.6 8.8 3 7.1 3 5" }],
     ["path", { d: "m8 2 1.88 1.88" }],
-    ["path", { d: "M9 7.13v-1a3 3 0 0 1 4.18-2.895 3 3 0 0 1 1.821 2.896v1" }]
+    ["path", { d: "M9 7.13V6a3 3 0 1 1 6 0v1.13" }]
   ];
 
   const Bug = [
-    ["path", { d: "m8 2 1.88 1.88" }],
-    ["path", { d: "M14.12 3.88 16 2" }],
-    ["path", { d: "M9 7.13v-1a3.003 3.003 0 1 1 6 0v1" }],
-    ["path", { d: "M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6" }],
     ["path", { d: "M12 20v-9" }],
-    ["path", { d: "M6.53 9C4.6 8.8 3 7.1 3 5" }],
-    ["path", { d: "M6 13H2" }],
-    ["path", { d: "M3 21c0-2.1 1.7-3.9 3.8-4" }],
-    ["path", { d: "M20.97 5c0 2.1-1.6 3.8-3.5 4" }],
+    ["path", { d: "M14 7a4 4 0 0 1 4 4v3a6 6 0 0 1-12 0v-3a4 4 0 0 1 4-4z" }],
+    ["path", { d: "M14.12 3.88 16 2" }],
+    ["path", { d: "M21 21a4 4 0 0 0-3.81-4" }],
+    ["path", { d: "M21 5a4 4 0 0 1-3.55 3.97" }],
     ["path", { d: "M22 13h-4" }],
-    ["path", { d: "M17.2 17c2.1.1 3.8 1.9 3.8 4" }]
+    ["path", { d: "M3 21a4 4 0 0 1 3.81-4" }],
+    ["path", { d: "M3 5a4 4 0 0 0 3.55 3.97" }],
+    ["path", { d: "M6 13H2" }],
+    ["path", { d: "m8 2 1.88 1.88" }],
+    ["path", { d: "M9 7.13V6a3 3 0 1 1 6 0v1.13" }]
   ];
 
   const Building = [
@@ -2207,13 +2309,11 @@
   ];
 
   const Building2 = [
-    ["path", { d: "M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z" }],
-    ["path", { d: "M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2" }],
-    ["path", { d: "M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2" }],
-    ["path", { d: "M10 6h4" }],
-    ["path", { d: "M10 10h4" }],
-    ["path", { d: "M10 14h4" }],
-    ["path", { d: "M10 18h4" }]
+    ["path", { d: "M10 12h4" }],
+    ["path", { d: "M10 8h4" }],
+    ["path", { d: "M14 21v-3a2 2 0 0 0-4 0v3" }],
+    ["path", { d: "M6 10H4a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-2" }],
+    ["path", { d: "M6 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16" }]
   ];
 
   const BusFront = [
@@ -2243,6 +2343,16 @@
     ["circle", { cx: "16", cy: "18", r: "2" }]
   ];
 
+  const Cable = [
+    ["path", { d: "M17 19a1 1 0 0 1-1-1v-2a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2a1 1 0 0 1-1 1z" }],
+    ["path", { d: "M17 21v-2" }],
+    ["path", { d: "M19 14V6.5a1 1 0 0 0-7 0v11a1 1 0 0 1-7 0V10" }],
+    ["path", { d: "M21 21v-2" }],
+    ["path", { d: "M3 5V3" }],
+    ["path", { d: "M4 10a2 2 0 0 1-2-2V6a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2a2 2 0 0 1-2 2z" }],
+    ["path", { d: "M7 5V3" }]
+  ];
+
   const CableCar = [
     ["path", { d: "M10 3h.01" }],
     ["path", { d: "M14 2h.01" }],
@@ -2252,16 +2362,6 @@
     ["path", { d: "M9 12v5" }],
     ["path", { d: "M15 12v5" }],
     ["path", { d: "M4 17h16" }]
-  ];
-
-  const Cable = [
-    ["path", { d: "M17 19a1 1 0 0 1-1-1v-2a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2a1 1 0 0 1-1 1z" }],
-    ["path", { d: "M17 21v-2" }],
-    ["path", { d: "M19 14V6.5a1 1 0 0 0-7 0v11a1 1 0 0 1-7 0V10" }],
-    ["path", { d: "M21 21v-2" }],
-    ["path", { d: "M3 5V3" }],
-    ["path", { d: "M4 10a2 2 0 0 1-2-2V6a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2a2 2 0 0 1-2 2z" }],
-    ["path", { d: "M7 5V3" }]
   ];
 
   const CakeSlice = [
@@ -2288,6 +2388,14 @@
     ["path", { d: "M17 4h.01" }]
   ];
 
+  const Calendar1 = [
+    ["path", { d: "M11 14h1v4" }],
+    ["path", { d: "M16 2v4" }],
+    ["path", { d: "M3 10h18" }],
+    ["path", { d: "M8 2v4" }],
+    ["rect", { x: "3", y: "4", width: "18", height: "18", rx: "2" }]
+  ];
+
   const Calculator = [
     ["rect", { width: "16", height: "20", x: "4", y: "2", rx: "2" }],
     ["line", { x1: "8", x2: "16", y1: "6", y2: "6" }],
@@ -2299,14 +2407,6 @@
     ["path", { d: "M8 14h.01" }],
     ["path", { d: "M12 18h.01" }],
     ["path", { d: "M8 18h.01" }]
-  ];
-
-  const Calendar1 = [
-    ["path", { d: "M11 14h1v4" }],
-    ["path", { d: "M16 2v4" }],
-    ["path", { d: "M3 10h18" }],
-    ["path", { d: "M8 2v4" }],
-    ["rect", { x: "3", y: "4", width: "18", height: "18", rx: "2" }]
   ];
 
   const CalendarArrowDown = [
@@ -2362,7 +2462,7 @@
     ["path", { d: "m19.53 21.696-.382-.924" }],
     ["path", { d: "m20.772 16.852.924-.383" }],
     ["path", { d: "m20.772 19.148.924.383" }],
-    ["path", { d: "M21 11V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h6" }],
+    ["path", { d: "M21 10.592V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h6" }],
     ["path", { d: "M3 10h18" }],
     ["path", { d: "M8 2v4" }],
     ["circle", { cx: "18", cy: "18", r: "3" }]
@@ -2382,11 +2482,24 @@
   ];
 
   const CalendarFold = [
+    [
+      "path",
+      {
+        d: "M3 20a2 2 0 0 0 2 2h10a2.4 2.4 0 0 0 1.706-.706l3.588-3.588A2.4 2.4 0 0 0 21 16V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2z"
+      }
+    ],
+    ["path", { d: "M15 22v-5a1 1 0 0 1 1-1h5" }],
     ["path", { d: "M8 2v4" }],
     ["path", { d: "M16 2v4" }],
-    ["path", { d: "M21 17V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11Z" }],
+    ["path", { d: "M3 10h18" }]
+  ];
+
+  const CalendarMinus2 = [
+    ["path", { d: "M8 2v4" }],
+    ["path", { d: "M16 2v4" }],
+    ["rect", { width: "18", height: "18", x: "3", y: "4", rx: "2" }],
     ["path", { d: "M3 10h18" }],
-    ["path", { d: "M15 22v-4a2 2 0 0 1 2-2h4" }]
+    ["path", { d: "M10 16h4" }]
   ];
 
   const CalendarHeart = [
@@ -2402,12 +2515,13 @@
     ["path", { d: "M8 2v4" }]
   ];
 
-  const CalendarMinus2 = [
-    ["path", { d: "M8 2v4" }],
+  const CalendarOff = [
+    ["path", { d: "M4.2 4.2A2 2 0 0 0 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 1.82-1.18" }],
+    ["path", { d: "M21 15.5V6a2 2 0 0 0-2-2H9.5" }],
     ["path", { d: "M16 2v4" }],
-    ["rect", { width: "18", height: "18", x: "3", y: "4", rx: "2" }],
-    ["path", { d: "M3 10h18" }],
-    ["path", { d: "M10 16h4" }]
+    ["path", { d: "M3 10h7" }],
+    ["path", { d: "M21 10h-5.5" }],
+    ["path", { d: "m2 2 20 20" }]
   ];
 
   const CalendarMinus = [
@@ -2416,15 +2530,6 @@
     ["path", { d: "M21 15V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h8.5" }],
     ["path", { d: "M3 10h18" }],
     ["path", { d: "M8 2v4" }]
-  ];
-
-  const CalendarOff = [
-    ["path", { d: "M4.2 4.2A2 2 0 0 0 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 1.82-1.18" }],
-    ["path", { d: "M21 15.5V6a2 2 0 0 0-2-2H9.5" }],
-    ["path", { d: "M16 2v4" }],
-    ["path", { d: "M3 10h7" }],
-    ["path", { d: "M21 10h-5.5" }],
-    ["path", { d: "m2 2 20 20" }]
   ];
 
   const CalendarPlus2 = [
@@ -2436,15 +2541,6 @@
     ["path", { d: "M12 14v4" }]
   ];
 
-  const CalendarPlus = [
-    ["path", { d: "M16 19h6" }],
-    ["path", { d: "M16 2v4" }],
-    ["path", { d: "M19 16v6" }],
-    ["path", { d: "M21 12.598V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h8.5" }],
-    ["path", { d: "M3 10h18" }],
-    ["path", { d: "M8 2v4" }]
-  ];
-
   const CalendarRange = [
     ["rect", { width: "18", height: "18", x: "3", y: "4", rx: "2" }],
     ["path", { d: "M16 2v4" }],
@@ -2454,6 +2550,15 @@
     ["path", { d: "M13 18H7" }],
     ["path", { d: "M7 14h.01" }],
     ["path", { d: "M17 18h.01" }]
+  ];
+
+  const CalendarPlus = [
+    ["path", { d: "M16 19h6" }],
+    ["path", { d: "M16 2v4" }],
+    ["path", { d: "M19 16v6" }],
+    ["path", { d: "M21 12.598V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h8.5" }],
+    ["path", { d: "M3 10h18" }],
+    ["path", { d: "M8 2v4" }]
   ];
 
   const CalendarSearch = [
@@ -2501,14 +2606,13 @@
     ["path", { d: "M3 10h18" }]
   ];
 
-  const Camera = [
-    [
-      "path",
-      {
-        d: "M13.997 4a2 2 0 0 1 1.76 1.05l.486.9A2 2 0 0 0 18.003 7H20a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h1.997a2 2 0 0 0 1.759-1.048l.489-.904A2 2 0 0 1 10.004 4z"
-      }
-    ],
-    ["circle", { cx: "12", cy: "13", r: "3" }]
+  const Calendars = [
+    ["path", { d: "M12 2v2" }],
+    ["path", { d: "M15.726 21.01A2 2 0 0 1 14 22H4a2 2 0 0 1-2-2V10a2 2 0 0 1 2-2" }],
+    ["path", { d: "M18 2v2" }],
+    ["path", { d: "M2 13h2" }],
+    ["path", { d: "M8 8h14" }],
+    ["rect", { x: "8", y: "3", width: "14", height: "14", rx: "2" }]
   ];
 
   const CameraOff = [
@@ -2523,6 +2627,16 @@
     ]
   ];
 
+  const Camera = [
+    [
+      "path",
+      {
+        d: "M13.997 4a2 2 0 0 1 1.76 1.05l.486.9A2 2 0 0 0 18.003 7H20a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h1.997a2 2 0 0 0 1.759-1.048l.489-.904A2 2 0 0 1 10.004 4z"
+      }
+    ],
+    ["circle", { cx: "12", cy: "13", r: "3" }]
+  ];
+
   const CandyCane = [
     [
       "path",
@@ -2532,26 +2646,6 @@
     ["path", { d: "M10.9 4.8 13 9" }],
     ["path", { d: "m7.9 9.7 2 4.4" }],
     ["path", { d: "M4.9 14.7 7 18.9" }]
-  ];
-
-  const CandyOff = [
-    ["path", { d: "M10 10v7.9" }],
-    ["path", { d: "M11.802 6.145a5 5 0 0 1 6.053 6.053" }],
-    ["path", { d: "M14 6.1v2.243" }],
-    ["path", { d: "m15.5 15.571-.964.964a5 5 0 0 1-7.071 0 5 5 0 0 1 0-7.07l.964-.965" }],
-    [
-      "path",
-      {
-        d: "M16 7V3a1 1 0 0 1 1.707-.707 2.5 2.5 0 0 0 2.152.717 1 1 0 0 1 1.131 1.131 2.5 2.5 0 0 0 .717 2.152A1 1 0 0 1 21 8h-4"
-      }
-    ],
-    ["path", { d: "m2 2 20 20" }],
-    [
-      "path",
-      {
-        d: "M8 17v4a1 1 0 0 1-1.707.707 2.5 2.5 0 0 0-2.152-.717 1 1 0 0 1-1.131-1.131 2.5 2.5 0 0 0-.717-2.152A1 1 0 0 1 3 16h4"
-      }
-    ]
   ];
 
   const Candy = [
@@ -2577,6 +2671,40 @@
     ]
   ];
 
+  const CandyOff = [
+    ["path", { d: "M10 10v7.9" }],
+    ["path", { d: "M11.802 6.145a5 5 0 0 1 6.053 6.053" }],
+    ["path", { d: "M14 6.1v2.243" }],
+    ["path", { d: "m15.5 15.571-.964.964a5 5 0 0 1-7.071 0 5 5 0 0 1 0-7.07l.964-.965" }],
+    [
+      "path",
+      {
+        d: "M16 7V3a1 1 0 0 1 1.707-.707 2.5 2.5 0 0 0 2.152.717 1 1 0 0 1 1.131 1.131 2.5 2.5 0 0 0 .717 2.152A1 1 0 0 1 21 8h-4"
+      }
+    ],
+    ["path", { d: "m2 2 20 20" }],
+    [
+      "path",
+      {
+        d: "M8 17v4a1 1 0 0 1-1.707.707 2.5 2.5 0 0 0-2.152-.717 1 1 0 0 1-1.131-1.131 2.5 2.5 0 0 0-.717-2.152A1 1 0 0 1 3 16h4"
+      }
+    ]
+  ];
+
+  const CannabisOff = [
+    ["path", { d: "M12 22v-4c1.5 1.5 3.5 3 6 3 0-1.5-.5-3.5-2-5" }],
+    ["path", { d: "M13.988 8.327C13.902 6.054 13.365 3.82 12 2a9.3 9.3 0 0 0-1.445 2.9" }],
+    ["path", { d: "M17.375 11.725C18.882 10.53 21 7.841 21 6c-2.324 0-5.08 1.296-6.662 2.684" }],
+    ["path", { d: "m2 2 20 20" }],
+    ["path", { d: "M21.024 15.378A15 15 0 0 0 22 15c-.426-1.279-2.67-2.557-4.25-2.907" }],
+    [
+      "path",
+      {
+        d: "M6.995 6.992C5.714 6.4 4.29 6 3 6c0 2 2.5 5 4 6-1.5 0-4.5 1.5-5 3 3.5 1.5 6 1 6 1-1.5 1.5-2 3.5-2 5 2.5 0 4.5-1.5 6-3"
+      }
+    ]
+  ];
+
   const Cannabis = [
     ["path", { d: "M12 22v-4" }],
     [
@@ -2596,22 +2724,12 @@
     ["path", { d: "M7 15h2.5" }]
   ];
 
-  const CarFront = [
-    ["path", { d: "m21 8-2 2-1.5-3.7A2 2 0 0 0 15.646 5H8.4a2 2 0 0 0-1.903 1.257L5 10 3 8" }],
-    ["path", { d: "M7 14h.01" }],
-    ["path", { d: "M17 14h.01" }],
-    ["rect", { width: "18", height: "8", x: "3", y: "10", rx: "2" }],
-    ["path", { d: "M5 18v2" }],
-    ["path", { d: "M19 18v2" }]
-  ];
-
   const Captions = [
     ["rect", { width: "18", height: "14", x: "3", y: "5", rx: "2", ry: "2" }],
     ["path", { d: "M7 15h4M15 15h2M7 11h2M13 11h4" }]
   ];
 
-  const CarTaxiFront = [
-    ["path", { d: "M10 2h4" }],
+  const CarFront = [
     ["path", { d: "m21 8-2 2-1.5-3.7A2 2 0 0 0 15.646 5H8.4a2 2 0 0 0-1.903 1.257L5 10 3 8" }],
     ["path", { d: "M7 14h.01" }],
     ["path", { d: "M17 14h.01" }],
@@ -2630,6 +2748,16 @@
     ["circle", { cx: "7", cy: "17", r: "2" }],
     ["path", { d: "M9 17h6" }],
     ["circle", { cx: "17", cy: "17", r: "2" }]
+  ];
+
+  const CarTaxiFront = [
+    ["path", { d: "M10 2h4" }],
+    ["path", { d: "m21 8-2 2-1.5-3.7A2 2 0 0 0 15.646 5H8.4a2 2 0 0 0-1.903 1.257L5 10 3 8" }],
+    ["path", { d: "M7 14h.01" }],
+    ["path", { d: "M17 14h.01" }],
+    ["rect", { width: "18", height: "8", x: "3", y: "10", rx: "2" }],
+    ["path", { d: "M5 18v2" }],
+    ["path", { d: "M19 18v2" }]
   ];
 
   const Caravan = [
@@ -2723,6 +2851,25 @@
     ["path", { d: "M11.25 16.25h1.5L12 17l-.75-.75Z" }]
   ];
 
+  const CctvOff = [
+    [
+      "path",
+      {
+        d: "m12.309 6.652 4.797 2.401a1 1 0 0 1 .447 1.341l-.501 1.001.605.605h2.725a1 1 0 0 1 .894 1.447l-.724 1.448"
+      }
+    ],
+    [
+      "path",
+      {
+        d: "m15.166 15.166-.719 1.439a1 1 0 0 1-1.342.447L3.61 12.3a2.92 2.92 0 0 1-1.3-3.91L3.69 5.6a2.9 2.9 0 0 1 .873-1.037"
+      }
+    ],
+    ["path", { d: "M2 19h3.76a2 2 0 0 0 1.8-1.1l1.441-2.902" }],
+    ["path", { d: "m2 2 20 20" }],
+    ["path", { d: "M2 21v-4" }],
+    ["path", { d: "M7 9h.01" }]
+  ];
+
   const Cctv = [
     [
       "path",
@@ -2814,19 +2961,19 @@
     ["path", { d: "M8 17v-3" }]
   ];
 
-  const ChartColumn = [
-    ["path", { d: "M3 3v16a2 2 0 0 0 2 2h16" }],
-    ["path", { d: "M18 17V9" }],
-    ["path", { d: "M13 17V5" }],
-    ["path", { d: "M8 17v-3" }]
-  ];
-
   const ChartColumnStacked = [
     ["path", { d: "M11 13H7" }],
     ["path", { d: "M19 9h-4" }],
     ["path", { d: "M3 3v16a2 2 0 0 0 2 2h16" }],
     ["rect", { x: "15", y: "5", width: "4", height: "12", rx: "1" }],
     ["rect", { x: "7", y: "8", width: "4", height: "9", rx: "1" }]
+  ];
+
+  const ChartColumn = [
+    ["path", { d: "M3 3v16a2 2 0 0 0 2 2h16" }],
+    ["path", { d: "M18 17V9" }],
+    ["path", { d: "M13 17V5" }],
+    ["path", { d: "M8 17v-3" }]
   ];
 
   const ChartGantt = [
@@ -2852,21 +2999,21 @@
   ];
 
   const ChartNoAxesColumnDecreasing = [
-    ["path", { d: "M12 20V10" }],
-    ["path", { d: "M18 20v-4" }],
-    ["path", { d: "M6 20V4" }]
+    ["path", { d: "M5 21V3" }],
+    ["path", { d: "M12 21V9" }],
+    ["path", { d: "M19 21v-6" }]
   ];
 
   const ChartNoAxesColumnIncreasing = [
-    ["line", { x1: "12", x2: "12", y1: "20", y2: "10" }],
-    ["line", { x1: "18", x2: "18", y1: "20", y2: "4" }],
-    ["line", { x1: "6", x2: "6", y1: "20", y2: "16" }]
+    ["path", { d: "M5 21v-6" }],
+    ["path", { d: "M12 21V9" }],
+    ["path", { d: "M19 21V3" }]
   ];
 
   const ChartNoAxesColumn = [
-    ["line", { x1: "18", x2: "18", y1: "20", y2: "10" }],
-    ["line", { x1: "12", x2: "12", y1: "20", y2: "4" }],
-    ["line", { x1: "6", x2: "6", y1: "20", y2: "14" }]
+    ["path", { d: "M5 21v-6" }],
+    ["path", { d: "M12 21V3" }],
+    ["path", { d: "M19 21V9" }]
   ];
 
   const ChartNoAxesCombined = [
@@ -2879,9 +3026,9 @@
   ];
 
   const ChartNoAxesGantt = [
-    ["path", { d: "M8 6h10" }],
-    ["path", { d: "M6 12h9" }],
-    ["path", { d: "M11 18h7" }]
+    ["path", { d: "M6 5h12" }],
+    ["path", { d: "M4 12h10" }],
+    ["path", { d: "M12 19h8" }]
   ];
 
   const ChartPie = [
@@ -2938,19 +3085,85 @@
     ["path", { d: "M22 9c-4.29 0-7.14-2.33-10-7 5.71 0 10 4.67 10 7Z" }]
   ];
 
+  const ChessKing = [
+    ["path", { d: "M4 20a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v1a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z" }],
+    [
+      "path",
+      {
+        d: "m6.7 18-1-1C4.35 15.682 3 14.09 3 12a5 5 0 0 1 4.95-5c1.584 0 2.7.455 4.05 1.818C13.35 7.455 14.466 7 16.05 7A5 5 0 0 1 21 12c0 2.082-1.359 3.673-2.7 5l-1 1"
+      }
+    ],
+    ["path", { d: "M10 4h4" }],
+    ["path", { d: "M12 2v6.818" }]
+  ];
+
+  const ChessBishop = [
+    ["path", { d: "M5 20a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v1a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1z" }],
+    [
+      "path",
+      {
+        d: "M15 18c1.5-.615 3-2.461 3-4.923C18 8.769 14.5 4.462 12 2 9.5 4.462 6 8.77 6 13.077 6 15.539 7.5 17.385 9 18"
+      }
+    ],
+    ["path", { d: "m16 7-2.5 2.5" }],
+    ["path", { d: "M9 2h6" }]
+  ];
+
+  const ChessKnight = [
+    ["path", { d: "M5 20a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v1a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1z" }],
+    [
+      "path",
+      {
+        d: "M16.5 18c1-2 2.5-5 2.5-9a7 7 0 0 0-7-7H6.635a1 1 0 0 0-.768 1.64L7 5l-2.32 5.802a2 2 0 0 0 .95 2.526l2.87 1.456"
+      }
+    ],
+    ["path", { d: "m15 5 1.425-1.425" }],
+    ["path", { d: "m17 8 1.53-1.53" }],
+    ["path", { d: "M9.713 12.185 7 18" }]
+  ];
+
+  const ChessPawn = [
+    ["path", { d: "M5 20a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v1a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1z" }],
+    ["path", { d: "m14.5 10 1.5 8" }],
+    ["path", { d: "M7 10h10" }],
+    ["path", { d: "m8 18 1.5-8" }],
+    ["circle", { cx: "12", cy: "6", r: "4" }]
+  ];
+
+  const ChessRook = [
+    ["path", { d: "M5 20a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v1a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1z" }],
+    ["path", { d: "M10 2v2" }],
+    ["path", { d: "M14 2v2" }],
+    ["path", { d: "m17 18-1-9" }],
+    ["path", { d: "M6 2v5a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V2" }],
+    ["path", { d: "M6 4h12" }],
+    ["path", { d: "m7 18 1-9" }]
+  ];
+
   const ChevronDown = [["path", { d: "m6 9 6 6 6-6" }]];
+
+  const ChessQueen = [
+    ["path", { d: "M4 20a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v1a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z" }],
+    ["path", { d: "m12.474 5.943 1.567 5.34a1 1 0 0 0 1.75.328l2.616-3.402" }],
+    ["path", { d: "m20 9-3 9" }],
+    ["path", { d: "m5.594 8.209 2.615 3.403a1 1 0 0 0 1.75-.329l1.567-5.34" }],
+    ["path", { d: "M7 18 4 9" }],
+    ["circle", { cx: "12", cy: "4", r: "2" }],
+    ["circle", { cx: "20", cy: "7", r: "2" }],
+    ["circle", { cx: "4", cy: "7", r: "2" }]
+  ];
 
   const ChevronFirst = [
     ["path", { d: "m17 18-6-6 6-6" }],
     ["path", { d: "M7 6v12" }]
   ];
 
-  const ChevronLeft = [["path", { d: "m15 18-6-6 6-6" }]];
-
   const ChevronLast = [
     ["path", { d: "m7 18 6-6-6-6" }],
     ["path", { d: "M17 6v12" }]
   ];
+
+  const ChevronLeft = [["path", { d: "m15 18-6-6 6-6" }]];
 
   const ChevronRight = [["path", { d: "m9 18 6-6-6-6" }]];
 
@@ -2994,40 +3207,27 @@
     ["path", { d: "m13 17 5-5-5-5" }]
   ];
 
-  const ChevronsUpDown = [
-    ["path", { d: "m7 15 5 5 5-5" }],
-    ["path", { d: "m7 9 5-5 5 5" }]
-  ];
-
   const ChevronsUp = [
     ["path", { d: "m17 11-5-5-5 5" }],
     ["path", { d: "m17 18-5-5-5 5" }]
   ];
 
-  const Chromium = [
-    ["path", { d: "M10.88 21.94 15.46 14" }],
-    ["path", { d: "M21.17 8H12" }],
-    ["path", { d: "M3.95 6.06 8.54 14" }],
-    ["circle", { cx: "12", cy: "12", r: "10" }],
-    ["circle", { cx: "12", cy: "12", r: "4" }]
+  const ChevronsUpDown = [
+    ["path", { d: "m7 15 5 5 5-5" }],
+    ["path", { d: "m7 9 5-5 5 5" }]
   ];
 
   const Church = [
     ["path", { d: "M10 9h4" }],
     ["path", { d: "M12 7v5" }],
-    ["path", { d: "M14 22v-4a2 2 0 0 0-4 0v4" }],
+    ["path", { d: "M14 21v-3a2 2 0 0 0-4 0v3" }],
     [
       "path",
       {
-        d: "M18 22V5.618a1 1 0 0 0-.553-.894l-4.553-2.277a2 2 0 0 0-1.788 0L6.553 4.724A1 1 0 0 0 6 5.618V22"
+        d: "m18 9 3.52 2.147a1 1 0 0 1 .48.854V19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-6.999a1 1 0 0 1 .48-.854L6 9"
       }
     ],
-    [
-      "path",
-      {
-        d: "m18 7 3.447 1.724a1 1 0 0 1 .553.894V20a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9.618a1 1 0 0 1 .553-.894L6 7"
-      }
-    ]
+    ["path", { d: "M6 21V7a1 1 0 0 1 .376-.782l5-3.999a1 1 0 0 1 1.249.001l5 4A1 1 0 0 1 18 7v14" }]
   ];
 
   const CigaretteOff = [
@@ -3083,6 +3283,12 @@
     ["path", { d: "M12 2A10 10 0 1 1 2 12" }]
   ];
 
+  const CircleArrowOutUpRight = [
+    ["path", { d: "M22 12A10 10 0 1 1 12 2" }],
+    ["path", { d: "M22 2 12 12" }],
+    ["path", { d: "M16 2h6v6" }]
+  ];
+
   const CircleArrowRight = [
     ["circle", { cx: "12", cy: "12", r: "10" }],
     ["path", { d: "m12 16 4-4-4-4" }],
@@ -3095,12 +3301,6 @@
     ["path", { d: "M12 16V8" }]
   ];
 
-  const CircleArrowOutUpRight = [
-    ["path", { d: "M22 12A10 10 0 1 1 12 2" }],
-    ["path", { d: "M22 2 12 12" }],
-    ["path", { d: "M16 2h6v6" }]
-  ];
-
   const CircleCheckBig = [
     ["path", { d: "M21.801 10A10 10 0 1 1 17 3.335" }],
     ["path", { d: "m9 11 3 3L22 4" }]
@@ -3111,14 +3311,14 @@
     ["path", { d: "m9 12 2 2 4-4" }]
   ];
 
-  const CircleChevronDown = [
-    ["circle", { cx: "12", cy: "12", r: "10" }],
-    ["path", { d: "m16 10-4 4-4-4" }]
-  ];
-
   const CircleChevronLeft = [
     ["circle", { cx: "12", cy: "12", r: "10" }],
     ["path", { d: "m14 16-4-4 4-4" }]
+  ];
+
+  const CircleChevronDown = [
+    ["circle", { cx: "12", cy: "12", r: "10" }],
+    ["path", { d: "m16 10-4 4-4-4" }]
   ];
 
   const CircleChevronRight = [
@@ -3143,10 +3343,10 @@
   ];
 
   const CircleDivide = [
+    ["circle", { cx: "12", cy: "12", r: "10" }],
     ["line", { x1: "8", x2: "16", y1: "12", y2: "12" }],
     ["line", { x1: "12", x2: "12", y1: "16", y2: "16" }],
-    ["line", { x1: "12", x2: "12", y1: "8", y2: "8" }],
-    ["circle", { cx: "12", cy: "12", r: "10" }]
+    ["line", { x1: "12", x2: "12", y1: "8", y2: "8" }]
   ];
 
   const CircleDollarSign = [
@@ -3167,11 +3367,6 @@
     ["circle", { cx: "12", cy: "12", r: "1" }]
   ];
 
-  const CircleDot = [
-    ["circle", { cx: "12", cy: "12", r: "10" }],
-    ["circle", { cx: "12", cy: "12", r: "1" }]
-  ];
-
   const CircleEllipsis = [
     ["circle", { cx: "12", cy: "12", r: "10" }],
     ["path", { d: "M17 12h.01" }],
@@ -3179,10 +3374,15 @@
     ["path", { d: "M7 12h.01" }]
   ];
 
+  const CircleDot = [
+    ["circle", { cx: "12", cy: "12", r: "10" }],
+    ["circle", { cx: "12", cy: "12", r: "1" }]
+  ];
+
   const CircleEqual = [
+    ["circle", { cx: "12", cy: "12", r: "10" }],
     ["path", { d: "M7 10h10" }],
-    ["path", { d: "M7 14h10" }],
-    ["circle", { cx: "12", cy: "12", r: "10" }]
+    ["path", { d: "M7 14h10" }]
   ];
 
   const CircleFadingArrowUp = [
@@ -3259,6 +3459,15 @@
     ["circle", { cx: "12", cy: "12", r: "10" }]
   ];
 
+  const CirclePile = [
+    ["circle", { cx: "12", cy: "19", r: "2" }],
+    ["circle", { cx: "12", cy: "5", r: "2" }],
+    ["circle", { cx: "16", cy: "12", r: "2" }],
+    ["circle", { cx: "20", cy: "19", r: "2" }],
+    ["circle", { cx: "4", cy: "19", r: "2" }],
+    ["circle", { cx: "8", cy: "12", r: "2" }]
+  ];
+
   const CirclePlus = [
     ["circle", { cx: "12", cy: "12", r: "10" }],
     ["path", { d: "M8 12h8" }],
@@ -3266,16 +3475,16 @@
   ];
 
   const CirclePoundSterling = [
+    ["circle", { cx: "12", cy: "12", r: "10" }],
     ["path", { d: "M10 16V9.5a1 1 0 0 1 5 0" }],
     ["path", { d: "M8 12h4" }],
-    ["path", { d: "M8 16h7" }],
-    ["circle", { cx: "12", cy: "12", r: "10" }]
+    ["path", { d: "M8 16h7" }]
   ];
 
   const CirclePower = [
+    ["circle", { cx: "12", cy: "12", r: "10" }],
     ["path", { d: "M12 7v4" }],
-    ["path", { d: "M7.998 9.003a5 5 0 1 0 8-.005" }],
-    ["circle", { cx: "12", cy: "12", r: "10" }]
+    ["path", { d: "M7.998 9.003a5 5 0 1 0 8-.005" }]
   ];
 
   const CircleQuestionMark = [
@@ -3285,8 +3494,8 @@
   ];
 
   const CircleSlash2 = [
-    ["path", { d: "M22 2 2 22" }],
-    ["circle", { cx: "12", cy: "12", r: "10" }]
+    ["circle", { cx: "12", cy: "12", r: "10" }],
+    ["path", { d: "M22 2 2 22" }]
   ];
 
   const CircleSlash = [
@@ -3297,13 +3506,13 @@
   const CircleSmall = [["circle", { cx: "12", cy: "12", r: "6" }]];
 
   const CircleStar = [
+    ["circle", { cx: "12", cy: "12", r: "10" }],
     [
       "path",
       {
         d: "M11.051 7.616a1 1 0 0 1 1.909.024l.737 1.452a1 1 0 0 0 .737.535l1.634.256a1 1 0 0 1 .588 1.806l-1.172 1.168a1 1 0 0 0-.282.866l.259 1.613a1 1 0 0 1-1.541 1.134l-1.465-.75a1 1 0 0 0-.912 0l-1.465.75a1 1 0 0 1-1.539-1.133l.258-1.613a1 1 0 0 0-.282-.867l-1.156-1.152a1 1 0 0 1 .572-1.822l1.633-.256a1 1 0 0 0 .737-.535z"
       }
-    ],
-    ["circle", { cx: "12", cy: "12", r: "10" }]
+    ]
   ];
 
   const CircleStop = [
@@ -3312,8 +3521,8 @@
   ];
 
   const CircleUserRound = [
-    ["path", { d: "M18 20a6 6 0 0 0-12 0" }],
-    ["circle", { cx: "12", cy: "10", r: "4" }],
+    ["path", { d: "M17.925 20.056a6 6 0 0 0-11.851.001" }],
+    ["circle", { cx: "12", cy: "11", r: "4" }],
     ["circle", { cx: "12", cy: "12", r: "10" }]
   ];
 
@@ -3350,10 +3559,10 @@
   ];
 
   const Clapperboard = [
-    ["path", { d: "M20.2 6 3 11l-.9-2.4c-.3-1.1.3-2.2 1.3-2.5l13.5-4c1.1-.3 2.2.3 2.5 1.3Z" }],
-    ["path", { d: "m6.2 5.3 3.1 3.9" }],
-    ["path", { d: "m12.4 3.4 3.1 4" }],
-    ["path", { d: "M3 11h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" }]
+    ["path", { d: "m12.296 3.464 3.02 3.956" }],
+    ["path", { d: "M20.2 6 3 11l-.9-2.4c-.3-1.1.3-2.2 1.3-2.5l13.5-4c1.1-.3 2.2.3 2.5 1.3z" }],
+    ["path", { d: "M3 11h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" }],
+    ["path", { d: "m6.18 5.276 3.1 3.899" }]
   ];
 
   const ClipboardCheck = [
@@ -3393,6 +3602,14 @@
     ["path", { d: "M9 14h6" }]
   ];
 
+  const ClipboardPaste = [
+    ["path", { d: "M11 14h10" }],
+    ["path", { d: "M16 4h2a2 2 0 0 1 2 2v1.344" }],
+    ["path", { d: "m17 18 4-4-4-4" }],
+    ["path", { d: "M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 1.793-1.113" }],
+    ["rect", { x: "8", y: "2", width: "8", height: "4", rx: "1" }]
+  ];
+
   const ClipboardPenLine = [
     ["rect", { width: "8", height: "4", x: "8", y: "2", rx: "1" }],
     ["path", { d: "M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-.5" }],
@@ -3406,24 +3623,16 @@
     ]
   ];
 
-  const ClipboardPaste = [
-    ["path", { d: "M11 14h10" }],
-    ["path", { d: "M16 4h2a2 2 0 0 1 2 2v1.344" }],
-    ["path", { d: "m17 18 4-4-4-4" }],
-    ["path", { d: "M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 1.793-1.113" }],
-    ["rect", { x: "8", y: "2", width: "8", height: "4", rx: "1" }]
-  ];
-
   const ClipboardPen = [
-    ["rect", { width: "8", height: "4", x: "8", y: "2", rx: "1" }],
-    ["path", { d: "M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-5.5" }],
-    ["path", { d: "M4 13.5V6a2 2 0 0 1 2-2h2" }],
+    ["path", { d: "M16 4h2a2 2 0 0 1 2 2v2" }],
     [
       "path",
       {
-        d: "M13.378 15.626a1 1 0 1 0-3.004-3.004l-5.01 5.012a2 2 0 0 0-.506.854l-.837 2.87a.5.5 0 0 0 .62.62l2.87-.837a2 2 0 0 0 .854-.506z"
+        d: "M21.34 15.664a1 1 0 1 0-3.004-3.004l-5.01 5.012a2 2 0 0 0-.506.854l-.837 2.87a.5.5 0 0 0 .62.62l2.87-.837a2 2 0 0 0 .854-.506z"
       }
-    ]
+    ],
+    ["path", { d: "M8 22H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" }],
+    ["rect", { x: "8", y: "2", width: "8", height: "4", rx: "1" }]
   ];
 
   const ClipboardPlus = [
@@ -3448,69 +3657,69 @@
     ["path", { d: "m9 11 6 6" }]
   ];
 
+  const Clock1 = [
+    ["circle", { cx: "12", cy: "12", r: "10" }],
+    ["path", { d: "M12 6v6l2-4" }]
+  ];
+
   const Clipboard = [
     ["rect", { width: "8", height: "4", x: "8", y: "2", rx: "1", ry: "1" }],
     ["path", { d: "M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" }]
   ];
 
-  const Clock1 = [
-    ["path", { d: "M12 6v6l2-4" }],
-    ["circle", { cx: "12", cy: "12", r: "10" }]
-  ];
-
   const Clock10 = [
-    ["path", { d: "M12 6v6l-4-2" }],
-    ["circle", { cx: "12", cy: "12", r: "10" }]
+    ["circle", { cx: "12", cy: "12", r: "10" }],
+    ["path", { d: "M12 6v6l-4-2" }]
   ];
 
   const Clock11 = [
-    ["path", { d: "M12 6v6l-2-4" }],
-    ["circle", { cx: "12", cy: "12", r: "10" }]
+    ["circle", { cx: "12", cy: "12", r: "10" }],
+    ["path", { d: "M12 6v6l-2-4" }]
   ];
 
   const Clock12 = [
-    ["path", { d: "M12 6v6" }],
-    ["circle", { cx: "12", cy: "12", r: "10" }]
+    ["circle", { cx: "12", cy: "12", r: "10" }],
+    ["path", { d: "M12 6v6" }]
   ];
 
   const Clock2 = [
-    ["path", { d: "M12 6v6l4-2" }],
-    ["circle", { cx: "12", cy: "12", r: "10" }]
+    ["circle", { cx: "12", cy: "12", r: "10" }],
+    ["path", { d: "M12 6v6l4-2" }]
   ];
 
   const Clock3 = [
-    ["path", { d: "M12 6v6h4" }],
-    ["circle", { cx: "12", cy: "12", r: "10" }]
+    ["circle", { cx: "12", cy: "12", r: "10" }],
+    ["path", { d: "M12 6v6h4" }]
   ];
 
   const Clock4 = [
-    ["path", { d: "M12 6v6l4 2" }],
-    ["circle", { cx: "12", cy: "12", r: "10" }]
+    ["circle", { cx: "12", cy: "12", r: "10" }],
+    ["path", { d: "M12 6v6l4 2" }]
   ];
 
   const Clock5 = [
-    ["path", { d: "M12 6v6l2 4" }],
-    ["circle", { cx: "12", cy: "12", r: "10" }]
-  ];
-
-  const Clock7 = [
-    ["path", { d: "M12 6v6l-2 4" }],
-    ["circle", { cx: "12", cy: "12", r: "10" }]
+    ["circle", { cx: "12", cy: "12", r: "10" }],
+    ["path", { d: "M12 6v6l2 4" }]
   ];
 
   const Clock6 = [
-    ["path", { d: "M12 6v10" }],
-    ["circle", { cx: "12", cy: "12", r: "10" }]
+    ["circle", { cx: "12", cy: "12", r: "10" }],
+    ["path", { d: "M12 6v10" }]
   ];
 
   const Clock8 = [
-    ["path", { d: "M12 6v6l-4 2" }],
-    ["circle", { cx: "12", cy: "12", r: "10" }]
+    ["circle", { cx: "12", cy: "12", r: "10" }],
+    ["path", { d: "M12 6v6l-4 2" }]
+  ];
+
+  const Clock7 = [
+    ["circle", { cx: "12", cy: "12", r: "10" }],
+    ["path", { d: "M12 6v6l-2 4" }]
   ];
 
   const Clock9 = [
-    ["path", { d: "M12 6v6H8" }],
-    ["circle", { cx: "12", cy: "12", r: "10" }]
+    ["circle", { cx: "12", cy: "12", r: "10" }],
+    ["path", { d: "M12 6v6H8" }]
   ];
 
   const ClockAlert = [
@@ -3534,6 +3743,12 @@
     ["path", { d: "M18 22v-8" }]
   ];
 
+  const ClockCheck = [
+    ["path", { d: "M12 6v6l4 2" }],
+    ["path", { d: "M22 12a10 10 0 1 0-11 9.95" }],
+    ["path", { d: "m22 16-5.5 5.5L14 19" }]
+  ];
+
   const ClockFading = [
     ["path", { d: "M12 2a10 10 0 0 1 7.38 16.75" }],
     ["path", { d: "M12 6v6l4 2" }],
@@ -3551,8 +3766,8 @@
   ];
 
   const Clock = [
-    ["path", { d: "M12 6v6l4 2" }],
-    ["circle", { cx: "12", cy: "12", r: "10" }]
+    ["circle", { cx: "12", cy: "12", r: "10" }],
+    ["path", { d: "M12 6v6l4 2" }]
   ];
 
   const ClosedCaption = [
@@ -3564,12 +3779,18 @@
   const CloudAlert = [
     ["path", { d: "M12 12v4" }],
     ["path", { d: "M12 20h.01" }],
-    ["path", { d: "M17 18h.5a1 1 0 0 0 0-9h-1.79A7 7 0 1 0 7 17.708" }]
+    ["path", { d: "M8.128 16.949A7 7 0 1 1 15.71 8h1.79a1 1 0 0 1 0 9h-1.642" }]
+  ];
+
+  const CloudBackup = [
+    ["path", { d: "M21 15.251A4.5 4.5 0 0 0 17.5 8h-1.79A7 7 0 1 0 3 13.607" }],
+    ["path", { d: "M7 11v4h4" }],
+    ["path", { d: "M8 19a5 5 0 0 0 9-3 4.5 4.5 0 0 0-4.5-4.5 4.82 4.82 0 0 0-3.41 1.41L7 15" }]
   ];
 
   const CloudCheck = [
     ["path", { d: "m17 15-5.5 5.5L9 18" }],
-    ["path", { d: "M5 17.743A7 7 0 1 1 15.71 10h1.79a4.5 4.5 0 0 1 1.5 8.742" }]
+    ["path", { d: "M5.516 16.07A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 3.501 7.327" }]
   ];
 
   const CloudCog = [
@@ -3584,6 +3805,12 @@
     ["path", { d: "m9.228 18.148-.923.383" }]
   ];
 
+  const CloudDownload = [
+    ["path", { d: "M12 13v8l-4-4" }],
+    ["path", { d: "m12 21 4-4" }],
+    ["path", { d: "M4.393 15.269A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.436 8.284" }]
+  ];
+
   const CloudDrizzle = [
     ["path", { d: "M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242" }],
     ["path", { d: "M8 19v1" }],
@@ -3594,18 +3821,6 @@
     ["path", { d: "M12 16v1" }]
   ];
 
-  const CloudDownload = [
-    ["path", { d: "M12 13v8l-4-4" }],
-    ["path", { d: "m12 21 4-4" }],
-    ["path", { d: "M4.393 15.269A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.436 8.284" }]
-  ];
-
-  const CloudFog = [
-    ["path", { d: "M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242" }],
-    ["path", { d: "M16 17H7" }],
-    ["path", { d: "M17 21H9" }]
-  ];
-
   const CloudHail = [
     ["path", { d: "M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242" }],
     ["path", { d: "M16 14v2" }],
@@ -3614,6 +3829,12 @@
     ["path", { d: "M8 20h.01" }],
     ["path", { d: "M12 16v2" }],
     ["path", { d: "M12 22h.01" }]
+  ];
+
+  const CloudFog = [
+    ["path", { d: "M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242" }],
+    ["path", { d: "M16 17H7" }],
+    ["path", { d: "M17 21H9" }]
   ];
 
   const CloudLightning = [
@@ -3643,17 +3864,17 @@
     ]
   ];
 
-  const CloudOff = [
-    ["path", { d: "m2 2 20 20" }],
-    ["path", { d: "M5.782 5.782A7 7 0 0 0 9 19h8.5a4.5 4.5 0 0 0 1.307-.193" }],
-    ["path", { d: "M21.532 16.5A4.5 4.5 0 0 0 17.5 10h-1.79A7.008 7.008 0 0 0 10 5.07" }]
-  ];
-
   const CloudRainWind = [
     ["path", { d: "M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242" }],
     ["path", { d: "m9.2 22 3-7" }],
     ["path", { d: "m9 13-3 7" }],
     ["path", { d: "m17 13-3 7" }]
+  ];
+
+  const CloudOff = [
+    ["path", { d: "M10.94 5.274A7 7 0 0 1 15.71 10h1.79a4.5 4.5 0 0 1 4.222 6.057" }],
+    ["path", { d: "M18.796 18.81A4.5 4.5 0 0 1 17.5 19H9A7 7 0 0 1 5.79 5.78" }],
+    ["path", { d: "m2 2 20 20" }]
   ];
 
   const CloudRain = [
@@ -3684,6 +3905,14 @@
     ["path", { d: "M7 19v2" }]
   ];
 
+  const CloudSync = [
+    ["path", { d: "m17 18-1.535 1.605a5 5 0 0 1-8-1.5" }],
+    ["path", { d: "M17 22v-4h-4" }],
+    ["path", { d: "M20.996 15.251A4.5 4.5 0 0 0 17.495 8h-1.79a7 7 0 1 0-12.709 5.607" }],
+    ["path", { d: "M7 10v4h4" }],
+    ["path", { d: "m7 14 1.535-1.605a5 5 0 0 1 8 1.5" }]
+  ];
+
   const CloudSun = [
     ["path", { d: "M12 2v2" }],
     ["path", { d: "m4.93 4.93 1.41 1.41" }],
@@ -3702,8 +3931,8 @@
   const Cloud = [["path", { d: "M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" }]];
 
   const Cloudy = [
-    ["path", { d: "M17.5 21H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" }],
-    ["path", { d: "M22 10a3 3 0 0 0-3-3h-2.207a5.502 5.502 0 0 0-10.702.5" }]
+    ["path", { d: "M17.5 12a1 1 0 1 1 0 9H9.006a7 7 0 1 1 6.702-9z" }],
+    ["path", { d: "M21.832 9A3 3 0 0 0 19 7h-2.207a5.5 5.5 0 0 0-10.72.61" }]
   ];
 
   const Clover = [
@@ -3725,37 +3954,15 @@
     ["path", { d: "M12 17.66L12 22" }]
   ];
 
-  const Code = [
-    ["path", { d: "m16 18 6-6-6-6" }],
-    ["path", { d: "m8 6-6 6 6 6" }]
-  ];
-
   const CodeXml = [
     ["path", { d: "m18 16 4-4-4-4" }],
     ["path", { d: "m6 8-4 4 4 4" }],
     ["path", { d: "m14.5 4-5 16" }]
   ];
 
-  const Codepen = [
-    ["polygon", { points: "12 2 22 8.5 22 15.5 12 22 2 15.5 2 8.5 12 2" }],
-    ["line", { x1: "12", x2: "12", y1: "22", y2: "15.5" }],
-    ["polyline", { points: "22 8.5 12 15.5 2 8.5" }],
-    ["polyline", { points: "2 15.5 12 8.5 22 15.5" }],
-    ["line", { x1: "12", x2: "12", y1: "2", y2: "8.5" }]
-  ];
-
-  const Codesandbox = [
-    [
-      "path",
-      {
-        d: "M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"
-      }
-    ],
-    ["polyline", { points: "7.5 4.21 12 6.81 16.5 4.21" }],
-    ["polyline", { points: "7.5 19.79 7.5 14.6 3 12" }],
-    ["polyline", { points: "21 12 16.5 14.6 16.5 19.79" }],
-    ["polyline", { points: "3.27 6.96 12 12.01 20.73 6.96" }],
-    ["line", { x1: "12", x2: "12", y1: "22.08", y2: "12" }]
+  const Code = [
+    ["path", { d: "m16 18 6-6-6-6" }],
+    ["path", { d: "m8 6-6 6 6 6" }]
   ];
 
   const Coffee = [
@@ -3788,10 +3995,10 @@
   ];
 
   const Coins = [
-    ["circle", { cx: "8", cy: "8", r: "6" }],
-    ["path", { d: "M18.09 10.37A6 6 0 1 1 10.34 18" }],
-    ["path", { d: "M7 6h1v4" }],
-    ["path", { d: "m16.71 13.88.7.71-2.82 2.82" }]
+    ["path", { d: "M13.744 17.736a6 6 0 1 1-7.48-7.48" }],
+    ["path", { d: "M15 6h1v4" }],
+    ["path", { d: "m6.134 14.768.866-.5 2 3.464" }],
+    ["circle", { cx: "16", cy: "8", r: "6" }]
   ];
 
   const Columns2 = [
@@ -3828,12 +4035,12 @@
   ];
 
   const Combine = [
-    ["path", { d: "M10 18H5a3 3 0 0 1-3-3v-1" }],
-    ["path", { d: "M14 2a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2" }],
-    ["path", { d: "M20 2a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2" }],
-    ["path", { d: "m7 21 3-3-3-3" }],
-    ["rect", { x: "14", y: "14", width: "8", height: "8", rx: "2" }],
-    ["rect", { x: "2", y: "2", width: "8", height: "8", rx: "2" }]
+    ["path", { d: "M14 3a1 1 0 0 1 1 1v5a1 1 0 0 1-1 1" }],
+    ["path", { d: "M19 3a1 1 0 0 1 1 1v5a1 1 0 0 1-1 1" }],
+    ["path", { d: "m7 15 3 3" }],
+    ["path", { d: "m7 21 3-3H5a2 2 0 0 1-2-2v-2" }],
+    ["rect", { x: "14", y: "14", width: "7", height: "7", rx: "1" }],
+    ["rect", { x: "3", y: "3", width: "7", height: "7", rx: "1" }]
   ];
 
   const Command = [
@@ -3841,13 +4048,13 @@
   ];
 
   const Compass = [
+    ["circle", { cx: "12", cy: "12", r: "10" }],
     [
       "path",
       {
         d: "m16.24 7.76-1.804 5.411a2 2 0 0 1-1.265 1.265L7.76 16.24l1.804-5.411a2 2 0 0 1 1.265-1.265z"
       }
-    ],
-    ["circle", { cx: "12", cy: "12", r: "10" }]
+    ]
   ];
 
   const Component = [
@@ -3982,11 +4189,6 @@
     ["path", { d: "M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" }]
   ];
 
-  const Copyleft = [
-    ["circle", { cx: "12", cy: "12", r: "10" }],
-    ["path", { d: "M9.17 14.83a4 4 0 1 0 0-5.66" }]
-  ];
-
   const CopyX = [
     ["line", { x1: "12", x2: "18", y1: "12", y2: "18" }],
     ["line", { x1: "12", x2: "18", y1: "18", y2: "12" }],
@@ -3997,6 +4199,11 @@
   const Copy = [
     ["rect", { width: "14", height: "14", x: "8", y: "8", rx: "2", ry: "2" }],
     ["path", { d: "M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" }]
+  ];
+
+  const Copyleft = [
+    ["circle", { cx: "12", cy: "12", r: "10" }],
+    ["path", { d: "M9.17 14.83a4 4 0 1 0 0-5.66" }]
   ];
 
   const Copyright = [
@@ -4107,17 +4314,6 @@
     ["line", { x1: "12", x2: "12", y1: "22", y2: "18" }]
   ];
 
-  const Cuboid = [
-    [
-      "path",
-      {
-        d: "m21.12 6.4-6.05-4.06a2 2 0 0 0-2.17-.05L2.95 8.41a2 2 0 0 0-.95 1.7v5.82a2 2 0 0 0 .88 1.66l6.05 4.07a2 2 0 0 0 2.17.05l9.95-6.12a2 2 0 0 0 .95-1.7V8.06a2 2 0 0 0-.88-1.66Z"
-      }
-    ],
-    ["path", { d: "M10 22v-8L2.25 9.15" }],
-    ["path", { d: "m10 14 11.77-6.87" }]
-  ];
-
   const Crown = [
     [
       "path",
@@ -4128,16 +4324,22 @@
     ["path", { d: "M5 21h14" }]
   ];
 
+  const Cuboid = [
+    ["path", { d: "M10 22v-8" }],
+    ["path", { d: "M2.336 8.89 10 14l11.715-7.029" }],
+    [
+      "path",
+      {
+        d: "M22 14a2 2 0 0 1-.971 1.715l-10 6a2 2 0 0 1-2.138-.05l-6-4A2 2 0 0 1 2 16v-6a2 2 0 0 1 .971-1.715l10-6a2 2 0 0 1 2.138.05l6 4A2 2 0 0 1 22 8z"
+      }
+    ]
+  ];
+
   const CupSoda = [
     ["path", { d: "m6 8 1.75 12.28a2 2 0 0 0 2 1.72h4.54a2 2 0 0 0 2-1.72L18 8" }],
     ["path", { d: "M5 8h14" }],
     ["path", { d: "M7 15a6.47 6.47 0 0 1 5 0 6.47 6.47 0 0 0 5 0" }],
     ["path", { d: "m12 8 1-6h2" }]
-  ];
-
-  const Cylinder = [
-    ["ellipse", { cx: "12", cy: "5", rx: "9", ry: "3" }],
-    ["path", { d: "M3 5v14a9 3 0 0 0 18 0V5" }]
   ];
 
   const Currency = [
@@ -4146,6 +4348,11 @@
     ["line", { x1: "21", x2: "18", y1: "3", y2: "6" }],
     ["line", { x1: "3", x2: "6", y1: "21", y2: "18" }],
     ["line", { x1: "21", x2: "18", y1: "21", y2: "18" }]
+  ];
+
+  const Cylinder = [
+    ["ellipse", { cx: "12", cy: "5", rx: "9", ry: "3" }],
+    ["path", { d: "M3 5v14a9 3 0 0 0 18 0V5" }]
   ];
 
   const Dam = [
@@ -4173,6 +4380,15 @@
     ["path", { d: "M21 5V8" }],
     ["path", { d: "M21 12L18 17H22L19 22" }],
     ["path", { d: "M3 12A9 3 0 0 0 14.59 14.87" }]
+  ];
+
+  const DatabaseSearch = [
+    ["path", { d: "M21 11.693V5" }],
+    ["path", { d: "m22 22-1.875-1.875" }],
+    ["path", { d: "M3 12a9 3 0 0 0 8.697 2.998" }],
+    ["path", { d: "M3 5v14a9 3 0 0 0 9.28 2.999" }],
+    ["circle", { cx: "18", cy: "18", r: "3" }],
+    ["ellipse", { cx: "12", cy: "5", rx: "9", ry: "3" }]
   ];
 
   const Database = [
@@ -4313,6 +4529,12 @@
     ["path", { d: "M8 16h.01" }]
   ];
 
+  const Diff = [
+    ["path", { d: "M12 3v14" }],
+    ["path", { d: "M5 10h14" }],
+    ["path", { d: "M5 21h14" }]
+  ];
+
   const Dices = [
     ["rect", { width: "12", height: "12", x: "2", y: "10", rx: "2", ry: "2" }],
     ["path", { d: "m17.92 14 3.5-3.5a2.24 2.24 0 0 0 0-3l-5-4.92a2.24 2.24 0 0 0-3 0L10 6" }],
@@ -4320,12 +4542,6 @@
     ["path", { d: "M10 14h.01" }],
     ["path", { d: "M15 6h.01" }],
     ["path", { d: "M18 9h.01" }]
-  ];
-
-  const Diff = [
-    ["path", { d: "M12 3v14" }],
-    ["path", { d: "M5 10h14" }],
-    ["path", { d: "M5 21h14" }]
   ];
 
   const Disc2 = [
@@ -4347,15 +4563,28 @@
     ["path", { d: "M12 12h.01" }]
   ];
 
+  const Divide = [
+    ["circle", { cx: "12", cy: "6", r: "1" }],
+    ["line", { x1: "5", x2: "19", y1: "12", y2: "12" }],
+    ["circle", { cx: "12", cy: "18", r: "1" }]
+  ];
+
   const Disc = [
     ["circle", { cx: "12", cy: "12", r: "10" }],
     ["circle", { cx: "12", cy: "12", r: "2" }]
   ];
 
-  const Divide = [
-    ["circle", { cx: "12", cy: "6", r: "1" }],
-    ["line", { x1: "5", x2: "19", y1: "12", y2: "12" }],
-    ["circle", { cx: "12", cy: "18", r: "1" }]
+  const DnaOff = [
+    ["path", { d: "M15 2c-1.35 1.5-2.092 3-2.5 4.5L14 8" }],
+    ["path", { d: "m17 6-2.891-2.891" }],
+    ["path", { d: "M2 15c3.333-3 6.667-3 10-3" }],
+    ["path", { d: "m2 2 20 20" }],
+    ["path", { d: "m20 9 .891.891" }],
+    ["path", { d: "M22 9c-1.5 1.35-3 2.092-4.5 2.5l-1-1" }],
+    ["path", { d: "M3.109 14.109 4 15" }],
+    ["path", { d: "m6.5 12.5 1 1" }],
+    ["path", { d: "m7 18 2.891 2.891" }],
+    ["path", { d: "M9 22c1.35-1.5 2.092-3 2.5-4.5L10 16" }]
   ];
 
   const Dna = [
@@ -4372,23 +4601,15 @@
     ["path", { d: "M9 22c1.798-1.998 2.518-3.995 2.807-5.993" }]
   ];
 
-  const DnaOff = [
-    ["path", { d: "M15 2c-1.35 1.5-2.092 3-2.5 4.5L14 8" }],
-    ["path", { d: "m17 6-2.891-2.891" }],
-    ["path", { d: "M2 15c3.333-3 6.667-3 10-3" }],
-    ["path", { d: "m2 2 20 20" }],
-    ["path", { d: "m20 9 .891.891" }],
-    ["path", { d: "M22 9c-1.5 1.35-3 2.092-4.5 2.5l-1-1" }],
-    ["path", { d: "M3.109 14.109 4 15" }],
-    ["path", { d: "m6.5 12.5 1 1" }],
-    ["path", { d: "m7 18 2.891 2.891" }],
-    ["path", { d: "M9 22c1.35-1.5 2.092-3 2.5-4.5L10 16" }]
-  ];
-
   const Dock = [
     ["path", { d: "M2 8h20" }],
     ["rect", { width: "20", height: "16", x: "2", y: "4", rx: "2" }],
     ["path", { d: "M6 16h12" }]
+  ];
+
+  const DollarSign = [
+    ["line", { x1: "12", x2: "12", y1: "2", y2: "22" }],
+    ["path", { d: "M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" }]
   ];
 
   const Dog = [
@@ -4407,11 +4628,6 @@
         d: "M8.5 8.5c-.384 1.05-1.083 2.028-2.344 2.5-1.931.722-3.576-.297-3.656-1-.113-.994 1.177-6.53 4-7 1.923-.321 3.651.845 3.651 2.235A7.497 7.497 0 0 1 14 5.277c0-1.39 1.844-2.598 3.767-2.277 2.823.47 4.113 6.006 4 7-.08.703-1.725 1.722-3.656 1-1.261-.472-1.855-1.45-2.239-2.5"
       }
     ]
-  ];
-
-  const DollarSign = [
-    ["line", { x1: "12", x2: "12", y1: "2", y2: "22" }],
-    ["path", { d: "M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" }]
   ];
 
   const Donut = [
@@ -4467,6 +4683,20 @@
     ["circle", { cx: "12", cy: "5", r: "2" }]
   ];
 
+  const Drill = [
+    ["path", { d: "M10 18a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H5a3 3 0 0 1-3-3 1 1 0 0 1 1-1z" }],
+    [
+      "path",
+      {
+        d: "M13 10H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1l-.81 3.242a1 1 0 0 1-.97.758H8"
+      }
+    ],
+    ["path", { d: "M14 4h3a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1h-3" }],
+    ["path", { d: "M18 6h4" }],
+    ["path", { d: "m5 10-2 8" }],
+    ["path", { d: "m7 18 2-8" }]
+  ];
+
   const Drama = [
     ["path", { d: "M10 11h.01" }],
     ["path", { d: "M14 6h.01" }],
@@ -4483,27 +4713,6 @@
     ["path", { d: "M9.1 16.5c.3-1.1 1.4-1.7 2.4-1.4" }]
   ];
 
-  const Dribbble = [
-    ["circle", { cx: "12", cy: "12", r: "10" }],
-    ["path", { d: "M19.13 5.09C15.22 9.14 10 10.44 2.25 10.94" }],
-    ["path", { d: "M21.75 12.84c-6.62-1.41-12.14 1-16.38 6.32" }],
-    ["path", { d: "M8.56 2.75c4.37 6 6 9.42 8 17.72" }]
-  ];
-
-  const Drill = [
-    ["path", { d: "M10 18a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H5a3 3 0 0 1-3-3 1 1 0 0 1 1-1z" }],
-    [
-      "path",
-      {
-        d: "M13 10H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1l-.81 3.242a1 1 0 0 1-.97.758H8"
-      }
-    ],
-    ["path", { d: "M14 4h3a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1h-3" }],
-    ["path", { d: "M18 6h4" }],
-    ["path", { d: "m5 10-2 8" }],
-    ["path", { d: "m7 18 2-8" }]
-  ];
-
   const Drone = [
     ["path", { d: "M10 10 7 7" }],
     ["path", { d: "m10 14-3 3" }],
@@ -4516,6 +4725,15 @@
     ["rect", { x: "10", y: "8", width: "4", height: "8", rx: "1" }]
   ];
 
+  const Droplet = [
+    [
+      "path",
+      {
+        d: "M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z"
+      }
+    ]
+  ];
+
   const DropletOff = [
     [
       "path",
@@ -4525,15 +4743,6 @@
     ],
     ["path", { d: "m2 2 20 20" }],
     ["path", { d: "M8.795 8.797A11 11 0 0 1 8 9.5C6 11.1 5 13 5 15a7 7 0 0 0 13.222 3.208" }]
-  ];
-
-  const Droplet = [
-    [
-      "path",
-      {
-        d: "M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z"
-      }
-    ]
   ];
 
   const Droplets = [
@@ -4551,11 +4760,6 @@
     ]
   ];
 
-  const Drumstick = [
-    ["path", { d: "M15.4 15.63a7.875 6 135 1 1 6.23-6.23 4.5 3.43 135 0 0-6.23 6.23" }],
-    ["path", { d: "m8.29 12.71-2.6 2.6a2.5 2.5 0 1 0-1.65 4.65A2.5 2.5 0 1 0 8.7 18.3l2.59-2.59" }]
-  ];
-
   const Drum = [
     ["path", { d: "m2 2 8 8" }],
     ["path", { d: "m22 2-8 8" }],
@@ -4564,6 +4768,11 @@
     ["path", { d: "M12 14v8" }],
     ["path", { d: "M17 13.4v7.9" }],
     ["path", { d: "M2 9v8a10 5 0 0 0 20 0V9" }]
+  ];
+
+  const Drumstick = [
+    ["path", { d: "M15.4 15.63a7.875 6 135 1 1 6.23-6.23 4.5 3.43 135 0 0-6.23 6.23" }],
+    ["path", { d: "m8.29 12.71-2.6 2.6a2.5 2.5 0 1 0-1.65 4.65A2.5 2.5 0 1 0 8.7 18.3l2.59-2.59" }]
   ];
 
   const Dumbbell = [
@@ -4631,13 +4840,15 @@
     ]
   ];
 
+  const Egg = [["path", { d: "M12 2C8 2 4 8 4 14a8 8 0 0 0 16 0c0-6-4-12-8-12" }]];
+
   const EggOff = [
     ["path", { d: "m2 2 20 20" }],
     ["path", { d: "M20 14.347V14c0-6-4-12-8-12-1.078 0-2.157.436-3.157 1.19" }],
     ["path", { d: "M6.206 6.21C4.871 8.4 4 11.2 4 14a8 8 0 0 0 14.568 4.568" }]
   ];
 
-  const Egg = [["path", { d: "M12 2C8 2 4 8 4 14a8 8 0 0 0 16 0c0-6-4-12-8-12" }]];
+  const Ellipse = [["ellipse", { cx: "12", cy: "12", rx: "10", ry: "6" }]];
 
   const EllipsisVertical = [
     ["circle", { cx: "12", cy: "12", r: "1" }],
@@ -4645,15 +4856,15 @@
     ["circle", { cx: "12", cy: "19", r: "1" }]
   ];
 
+  const EqualApproximately = [
+    ["path", { d: "M5 15a6.5 6.5 0 0 1 7 0 6.5 6.5 0 0 0 7 0" }],
+    ["path", { d: "M5 9a6.5 6.5 0 0 1 7 0 6.5 6.5 0 0 0 7 0" }]
+  ];
+
   const Ellipsis = [
     ["circle", { cx: "12", cy: "12", r: "1" }],
     ["circle", { cx: "19", cy: "12", r: "1" }],
     ["circle", { cx: "5", cy: "12", r: "1" }]
-  ];
-
-  const EqualApproximately = [
-    ["path", { d: "M5 15a6.5 6.5 0 0 1 7 0 6.5 6.5 0 0 0 7 0" }],
-    ["path", { d: "M5 9a6.5 6.5 0 0 1 7 0 6.5 6.5 0 0 0 7 0" }]
   ];
 
   const EqualNot = [
@@ -4697,10 +4908,12 @@
     ]
   ];
 
-  const ExternalLink = [
-    ["path", { d: "M15 3h6v6" }],
-    ["path", { d: "M10 14 21 3" }],
-    ["path", { d: "M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" }]
+  const EvCharger = [
+    ["path", { d: "M14 13h2a2 2 0 0 1 2 2v2a2 2 0 0 0 4 0v-6.998a2 2 0 0 0-.59-1.42L18 5" }],
+    ["path", { d: "M14 21V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v16" }],
+    ["path", { d: "M2 21h13" }],
+    ["path", { d: "M3 7h11" }],
+    ["path", { d: "m9 11-2 3h3l-2 3" }]
   ];
 
   const Expand = [
@@ -4712,6 +4925,12 @@
     ["path", { d: "m3 21 6-6" }],
     ["path", { d: "M3 8V3h5" }],
     ["path", { d: "M9 9 3 3" }]
+  ];
+
+  const ExternalLink = [
+    ["path", { d: "M15 3h6v6" }],
+    ["path", { d: "M10 14 21 3" }],
+    ["path", { d: "M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" }]
   ];
 
   const EyeClosed = [
@@ -4747,10 +4966,6 @@
       }
     ],
     ["circle", { cx: "12", cy: "12", r: "3" }]
-  ];
-
-  const Facebook = [
-    ["path", { d: "M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z" }]
   ];
 
   const Factory = [
@@ -4791,16 +5006,6 @@
     ["path", { d: "M17.5 15H9" }]
   ];
 
-  const Fence = [
-    ["path", { d: "M4 3 2 5v15c0 .6.4 1 1 1h2c.6 0 1-.4 1-1V5Z" }],
-    ["path", { d: "M6 8h4" }],
-    ["path", { d: "M6 18h4" }],
-    ["path", { d: "m12 3-2 2v15c0 .6.4 1 1 1h2c.6 0 1-.4 1-1V5Z" }],
-    ["path", { d: "M14 8h4" }],
-    ["path", { d: "M14 18h4" }],
-    ["path", { d: "m20 3-2 2v15c0 .6.4 1 1 1h2c.6 0 1-.4 1-1V5Z" }]
-  ];
-
   const FerrisWheel = [
     ["circle", { cx: "12", cy: "12", r: "2" }],
     ["path", { d: "M12 2v4" }],
@@ -4813,108 +5018,146 @@
     ["path", { d: "M18 18.7a9 9 0 1 0-12 0" }]
   ];
 
-  const Figma = [
-    ["path", { d: "M5 5.5A3.5 3.5 0 0 1 8.5 2H12v7H8.5A3.5 3.5 0 0 1 5 5.5z" }],
-    ["path", { d: "M12 2h3.5a3.5 3.5 0 1 1 0 7H12V2z" }],
-    ["path", { d: "M12 12.5a3.5 3.5 0 1 1 7 0 3.5 3.5 0 1 1-7 0z" }],
-    ["path", { d: "M5 19.5A3.5 3.5 0 0 1 8.5 16H12v3.5a3.5 3.5 0 1 1-7 0z" }],
-    ["path", { d: "M5 12.5A3.5 3.5 0 0 1 8.5 9H12v7H8.5A3.5 3.5 0 0 1 5 12.5z" }]
+  const Fence = [
+    ["path", { d: "M4 3 2 5v15c0 .6.4 1 1 1h2c.6 0 1-.4 1-1V5Z" }],
+    ["path", { d: "M6 8h4" }],
+    ["path", { d: "M6 18h4" }],
+    ["path", { d: "m12 3-2 2v15c0 .6.4 1 1 1h2c.6 0 1-.4 1-1V5Z" }],
+    ["path", { d: "M14 8h4" }],
+    ["path", { d: "M14 18h4" }],
+    ["path", { d: "m20 3-2 2v15c0 .6.4 1 1 1h2c.6 0 1-.4 1-1V5Z" }]
   ];
 
   const FileArchive = [
-    ["path", { d: "M10 12v-1" }],
-    ["path", { d: "M10 18v-2" }],
-    ["path", { d: "M10 7V6" }],
-    ["path", { d: "M14 2v4a2 2 0 0 0 2 2h4" }],
-    ["path", { d: "M15.5 22H18a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v16a2 2 0 0 0 .274 1.01" }],
-    ["circle", { cx: "10", cy: "20", r: "2" }]
-  ];
-
-  const FileAudio2 = [
-    ["path", { d: "M4 22h14a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v2" }],
-    ["path", { d: "M14 2v4a2 2 0 0 0 2 2h4" }],
-    ["circle", { cx: "3", cy: "17", r: "1" }],
-    ["path", { d: "M2 17v-3a4 4 0 0 1 8 0v3" }],
-    ["circle", { cx: "9", cy: "17", r: "1" }]
-  ];
-
-  const FileAudio = [
-    ["path", { d: "M17.5 22h.5a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v3" }],
-    ["path", { d: "M14 2v4a2 2 0 0 0 2 2h4" }],
     [
       "path",
-      { d: "M2 19a2 2 0 1 1 4 0v1a2 2 0 1 1-4 0v-4a6 6 0 0 1 12 0v4a2 2 0 1 1-4 0v-1a2 2 0 1 1 4 0" }
-    ]
+      {
+        d: "M13.659 22H18a2 2 0 0 0 2-2V8a2.4 2.4 0 0 0-.706-1.706l-3.588-3.588A2.4 2.4 0 0 0 14 2H6a2 2 0 0 0-2 2v11.5"
+      }
+    ],
+    ["path", { d: "M14 2v5a1 1 0 0 0 1 1h5" }],
+    ["path", { d: "M8 12v-1" }],
+    ["path", { d: "M8 18v-2" }],
+    ["path", { d: "M8 7V6" }],
+    ["circle", { cx: "8", cy: "20", r: "2" }]
   ];
 
   const FileAxis3d = [
-    ["path", { d: "M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" }],
-    ["path", { d: "M14 2v4a2 2 0 0 0 2 2h4" }],
+    [
+      "path",
+      {
+        d: "M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"
+      }
+    ],
+    ["path", { d: "M14 2v5a1 1 0 0 0 1 1h5" }],
     ["path", { d: "m8 18 4-4" }],
     ["path", { d: "M8 10v8h8" }]
   ];
 
-  const FileBadge2 = [
-    [
-      "path",
-      {
-        d: "m13.69 12.479 1.29 4.88a.5.5 0 0 1-.697.591l-1.844-.849a1 1 0 0 0-.88.001l-1.846.85a.5.5 0 0 1-.693-.593l1.29-4.88"
-      }
-    ],
-    ["path", { d: "M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z" }],
-    ["circle", { cx: "12", cy: "10", r: "3" }]
-  ];
-
   const FileBadge = [
-    ["path", { d: "M12 22h6a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v3.072" }],
-    ["path", { d: "M14 2v4a2 2 0 0 0 2 2h4" }],
     [
       "path",
       {
-        d: "m6.69 16.479 1.29 4.88a.5.5 0 0 1-.698.591l-1.843-.849a1 1 0 0 0-.88.001l-1.846.85a.5.5 0 0 1-.693-.593l1.29-4.88"
+        d: "M13 22h5a2 2 0 0 0 2-2V8a2.4 2.4 0 0 0-.706-1.706l-3.588-3.588A2.4 2.4 0 0 0 14 2H6a2 2 0 0 0-2 2v3.3"
       }
     ],
-    ["circle", { cx: "5", cy: "14", r: "3" }]
+    ["path", { d: "M14 2v5a1 1 0 0 0 1 1h5" }],
+    [
+      "path",
+      {
+        d: "m7.69 16.479 1.29 4.88a.5.5 0 0 1-.698.591l-1.843-.849a1 1 0 0 0-.879.001l-1.846.85a.5.5 0 0 1-.692-.593l1.29-4.88"
+      }
+    ],
+    ["circle", { cx: "6", cy: "14", r: "3" }]
   ];
 
   const FileBox = [
-    ["path", { d: "M14.5 22H18a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v4" }],
-    ["path", { d: "M14 2v4a2 2 0 0 0 2 2h4" }],
     [
       "path",
       {
-        d: "M3 13.1a2 2 0 0 0-1 1.76v3.24a2 2 0 0 0 .97 1.78L6 21.7a2 2 0 0 0 2.03.01L11 19.9a2 2 0 0 0 1-1.76V14.9a2 2 0 0 0-.97-1.78L8 11.3a2 2 0 0 0-2.03-.01Z"
+        d: "M14.5 22H18a2 2 0 0 0 2-2V8a2.4 2.4 0 0 0-.706-1.706l-3.588-3.588A2.4 2.4 0 0 0 14 2H6a2 2 0 0 0-2 2v3.8"
       }
     ],
-    ["path", { d: "M7 17v5" }],
-    ["path", { d: "M11.7 14.2 7 17l-4.7-2.8" }]
+    ["path", { d: "M14 2v5a1 1 0 0 0 1 1h5" }],
+    ["path", { d: "M11.7 14.2 7 17l-4.7-2.8" }],
+    [
+      "path",
+      {
+        d: "M3 13.1a2 2 0 0 0-.999 1.76v3.24a2 2 0 0 0 .969 1.78L6 21.7a2 2 0 0 0 2.03.01L11 19.9a2 2 0 0 0 1-1.76V14.9a2 2 0 0 0-.97-1.78L8 11.3a2 2 0 0 0-2.03-.01z"
+      }
+    ],
+    ["path", { d: "M7 17v5" }]
   ];
 
-  const FileChartColumn = [
-    ["path", { d: "M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" }],
-    ["path", { d: "M14 2v4a2 2 0 0 0 2 2h4" }],
-    ["path", { d: "M8 18v-1" }],
-    ["path", { d: "M12 18v-6" }],
-    ["path", { d: "M16 18v-3" }]
+  const FileBraces = [
+    [
+      "path",
+      {
+        d: "M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"
+      }
+    ],
+    ["path", { d: "M14 2v5a1 1 0 0 0 1 1h5" }],
+    ["path", { d: "M10 12a1 1 0 0 0-1 1v1a1 1 0 0 1-1 1 1 1 0 0 1 1 1v1a1 1 0 0 0 1 1" }],
+    ["path", { d: "M14 18a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1 1 1 0 0 1-1-1v-1a1 1 0 0 0-1-1" }]
   ];
 
   const FileChartColumnIncreasing = [
-    ["path", { d: "M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" }],
-    ["path", { d: "M14 2v4a2 2 0 0 0 2 2h4" }],
+    [
+      "path",
+      {
+        d: "M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"
+      }
+    ],
+    ["path", { d: "M14 2v5a1 1 0 0 0 1 1h5" }],
     ["path", { d: "M8 18v-2" }],
     ["path", { d: "M12 18v-4" }],
     ["path", { d: "M16 18v-6" }]
   ];
 
+  const FileBracesCorner = [
+    [
+      "path",
+      {
+        d: "M14 22h4a2 2 0 0 0 2-2V8a2.4 2.4 0 0 0-.706-1.706l-3.588-3.588A2.4 2.4 0 0 0 14 2H6a2 2 0 0 0-2 2v6"
+      }
+    ],
+    ["path", { d: "M14 2v5a1 1 0 0 0 1 1h5" }],
+    ["path", { d: "M5 14a1 1 0 0 0-1 1v2a1 1 0 0 1-1 1 1 1 0 0 1 1 1v2a1 1 0 0 0 1 1" }],
+    ["path", { d: "M9 22a1 1 0 0 0 1-1v-2a1 1 0 0 1 1-1 1 1 0 0 1-1-1v-2a1 1 0 0 0-1-1" }]
+  ];
+
+  const FileChartColumn = [
+    [
+      "path",
+      {
+        d: "M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"
+      }
+    ],
+    ["path", { d: "M14 2v5a1 1 0 0 0 1 1h5" }],
+    ["path", { d: "M8 18v-1" }],
+    ["path", { d: "M12 18v-6" }],
+    ["path", { d: "M16 18v-3" }]
+  ];
+
   const FileChartLine = [
-    ["path", { d: "M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" }],
-    ["path", { d: "M14 2v4a2 2 0 0 0 2 2h4" }],
+    [
+      "path",
+      {
+        d: "M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"
+      }
+    ],
+    ["path", { d: "M14 2v5a1 1 0 0 0 1 1h5" }],
     ["path", { d: "m16 13-3.5 3.5-2-2L8 17" }]
   ];
 
   const FileChartPie = [
-    ["path", { d: "M14 2v4a2 2 0 0 0 2 2h4" }],
-    ["path", { d: "M16 22h2a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v3.5" }],
+    [
+      "path",
+      {
+        d: "M15.941 22H18a2 2 0 0 0 2-2V8a2.4 2.4 0 0 0-.706-1.704l-3.588-3.588A2.4 2.4 0 0 0 14 2H6a2 2 0 0 0-2 2v3.512"
+      }
+    ],
+    ["path", { d: "M14 2v5a1 1 0 0 0 1 1h5" }],
     ["path", { d: "M4.017 11.512a6 6 0 1 0 8.466 8.475" }],
     [
       "path",
@@ -4924,165 +5167,248 @@
     ]
   ];
 
-  const FileCheck2 = [
-    ["path", { d: "M4 22h14a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v4" }],
-    ["path", { d: "M14 2v4a2 2 0 0 0 2 2h4" }],
-    ["path", { d: "m3 15 2 2 4-4" }]
+  const FileCheckCorner = [
+    [
+      "path",
+      {
+        d: "M10.5 22H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.706.706l3.588 3.588A2.4 2.4 0 0 1 20 8v6"
+      }
+    ],
+    ["path", { d: "M14 2v5a1 1 0 0 0 1 1h5" }],
+    ["path", { d: "m14 20 2 2 4-4" }]
   ];
 
   const FileCheck = [
-    ["path", { d: "M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" }],
-    ["path", { d: "M14 2v4a2 2 0 0 0 2 2h4" }],
+    [
+      "path",
+      {
+        d: "M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"
+      }
+    ],
+    ["path", { d: "M14 2v5a1 1 0 0 0 1 1h5" }],
     ["path", { d: "m9 15 2 2 4-4" }]
   ];
 
   const FileClock = [
-    ["path", { d: "M14 2v4a2 2 0 0 0 2 2h4" }],
-    ["path", { d: "M16 22h2a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v3" }],
+    [
+      "path",
+      {
+        d: "M16 22h2a2 2 0 0 0 2-2V8a2.4 2.4 0 0 0-.706-1.706l-3.588-3.588A2.4 2.4 0 0 0 14 2H6a2 2 0 0 0-2 2v2.85"
+      }
+    ],
+    ["path", { d: "M14 2v5a1 1 0 0 0 1 1h5" }],
     ["path", { d: "M8 14v2.2l1.6 1" }],
     ["circle", { cx: "8", cy: "16", r: "6" }]
   ];
 
-  const FileCode2 = [
-    ["path", { d: "M4 22h14a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v4" }],
-    ["path", { d: "M14 2v4a2 2 0 0 0 2 2h4" }],
-    ["path", { d: "m5 12-3 3 3 3" }],
-    ["path", { d: "m9 18 3-3-3-3" }]
+  const FileCodeCorner = [
+    [
+      "path",
+      {
+        d: "M4 12.15V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.706.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2h-3.35"
+      }
+    ],
+    ["path", { d: "M14 2v5a1 1 0 0 0 1 1h5" }],
+    ["path", { d: "m5 16-3 3 3 3" }],
+    ["path", { d: "m9 22 3-3-3-3" }]
   ];
 
   const FileCode = [
+    [
+      "path",
+      {
+        d: "M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"
+      }
+    ],
+    ["path", { d: "M14 2v5a1 1 0 0 0 1 1h5" }],
     ["path", { d: "M10 12.5 8 15l2 2.5" }],
-    ["path", { d: "m14 12.5 2 2.5-2 2.5" }],
-    ["path", { d: "M14 2v4a2 2 0 0 0 2 2h4" }],
-    ["path", { d: "M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z" }]
+    ["path", { d: "m14 12.5 2 2.5-2 2.5" }]
   ];
 
   const FileCog = [
-    ["path", { d: "M14 2v4a2 2 0 0 0 2 2h4" }],
-    ["path", { d: "m2.305 15.53.923-.382" }],
-    ["path", { d: "m3.228 12.852-.924-.383" }],
-    ["path", { d: "M4.677 21.5a2 2 0 0 0 1.313.5H18a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v2.5" }],
-    ["path", { d: "m4.852 11.228-.383-.923" }],
-    ["path", { d: "m4.852 16.772-.383.924" }],
-    ["path", { d: "m7.148 11.228.383-.923" }],
-    ["path", { d: "m7.53 17.696-.382-.924" }],
-    ["path", { d: "m8.772 12.852.923-.383" }],
-    ["path", { d: "m8.772 15.148.923.383" }],
-    ["circle", { cx: "6", cy: "14", r: "3" }]
+    ["path", { d: "M15 8a1 1 0 0 1-1-1V2a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8z" }],
+    ["path", { d: "M20 8v12a2 2 0 0 1-2 2h-4.182" }],
+    ["path", { d: "m3.305 19.53.923-.382" }],
+    ["path", { d: "M4 10.592V4a2 2 0 0 1 2-2h8" }],
+    ["path", { d: "m4.228 16.852-.924-.383" }],
+    ["path", { d: "m5.852 15.228-.383-.923" }],
+    ["path", { d: "m5.852 20.772-.383.924" }],
+    ["path", { d: "m8.148 15.228.383-.923" }],
+    ["path", { d: "m8.53 21.696-.382-.924" }],
+    ["path", { d: "m9.773 16.852.922-.383" }],
+    ["path", { d: "m9.773 19.148.922.383" }],
+    ["circle", { cx: "7", cy: "18", r: "3" }]
   ];
 
   const FileDiff = [
-    ["path", { d: "M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" }],
+    [
+      "path",
+      {
+        d: "M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"
+      }
+    ],
     ["path", { d: "M9 10h6" }],
     ["path", { d: "M12 13V7" }],
     ["path", { d: "M9 17h6" }]
   ];
 
   const FileDigit = [
-    ["path", { d: "M4 22h14a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v4" }],
-    ["path", { d: "M14 2v4a2 2 0 0 0 2 2h4" }],
-    ["rect", { width: "4", height: "6", x: "2", y: "12", rx: "2" }],
-    ["path", { d: "M10 12h2v6" }],
-    ["path", { d: "M10 18h4" }]
+    [
+      "path",
+      {
+        d: "M4 12V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.706.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2"
+      }
+    ],
+    ["path", { d: "M14 2v5a1 1 0 0 0 1 1h5" }],
+    ["path", { d: "M10 16h2v6" }],
+    ["path", { d: "M10 22h4" }],
+    ["rect", { x: "2", y: "16", width: "4", height: "6", rx: "2" }]
   ];
 
   const FileDown = [
-    ["path", { d: "M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" }],
-    ["path", { d: "M14 2v4a2 2 0 0 0 2 2h4" }],
+    [
+      "path",
+      {
+        d: "M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"
+      }
+    ],
+    ["path", { d: "M14 2v5a1 1 0 0 0 1 1h5" }],
     ["path", { d: "M12 18v-6" }],
     ["path", { d: "m9 15 3 3 3-3" }]
   ];
 
+  const FileExclamationPoint = [
+    [
+      "path",
+      {
+        d: "M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"
+      }
+    ],
+    ["path", { d: "M12 9v4" }],
+    ["path", { d: "M12 17h.01" }]
+  ];
+
+  const FileHeadphone = [
+    [
+      "path",
+      {
+        d: "M4 6.835V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.706.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2h-.343"
+      }
+    ],
+    ["path", { d: "M14 2v5a1 1 0 0 0 1 1h5" }],
+    [
+      "path",
+      { d: "M2 19a2 2 0 0 1 4 0v1a2 2 0 0 1-4 0v-4a6 6 0 0 1 12 0v4a2 2 0 0 1-4 0v-1a2 2 0 0 1 4 0" }
+    ]
+  ];
+
+  const FileHeart = [
+    [
+      "path",
+      {
+        d: "M13 22h5a2 2 0 0 0 2-2V8a2.4 2.4 0 0 0-.706-1.706l-3.588-3.588A2.4 2.4 0 0 0 14 2H6a2 2 0 0 0-2 2v7"
+      }
+    ],
+    ["path", { d: "M14 2v5a1 1 0 0 0 1 1h5" }],
+    [
+      "path",
+      {
+        d: "M3.62 18.8A2.25 2.25 0 1 1 7 15.836a2.25 2.25 0 1 1 3.38 2.966l-2.626 2.856a1 1 0 0 1-1.507 0z"
+      }
+    ]
+  ];
+
   const FileImage = [
-    ["path", { d: "M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" }],
-    ["path", { d: "M14 2v4a2 2 0 0 0 2 2h4" }],
+    [
+      "path",
+      {
+        d: "M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"
+      }
+    ],
+    ["path", { d: "M14 2v5a1 1 0 0 0 1 1h5" }],
     ["circle", { cx: "10", cy: "12", r: "2" }],
     ["path", { d: "m20 17-1.296-1.296a2.41 2.41 0 0 0-3.408 0L9 22" }]
   ];
 
-  const FileHeart = [
-    ["path", { d: "M14 2v4a2 2 0 0 0 2 2h4" }],
+  const FileInput = [
     [
       "path",
       {
-        d: "M2.62 13.8A2.25 2.25 0 1 1 6 10.836a2.25 2.25 0 1 1 3.38 2.966l-2.626 2.856a.998.998 0 0 1-1.507 0z"
+        d: "M4 11V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.706.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-1"
       }
     ],
-    ["path", { d: "M4 6.005V4a2 2 0 0 1 2-2h9l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-1.9-1.376" }]
-  ];
-
-  const FileInput = [
-    ["path", { d: "M4 22h14a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v4" }],
-    ["path", { d: "M14 2v4a2 2 0 0 0 2 2h4" }],
+    ["path", { d: "M14 2v5a1 1 0 0 0 1 1h5" }],
     ["path", { d: "M2 15h10" }],
     ["path", { d: "m9 18 3-3-3-3" }]
   ];
 
-  const FileJson2 = [
-    ["path", { d: "M4 22h14a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v4" }],
-    ["path", { d: "M14 2v4a2 2 0 0 0 2 2h4" }],
-    ["path", { d: "M4 12a1 1 0 0 0-1 1v1a1 1 0 0 1-1 1 1 1 0 0 1 1 1v1a1 1 0 0 0 1 1" }],
-    ["path", { d: "M8 18a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1 1 1 0 0 1-1-1v-1a1 1 0 0 0-1-1" }]
-  ];
-
-  const FileJson = [
-    ["path", { d: "M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" }],
-    ["path", { d: "M14 2v4a2 2 0 0 0 2 2h4" }],
-    ["path", { d: "M10 12a1 1 0 0 0-1 1v1a1 1 0 0 1-1 1 1 1 0 0 1 1 1v1a1 1 0 0 0 1 1" }],
-    ["path", { d: "M14 18a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1 1 1 0 0 1-1-1v-1a1 1 0 0 0-1-1" }]
-  ];
-
-  const FileKey2 = [
-    ["path", { d: "M4 22h14a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v6" }],
-    ["path", { d: "M14 2v4a2 2 0 0 0 2 2h4" }],
-    ["circle", { cx: "4", cy: "16", r: "2" }],
-    ["path", { d: "m10 10-4.5 4.5" }],
-    ["path", { d: "m9 11 1 1" }]
-  ];
-
   const FileKey = [
-    ["path", { d: "M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" }],
-    ["circle", { cx: "10", cy: "16", r: "2" }],
-    ["path", { d: "m16 10-4.5 4.5" }],
-    ["path", { d: "m15 11 1 1" }]
-  ];
-
-  const FileLock2 = [
-    ["path", { d: "M4 22h14a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v1" }],
-    ["path", { d: "M14 2v4a2 2 0 0 0 2 2h4" }],
-    ["rect", { width: "8", height: "5", x: "2", y: "13", rx: "1" }],
-    ["path", { d: "M8 13v-2a2 2 0 1 0-4 0v2" }]
+    ["path", { d: "M14 2v5a1 1 0 0 0 1 1h5" }],
+    ["path", { d: "M4 12v6" }],
+    ["path", { d: "M4 14h2" }],
+    [
+      "path",
+      {
+        d: "M9.65 22H18a2 2 0 0 0 2-2V8a2.4 2.4 0 0 0-.706-1.706l-3.588-3.588A2.4 2.4 0 0 0 14 2H6a2 2 0 0 0-2 2v4"
+      }
+    ],
+    ["circle", { cx: "4", cy: "20", r: "2" }]
   ];
 
   const FileLock = [
-    ["path", { d: "M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" }],
-    ["rect", { width: "8", height: "6", x: "8", y: "12", rx: "1" }],
-    ["path", { d: "M10 12v-2a2 2 0 1 1 4 0v2" }]
+    [
+      "path",
+      {
+        d: "M4 9.8V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.706.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2h-3"
+      }
+    ],
+    ["path", { d: "M14 2v5a1 1 0 0 0 1 1h5" }],
+    ["path", { d: "M9 17v-2a2 2 0 0 0-4 0v2" }],
+    ["rect", { width: "8", height: "5", x: "3", y: "17", rx: "1" }]
+  ];
+
+  const FileMinusCorner = [
+    [
+      "path",
+      {
+        d: "M20 14V8a2.4 2.4 0 0 0-.706-1.706l-3.588-3.588A2.4 2.4 0 0 0 14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12"
+      }
+    ],
+    ["path", { d: "M14 2v5a1 1 0 0 0 1 1h5" }],
+    ["path", { d: "M14 18h6" }]
   ];
 
   const FileMinus = [
-    ["path", { d: "M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" }],
-    ["path", { d: "M14 2v4a2 2 0 0 0 2 2h4" }],
+    [
+      "path",
+      {
+        d: "M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"
+      }
+    ],
+    ["path", { d: "M14 2v5a1 1 0 0 0 1 1h5" }],
     ["path", { d: "M9 15h6" }]
   ];
 
-  const FileMinus2 = [
-    ["path", { d: "M4 22h14a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v4" }],
-    ["path", { d: "M14 2v4a2 2 0 0 0 2 2h4" }],
-    ["path", { d: "M3 15h6" }]
-  ];
-
   const FileMusic = [
-    ["path", { d: "M10.5 22H18a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v8.4" }],
-    ["path", { d: "M8 18v-7.7L16 9v7" }],
-    ["circle", { cx: "14", cy: "16", r: "2" }],
-    ["circle", { cx: "6", cy: "18", r: "2" }]
+    [
+      "path",
+      {
+        d: "M11.65 22H18a2 2 0 0 0 2-2V8a2.4 2.4 0 0 0-.706-1.706l-3.588-3.588A2.4 2.4 0 0 0 14 2H6a2 2 0 0 0-2 2v10.35"
+      }
+    ],
+    ["path", { d: "M14 2v5a1 1 0 0 0 1 1h5" }],
+    ["path", { d: "M8 20v-7l3 1.474" }],
+    ["circle", { cx: "6", cy: "20", r: "2" }]
   ];
 
   const FileOutput = [
-    ["path", { d: "M14 2v4a2 2 0 0 0 2 2h4" }],
-    ["path", { d: "M4 7V4a2 2 0 0 1 2-2 2 2 0 0 0-2 2" }],
-    ["path", { d: "M4.063 20.999a2 2 0 0 0 2 1L18 22a2 2 0 0 0 2-2V7l-5-5H6" }],
+    [
+      "path",
+      {
+        d: "M4.226 20.925A2 2 0 0 0 6 22h12a2 2 0 0 0 2-2V8a2.4 2.4 0 0 0-.706-1.706l-3.588-3.588A2.4 2.4 0 0 0 14 2H6a2 2 0 0 0-2 2v3.127"
+      }
+    ],
+    ["path", { d: "M14 2v5a1 1 0 0 0 1 1h5" }],
     ["path", { d: "m5 11-3 3" }],
     ["path", { d: "m5 17-3-3h10" }]
   ];
@@ -5090,20 +5416,28 @@
   const FilePenLine = [
     [
       "path",
-      { d: "m18 5-2.414-2.414A2 2 0 0 0 14.172 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2" }
+      {
+        d: "M14.364 13.634a2 2 0 0 0-.506.854l-.837 2.87a.5.5 0 0 0 .62.62l2.87-.837a2 2 0 0 0 .854-.506l4.013-4.009a1 1 0 0 0-3.004-3.004z"
+      }
     ],
+    ["path", { d: "M14.487 7.858A1 1 0 0 1 14 7V2" }],
     [
       "path",
       {
-        d: "M21.378 12.626a1 1 0 0 0-3.004-3.004l-4.01 4.012a2 2 0 0 0-.506.854l-.837 2.87a.5.5 0 0 0 .62.62l2.87-.837a2 2 0 0 0 .854-.506z"
+        d: "M20 19.645V20a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l2.516 2.516"
       }
     ],
     ["path", { d: "M8 18h1" }]
   ];
 
   const FilePlay = [
-    ["path", { d: "M14 2v4a2 2 0 0 0 2 2h4" }],
-    ["path", { d: "M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z" }],
+    [
+      "path",
+      {
+        d: "M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"
+      }
+    ],
+    ["path", { d: "M14 2v5a1 1 0 0 0 1 1h5" }],
     [
       "path",
       {
@@ -5113,62 +5447,115 @@
   ];
 
   const FilePen = [
-    ["path", { d: "M12.5 22H18a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v9.5" }],
-    ["path", { d: "M14 2v4a2 2 0 0 0 2 2h4" }],
     [
       "path",
       {
-        d: "M13.378 15.626a1 1 0 1 0-3.004-3.004l-5.01 5.012a2 2 0 0 0-.506.854l-.837 2.87a.5.5 0 0 0 .62.62l2.87-.837a2 2 0 0 0 .854-.506z"
+        d: "M12.659 22H18a2 2 0 0 0 2-2V8a2.4 2.4 0 0 0-.706-1.706l-3.588-3.588A2.4 2.4 0 0 0 14 2H6a2 2 0 0 0-2 2v9.34"
+      }
+    ],
+    ["path", { d: "M14 2v5a1 1 0 0 0 1 1h5" }],
+    [
+      "path",
+      {
+        d: "M10.378 12.622a1 1 0 0 1 3 3.003L8.36 20.637a2 2 0 0 1-.854.506l-2.867.837a.5.5 0 0 1-.62-.62l.836-2.869a2 2 0 0 1 .506-.853z"
       }
     ]
   ];
 
+  const FilePlusCorner = [
+    [
+      "path",
+      {
+        d: "M11.35 22H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.706.706l3.588 3.588A2.4 2.4 0 0 1 20 8v5.35"
+      }
+    ],
+    ["path", { d: "M14 2v5a1 1 0 0 0 1 1h5" }],
+    ["path", { d: "M14 19h6" }],
+    ["path", { d: "M17 16v6" }]
+  ];
+
   const FilePlus = [
-    ["path", { d: "M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" }],
-    ["path", { d: "M14 2v4a2 2 0 0 0 2 2h4" }],
+    [
+      "path",
+      {
+        d: "M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"
+      }
+    ],
+    ["path", { d: "M14 2v5a1 1 0 0 0 1 1h5" }],
     ["path", { d: "M9 15h6" }],
     ["path", { d: "M12 18v-6" }]
   ];
 
-  const FilePlus2 = [
-    ["path", { d: "M4 22h14a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v4" }],
-    ["path", { d: "M14 2v4a2 2 0 0 0 2 2h4" }],
-    ["path", { d: "M3 15h6" }],
-    ["path", { d: "M6 12v6" }]
-  ];
-
   const FileQuestionMark = [
+    [
+      "path",
+      {
+        d: "M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"
+      }
+    ],
     ["path", { d: "M12 17h.01" }],
-    ["path", { d: "M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z" }],
     ["path", { d: "M9.1 9a3 3 0 0 1 5.82 1c0 2-3 3-3 3" }]
   ];
 
   const FileScan = [
-    ["path", { d: "M20 10V7l-5-5H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h4" }],
-    ["path", { d: "M14 2v4a2 2 0 0 0 2 2h4" }],
+    [
+      "path",
+      {
+        d: "M20 10V8a2.4 2.4 0 0 0-.706-1.704l-3.588-3.588A2.4 2.4 0 0 0 14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h4.35"
+      }
+    ],
+    ["path", { d: "M14 2v5a1 1 0 0 0 1 1h5" }],
     ["path", { d: "M16 14a2 2 0 0 0-2 2" }],
+    ["path", { d: "M16 22a2 2 0 0 1-2-2" }],
     ["path", { d: "M20 14a2 2 0 0 1 2 2" }],
-    ["path", { d: "M20 22a2 2 0 0 0 2-2" }],
-    ["path", { d: "M16 22a2 2 0 0 1-2-2" }]
+    ["path", { d: "M20 22a2 2 0 0 0 2-2" }]
   ];
 
-  const FileSearch2 = [
-    ["path", { d: "M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" }],
-    ["path", { d: "M14 2v4a2 2 0 0 0 2 2h4" }],
+  const FileSearchCorner = [
+    [
+      "path",
+      {
+        d: "M11.1 22H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.706.706l3.589 3.588A2.4 2.4 0 0 1 20 8v3.25"
+      }
+    ],
+    ["path", { d: "M14 2v5a1 1 0 0 0 1 1h5" }],
+    ["path", { d: "m21 22-2.88-2.88" }],
+    ["circle", { cx: "16", cy: "17", r: "3" }]
+  ];
+
+  const FileSearch = [
+    [
+      "path",
+      {
+        d: "M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"
+      }
+    ],
+    ["path", { d: "M14 2v5a1 1 0 0 0 1 1h5" }],
     ["circle", { cx: "11.5", cy: "14.5", r: "2.5" }],
     ["path", { d: "M13.3 16.3 15 18" }]
   ];
 
-  const FileSearch = [
-    ["path", { d: "M14 2v4a2 2 0 0 0 2 2h4" }],
-    ["path", { d: "M4.268 21a2 2 0 0 0 1.727 1H18a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v3" }],
-    ["path", { d: "m9 18-1.5-1.5" }],
-    ["circle", { cx: "5", cy: "14", r: "3" }]
+  const FileSignal = [
+    [
+      "path",
+      {
+        d: "M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"
+      }
+    ],
+    ["path", { d: "M14 2v5a1 1 0 0 0 1 1h5" }],
+    ["path", { d: "M8 15h.01" }],
+    ["path", { d: "M11.5 13.5a2.5 2.5 0 0 1 0 3" }],
+    ["path", { d: "M15 12a5 5 0 0 1 0 6" }]
   ];
 
   const FileSliders = [
-    ["path", { d: "M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" }],
-    ["path", { d: "M14 2v4a2 2 0 0 0 2 2h4" }],
+    [
+      "path",
+      {
+        d: "M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"
+      }
+    ],
+    ["path", { d: "M14 2v5a1 1 0 0 0 1 1h5" }],
     ["path", { d: "M8 12h8" }],
     ["path", { d: "M10 11v2" }],
     ["path", { d: "M8 17h8" }],
@@ -5176,8 +5563,13 @@
   ];
 
   const FileSpreadsheet = [
-    ["path", { d: "M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" }],
-    ["path", { d: "M14 2v4a2 2 0 0 0 2 2h4" }],
+    [
+      "path",
+      {
+        d: "M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"
+      }
+    ],
+    ["path", { d: "M14 2v5a1 1 0 0 0 1 1h5" }],
     ["path", { d: "M8 13h2" }],
     ["path", { d: "M14 13h2" }],
     ["path", { d: "M8 17h2" }],
@@ -5185,12 +5577,14 @@
   ];
 
   const FileSymlink = [
-    ["path", { d: "m10 18 3-3-3-3" }],
-    ["path", { d: "M14 2v4a2 2 0 0 0 2 2h4" }],
     [
       "path",
-      { d: "M4 11V4a2 2 0 0 1 2-2h9l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h7" }
-    ]
+      {
+        d: "M4 11V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.706.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h7"
+      }
+    ],
+    ["path", { d: "M14 2v5a1 1 0 0 0 1 1h5" }],
+    ["path", { d: "m10 18 3-3-3-3" }]
   ];
 
   const FileStack = [
@@ -5205,114 +5599,144 @@
   ];
 
   const FileTerminal = [
-    ["path", { d: "M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" }],
-    ["path", { d: "M14 2v4a2 2 0 0 0 2 2h4" }],
+    [
+      "path",
+      {
+        d: "M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"
+      }
+    ],
+    ["path", { d: "M14 2v5a1 1 0 0 0 1 1h5" }],
     ["path", { d: "m8 16 2-2-2-2" }],
     ["path", { d: "M12 18h4" }]
   ];
 
   const FileText = [
-    ["path", { d: "M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" }],
-    ["path", { d: "M14 2v4a2 2 0 0 0 2 2h4" }],
+    [
+      "path",
+      {
+        d: "M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"
+      }
+    ],
+    ["path", { d: "M14 2v5a1 1 0 0 0 1 1h5" }],
     ["path", { d: "M10 9H8" }],
     ["path", { d: "M16 13H8" }],
     ["path", { d: "M16 17H8" }]
   ];
 
-  const FileType2 = [
-    ["path", { d: "M4 22h14a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v4" }],
-    ["path", { d: "M14 2v4a2 2 0 0 0 2 2h4" }],
-    ["path", { d: "M2 13v-1h6v1" }],
-    ["path", { d: "M5 12v6" }],
-    ["path", { d: "M4 18h2" }]
+  const FileTypeCorner = [
+    [
+      "path",
+      {
+        d: "M12 22h6a2 2 0 0 0 2-2V8a2.4 2.4 0 0 0-.706-1.706l-3.588-3.588A2.4 2.4 0 0 0 14 2H6a2 2 0 0 0-2 2v6"
+      }
+    ],
+    ["path", { d: "M14 2v5a1 1 0 0 0 1 1h5" }],
+    ["path", { d: "M3 16v-1.5a.5.5 0 0 1 .5-.5h7a.5.5 0 0 1 .5.5V16" }],
+    ["path", { d: "M6 22h2" }],
+    ["path", { d: "M7 14v8" }]
   ];
 
   const FileType = [
-    ["path", { d: "M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" }],
-    ["path", { d: "M14 2v4a2 2 0 0 0 2 2h4" }],
-    ["path", { d: "M9 13v-1h6v1" }],
+    [
+      "path",
+      {
+        d: "M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"
+      }
+    ],
+    ["path", { d: "M14 2v5a1 1 0 0 0 1 1h5" }],
+    ["path", { d: "M11 18h2" }],
     ["path", { d: "M12 12v6" }],
-    ["path", { d: "M11 18h2" }]
+    ["path", { d: "M9 13v-.5a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 .5.5v.5" }]
   ];
 
   const FileUp = [
-    ["path", { d: "M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" }],
-    ["path", { d: "M14 2v4a2 2 0 0 0 2 2h4" }],
+    [
+      "path",
+      {
+        d: "M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"
+      }
+    ],
+    ["path", { d: "M14 2v5a1 1 0 0 0 1 1h5" }],
     ["path", { d: "M12 12v6" }],
     ["path", { d: "m15 15-3-3-3 3" }]
   ];
 
   const FileUser = [
-    ["path", { d: "M14 2v4a2 2 0 0 0 2 2h4" }],
-    ["path", { d: "M15 18a3 3 0 1 0-6 0" }],
-    ["path", { d: "M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z" }],
-    ["circle", { cx: "12", cy: "13", r: "2" }]
-  ];
-
-  const FileVolume2 = [
-    ["path", { d: "M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" }],
-    ["path", { d: "M14 2v4a2 2 0 0 0 2 2h4" }],
-    ["path", { d: "M8 15h.01" }],
-    ["path", { d: "M11.5 13.5a2.5 2.5 0 0 1 0 3" }],
-    ["path", { d: "M15 12a5 5 0 0 1 0 6" }]
-  ];
-
-  const FileVolume = [
-    ["path", { d: "M11 11a5 5 0 0 1 0 6" }],
-    ["path", { d: "M14 2v4a2 2 0 0 0 2 2h4" }],
-    ["path", { d: "M4 6.765V4a2 2 0 0 1 2-2h9l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-.93-.23" }],
     [
       "path",
       {
-        d: "M7 10.51a.5.5 0 0 0-.826-.38l-1.893 1.628A1 1 0 0 1 3.63 12H2.5a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h1.129a1 1 0 0 1 .652.242l1.893 1.63a.5.5 0 0 0 .826-.38z"
+        d: "M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"
+      }
+    ],
+    ["path", { d: "M14 2v5a1 1 0 0 0 1 1h5" }],
+    ["path", { d: "M16 22a4 4 0 0 0-8 0" }],
+    ["circle", { cx: "12", cy: "15", r: "3" }]
+  ];
+
+  const FileVolume = [
+    [
+      "path",
+      {
+        d: "M4 11.55V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.706.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2h-1.95"
+      }
+    ],
+    ["path", { d: "M14 2v5a1 1 0 0 0 1 1h5" }],
+    ["path", { d: "M12 15a5 5 0 0 1 0 6" }],
+    [
+      "path",
+      {
+        d: "M8 14.502a.5.5 0 0 0-.826-.381l-1.893 1.631a1 1 0 0 1-.651.243H3.5a.5.5 0 0 0-.5.501v3.006a.5.5 0 0 0 .5.501h1.129a1 1 0 0 1 .652.243l1.893 1.633a.5.5 0 0 0 .826-.38z"
       }
     ]
   ];
 
   const FileVideoCamera = [
-    ["path", { d: "M4 22h14a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v4" }],
-    ["path", { d: "M14 2v4a2 2 0 0 0 2 2h4" }],
-    ["rect", { width: "8", height: "6", x: "2", y: "12", rx: "1" }],
     [
       "path",
-      { d: "m10 13.843 3.033-1.755a.645.645 0 0 1 .967.56v4.704a.645.645 0 0 1-.967.56L10 16.157" }
-    ]
+      {
+        d: "M4 12V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.706.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2"
+      }
+    ],
+    ["path", { d: "M14 2v5a1 1 0 0 0 1 1h5" }],
+    [
+      "path",
+      { d: "m10 17.843 3.033-1.755a.64.64 0 0 1 .967.56v4.704a.65.65 0 0 1-.967.56L10 20.157" }
+    ],
+    ["rect", { width: "7", height: "6", x: "3", y: "16", rx: "1" }]
   ];
 
-  const FileWarning = [
-    ["path", { d: "M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" }],
-    ["path", { d: "M12 9v4" }],
-    ["path", { d: "M12 17h.01" }]
-  ];
-
-  const FileX2 = [
-    ["path", { d: "M4 22h14a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v4" }],
-    ["path", { d: "M14 2v4a2 2 0 0 0 2 2h4" }],
-    ["path", { d: "m8 12.5-5 5" }],
-    ["path", { d: "m3 12.5 5 5" }]
-  ];
-
-  const File = [
-    ["path", { d: "M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" }],
-    ["path", { d: "M14 2v4a2 2 0 0 0 2 2h4" }]
+  const FileXCorner = [
+    [
+      "path",
+      {
+        d: "M11 22H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.706.706l3.588 3.588A2.4 2.4 0 0 1 20 8v5"
+      }
+    ],
+    ["path", { d: "M14 2v5a1 1 0 0 0 1 1h5" }],
+    ["path", { d: "m15 17 5 5" }],
+    ["path", { d: "m20 17-5 5" }]
   ];
 
   const FileX = [
-    ["path", { d: "M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" }],
-    ["path", { d: "M14 2v4a2 2 0 0 0 2 2h4" }],
+    [
+      "path",
+      {
+        d: "M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"
+      }
+    ],
+    ["path", { d: "M14 2v5a1 1 0 0 0 1 1h5" }],
     ["path", { d: "m14.5 12.5-5 5" }],
     ["path", { d: "m9.5 12.5 5 5" }]
   ];
 
-  const Files = [
+  const File = [
     [
       "path",
       {
-        d: "M15 2a2 2 0 0 1 1.414.586l4 4A2 2 0 0 1 21 8v7a2 2 0 0 1-2 2h-8a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z"
+        d: "M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"
       }
     ],
-    ["path", { d: "M15 2v4a2 2 0 0 0 2 2h4" }],
-    ["path", { d: "M5 7a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h8a2 2 0 0 0 1.732-1" }]
+    ["path", { d: "M14 2v5a1 1 0 0 0 1 1h5" }]
   ];
 
   const Film = [
@@ -5326,7 +5750,13 @@
     ["path", { d: "M17 16.5h4" }]
   ];
 
-  const Fingerprint = [
+  const Files = [
+    ["path", { d: "M15 2h-4a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V8" }],
+    ["path", { d: "M16.706 2.706A2.4 2.4 0 0 0 15 2v5a1 1 0 0 0 1 1h5a2.4 2.4 0 0 0-.706-1.706z" }],
+    ["path", { d: "M5 7a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h8a2 2 0 0 0 1.732-1" }]
+  ];
+
+  const FingerprintPattern = [
     ["path", { d: "M12 10a2 2 0 0 0-2 2c0 1.02-.1 2.51-.26 4" }],
     ["path", { d: "M14 13.12c0 2.38 0 6.38-1 8.88" }],
     ["path", { d: "M17.29 21.02c.12-.6.43-2.3.5-3.02" }],
@@ -5346,6 +5776,8 @@
     ["path", { d: "M5 13h4" }],
     ["path", { d: "M17 10a4 4 0 0 0-8 0v10a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2Z" }]
   ];
+
+  const FishSymbol = [["path", { d: "M2 16s9-15 20-4C11 23 2 8 2 8" }]];
 
   const FishOff = [
     [
@@ -5368,8 +5800,6 @@
     ]
   ];
 
-  const FishSymbol = [["path", { d: "M2 16s9-15 20-4C11 23 2 8 2 8" }]];
-
   const Fish = [
     [
       "path",
@@ -5389,11 +5819,23 @@
     ["path", { d: "m16.01 17.93-.23 1.4A2 2 0 0 1 13.8 21H9.5a5.96 5.96 0 0 0 1.49-3.98" }]
   ];
 
+  const FishingHook = [
+    ["path", { d: "m17.586 11.414-5.93 5.93a1 1 0 0 1-8-8l3.137-3.137a.707.707 0 0 1 1.207.5V10" }],
+    ["path", { d: "M20.414 8.586 22 7" }],
+    ["circle", { cx: "19", cy: "10", r: "2" }]
+  ];
+
   const FlagOff = [
     ["path", { d: "M16 16c-3 0-5-2-8-2a6 6 0 0 0-4 1.528" }],
     ["path", { d: "m2 2 20 20" }],
     ["path", { d: "M4 22V4" }],
     ["path", { d: "M7.656 2H8c3 0 5 2 7.333 2q2 0 3.067-.8A1 1 0 0 1 20 4v10.347" }]
+  ];
+
+  const FishingRod = [
+    ["path", { d: "M4 11h1" }],
+    ["path", { d: "M8 15a2 2 0 0 1-4 0V3a1 1 0 0 1 1-1h.5C14 2 20 9 20 18v4" }],
+    ["circle", { cx: "18", cy: "18", r: "2" }]
   ];
 
   const FlagTriangleLeft = [
@@ -5413,6 +5855,26 @@
     ]
   ];
 
+  const Flame = [
+    [
+      "path",
+      {
+        d: "M12 3q1 4 4 6.5t3 5.5a1 1 0 0 1-14 0 5 5 0 0 1 1-3 1 1 0 0 0 5 0c0-2-1.5-3-1.5-5q0-2 2.5-4"
+      }
+    ]
+  ];
+
+  const FlashlightOff = [
+    ["path", { d: "M11.652 6H18" }],
+    ["path", { d: "M12 13v1" }],
+    [
+      "path",
+      { d: "M16 16v4a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-8a4 4 0 0 0-.8-2.4l-.6-.8A3 3 0 0 1 6 7V6" }
+    ],
+    ["path", { d: "m2 2 20 20" }],
+    ["path", { d: "M7.649 2H17a1 1 0 0 1 1 1v4a3 3 0 0 1-.6 1.8l-.6.8a4 4 0 0 0-.55 1.007" }]
+  ];
+
   const FlameKindling = [
     [
       "path",
@@ -5424,26 +5886,15 @@
     ["path", { d: "m5 18 14 4" }]
   ];
 
-  const Flame = [
+  const Flashlight = [
+    ["path", { d: "M12 13v1" }],
     [
       "path",
       {
-        d: "M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"
+        d: "M17 2a1 1 0 0 1 1 1v4a3 3 0 0 1-.6 1.8l-.6.8A4 4 0 0 0 16 12v8a2 2 0 0 1-2 2H10a2 2 0 0 1-2-2v-8a4 4 0 0 0-.8-2.4l-.6-.8A3 3 0 0 1 6 7V3a1 1 0 0 1 1-1z"
       }
-    ]
-  ];
-
-  const FlashlightOff = [
-    ["path", { d: "M16 16v4a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2V10c0-2-2-2-2-4" }],
-    ["path", { d: "M7 2h11v4c0 2-2 2-2 4v1" }],
-    ["line", { x1: "11", x2: "18", y1: "6", y2: "6" }],
-    ["line", { x1: "2", x2: "22", y1: "2", y2: "22" }]
-  ];
-
-  const Flashlight = [
-    ["path", { d: "M18 6c0 2-2 2-2 4v10a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2V10c0-2-2-2-2-4V2h12z" }],
-    ["line", { x1: "6", x2: "18", y1: "6", y2: "6" }],
-    ["line", { x1: "12", x2: "12", y1: "12", y2: "12" }]
+    ],
+    ["path", { d: "M6 6h12" }]
   ];
 
   const FlaskConicalOff = [
@@ -5481,27 +5932,9 @@
     ["path", { d: "M12 2v2" }]
   ];
 
-  const FlipHorizontal = [
-    ["path", { d: "M8 3H5a2 2 0 0 0-2 2v14c0 1.1.9 2 2 2h3" }],
-    ["path", { d: "M16 3h3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-3" }],
-    ["path", { d: "M12 20v2" }],
-    ["path", { d: "M12 14v2" }],
-    ["path", { d: "M12 8v2" }],
-    ["path", { d: "M12 2v2" }]
-  ];
-
   const FlipVertical2 = [
     ["path", { d: "m17 3-5 5-5-5h10" }],
     ["path", { d: "m17 21-5-5-5 5h10" }],
-    ["path", { d: "M4 12H2" }],
-    ["path", { d: "M10 12H8" }],
-    ["path", { d: "M16 12h-2" }],
-    ["path", { d: "M22 12h-2" }]
-  ];
-
-  const FlipVertical = [
-    ["path", { d: "M21 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v3" }],
-    ["path", { d: "M21 16v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-3" }],
     ["path", { d: "M4 12H2" }],
     ["path", { d: "M10 12H8" }],
     ["path", { d: "M16 12h-2" }],
@@ -5519,24 +5952,6 @@
     ["path", { d: "M12 10v12" }],
     ["path", { d: "M12 22c4.2 0 7-1.667 7-5-4.2 0-7 1.667-7 5Z" }],
     ["path", { d: "M12 22c-4.2 0-7-1.667-7-5 4.2 0 7 1.667 7 5Z" }]
-  ];
-
-  const Flower = [
-    ["circle", { cx: "12", cy: "12", r: "3" }],
-    [
-      "path",
-      {
-        d: "M12 16.5A4.5 4.5 0 1 1 7.5 12 4.5 4.5 0 1 1 12 7.5a4.5 4.5 0 1 1 4.5 4.5 4.5 4.5 0 1 1-4.5 4.5"
-      }
-    ],
-    ["path", { d: "M12 7.5V9" }],
-    ["path", { d: "M7.5 12H9" }],
-    ["path", { d: "M16.5 12H15" }],
-    ["path", { d: "M12 16.5V15" }],
-    ["path", { d: "m8 8 1.88 1.88" }],
-    ["path", { d: "M14.12 9.88 16 8" }],
-    ["path", { d: "m8 16 1.88-1.88" }],
-    ["path", { d: "M14.12 14.12 16 16" }]
   ];
 
   const Focus = [
@@ -5558,15 +5973,22 @@
     ["path", { d: "m5 15 3-3-3-3" }]
   ];
 
-  const FoldVertical = [
-    ["path", { d: "M12 22v-6" }],
-    ["path", { d: "M12 8V2" }],
-    ["path", { d: "M4 12H2" }],
-    ["path", { d: "M10 12H8" }],
-    ["path", { d: "M16 12h-2" }],
-    ["path", { d: "M22 12h-2" }],
-    ["path", { d: "m15 19-3-3-3 3" }],
-    ["path", { d: "m15 5-3 3-3-3" }]
+  const Flower = [
+    ["circle", { cx: "12", cy: "12", r: "3" }],
+    [
+      "path",
+      {
+        d: "M12 16.5A4.5 4.5 0 1 1 7.5 12 4.5 4.5 0 1 1 12 7.5a4.5 4.5 0 1 1 4.5 4.5 4.5 4.5 0 1 1-4.5 4.5"
+      }
+    ],
+    ["path", { d: "M12 7.5V9" }],
+    ["path", { d: "M7.5 12H9" }],
+    ["path", { d: "M16.5 12H15" }],
+    ["path", { d: "M12 16.5V15" }],
+    ["path", { d: "m8 8 1.88 1.88" }],
+    ["path", { d: "M14.12 9.88 16 8" }],
+    ["path", { d: "m8 16 1.88-1.88" }],
+    ["path", { d: "M14.12 14.12 16 16" }]
   ];
 
   const FolderArchive = [
@@ -5581,6 +6003,27 @@
     ["path", { d: "M15 17v-2" }]
   ];
 
+  const FolderBookmark = [
+    ["path", { d: "M12 6v8l3-3 3 3V6" }],
+    [
+      "path",
+      {
+        d: "M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2z"
+      }
+    ]
+  ];
+
+  const FoldVertical = [
+    ["path", { d: "M12 22v-6" }],
+    ["path", { d: "M12 8V2" }],
+    ["path", { d: "M4 12H2" }],
+    ["path", { d: "M10 12H8" }],
+    ["path", { d: "M16 12h-2" }],
+    ["path", { d: "M22 12h-2" }],
+    ["path", { d: "m15 19-3-3-3 3" }],
+    ["path", { d: "m15 5-3 3-3-3" }]
+  ];
+
   const FolderCheck = [
     [
       "path",
@@ -5589,17 +6032,6 @@
       }
     ],
     ["path", { d: "m9 13 2 2 4-4" }]
-  ];
-
-  const FolderClock = [
-    ["path", { d: "M16 14v2.2l1.6 1" }],
-    [
-      "path",
-      {
-        d: "M7 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2"
-      }
-    ],
-    ["circle", { cx: "16", cy: "16", r: "6" }]
   ];
 
   const FolderClosed = [
@@ -5641,6 +6073,17 @@
     ["circle", { cx: "18", cy: "18", r: "3" }]
   ];
 
+  const FolderClock = [
+    ["path", { d: "M16 14v2.2l1.6 1" }],
+    [
+      "path",
+      {
+        d: "M7 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2"
+      }
+    ],
+    ["circle", { cx: "16", cy: "16", r: "6" }]
+  ];
+
   const FolderDot = [
     [
       "path",
@@ -5663,6 +6106,7 @@
   ];
 
   const FolderGit2 = [
+    ["path", { d: "M18 19a5 5 0 0 1-5-5v8" }],
     [
       "path",
       {
@@ -5670,7 +6114,6 @@
       }
     ],
     ["circle", { cx: "13", cy: "12", r: "2" }],
-    ["path", { d: "M18 19c-2.8 0-5-2.2-5-5v8" }],
     ["circle", { cx: "20", cy: "19", r: "2" }]
   ];
 
@@ -5701,17 +6144,6 @@
     ]
   ];
 
-  const FolderInput = [
-    [
-      "path",
-      {
-        d: "M2 9V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-1"
-      }
-    ],
-    ["path", { d: "M2 13h10" }],
-    ["path", { d: "m9 16 3-3-3-3" }]
-  ];
-
   const FolderKanban = [
     [
       "path",
@@ -5725,15 +6157,26 @@
   ];
 
   const FolderKey = [
-    ["circle", { cx: "16", cy: "20", r: "2" }],
     [
       "path",
       {
-        d: "M10 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v2"
+        d: "M13 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v1.36"
       }
     ],
-    ["path", { d: "m22 14-4.5 4.5" }],
-    ["path", { d: "m21 15 1 1" }]
+    ["path", { d: "M19 12v6" }],
+    ["path", { d: "M19 14h2" }],
+    ["circle", { cx: "19", cy: "20", r: "2" }]
+  ];
+
+  const FolderInput = [
+    [
+      "path",
+      {
+        d: "M2 9V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-1"
+      }
+    ],
+    ["path", { d: "M2 13h10" }],
+    ["path", { d: "m9 16 3-3-3-3" }]
   ];
 
   const FolderLock = [
@@ -5745,16 +6188,6 @@
       }
     ],
     ["path", { d: "M20 17v-2a2 2 0 1 0-4 0v2" }]
-  ];
-
-  const FolderMinus = [
-    ["path", { d: "M9 13h6" }],
-    [
-      "path",
-      {
-        d: "M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"
-      }
-    ]
   ];
 
   const FolderOpenDot = [
@@ -5772,6 +6205,16 @@
       "path",
       {
         d: "m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"
+      }
+    ]
+  ];
+
+  const FolderMinus = [
+    ["path", { d: "M9 13h6" }],
+    [
+      "path",
+      {
+        d: "M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"
       }
     ]
   ];
@@ -5856,19 +6299,6 @@
     ["path", { d: "m8 16 3-3-3-3" }]
   ];
 
-  const FolderSync = [
-    [
-      "path",
-      {
-        d: "M9 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v.5"
-      }
-    ],
-    ["path", { d: "M12 10v4h4" }],
-    ["path", { d: "m12 14 1.535-1.605a5 5 0 0 1 8 1.5" }],
-    ["path", { d: "M22 22v-4h-4" }],
-    ["path", { d: "m22 18-1.535 1.605a5 5 0 0 1-8-1.5" }]
-  ];
-
   const FolderTree = [
     [
       "path",
@@ -5884,6 +6314,19 @@
     ],
     ["path", { d: "M3 5a2 2 0 0 0 2 2h3" }],
     ["path", { d: "M3 3v13a2 2 0 0 0 2 2h3" }]
+  ];
+
+  const FolderSync = [
+    [
+      "path",
+      {
+        d: "M9 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v.5"
+      }
+    ],
+    ["path", { d: "M12 10v4h4" }],
+    ["path", { d: "m12 14 1.535-1.605a5 5 0 0 1 8 1.5" }],
+    ["path", { d: "M22 22v-4h-4" }],
+    ["path", { d: "m22 18-1.535 1.605a5 5 0 0 1-8-1.5" }]
   ];
 
   const FolderUp = [
@@ -5946,9 +6389,22 @@
 
   const Forklift = [
     ["path", { d: "M12 12H5a2 2 0 0 0-2 2v5" }],
+    ["path", { d: "M15 19h7" }],
+    ["path", { d: "M16 19V2" }],
+    [
+      "path",
+      { d: "M6 12V7a2 2 0 0 1 2-2h2.172a2 2 0 0 1 1.414.586l3.828 3.828A2 2 0 0 1 16 10.828" }
+    ],
+    ["path", { d: "M7 19h4" }],
     ["circle", { cx: "13", cy: "19", r: "2" }],
-    ["circle", { cx: "5", cy: "19", r: "2" }],
-    ["path", { d: "M8 19h3m5-17v17h6M6 12V7c0-1.1.9-2 2-2h3l5 5" }]
+    ["circle", { cx: "5", cy: "19", r: "2" }]
+  ];
+
+  const Form = [
+    ["path", { d: "M4 14h6" }],
+    ["path", { d: "M4 2h10" }],
+    ["rect", { x: "4", y: "18", width: "16", height: "4", rx: "1" }],
+    ["rect", { x: "4", y: "6", width: "16", height: "4", rx: "1" }]
   ];
 
   const Forward = [
@@ -5963,13 +6419,18 @@
     ["line", { x1: "18", x2: "18", y1: "2", y2: "22" }]
   ];
 
-  const Framer = [["path", { d: "M5 16V9h14V2H5l14 14h-7m-7 0 7 7v-7m-7 0h7" }]];
-
   const Frown = [
     ["circle", { cx: "12", cy: "12", r: "10" }],
     ["path", { d: "M16 16s-1.5-2-4-2-4 2-4 2" }],
     ["line", { x1: "9", x2: "9.01", y1: "9", y2: "9" }],
     ["line", { x1: "15", x2: "15.01", y1: "9", y2: "9" }]
+  ];
+
+  const Fuel = [
+    ["path", { d: "M14 13h2a2 2 0 0 1 2 2v2a2 2 0 0 0 4 0v-6.998a2 2 0 0 0-.59-1.42L18 5" }],
+    ["path", { d: "M14 21V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v16" }],
+    ["path", { d: "M2 21h13" }],
+    ["path", { d: "M3 9h11" }]
   ];
 
   const Fullscreen = [
@@ -5991,16 +6452,6 @@
     ["path", { d: "M19 3v6" }]
   ];
 
-  const Fuel = [
-    ["line", { x1: "3", x2: "15", y1: "22", y2: "22" }],
-    ["line", { x1: "4", x2: "14", y1: "9", y2: "9" }],
-    ["path", { d: "M14 22V4a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v18" }],
-    [
-      "path",
-      { d: "M14 13h2a2 2 0 0 1 2 2v2a2 2 0 0 0 2 2a2 2 0 0 0 2-2V9.83a2 2 0 0 0-.59-1.42L18 5" }
-    ]
-  ];
-
   const FunnelX = [
     [
       "path",
@@ -6012,6 +6463,12 @@
     ["path", { d: "m21.5 3.5-5 5" }]
   ];
 
+  const GalleryHorizontalEnd = [
+    ["path", { d: "M2 7v10" }],
+    ["path", { d: "M6 5v14" }],
+    ["rect", { width: "12", height: "18", x: "10", y: "3", rx: "2" }]
+  ];
+
   const Funnel = [
     [
       "path",
@@ -6019,12 +6476,6 @@
         d: "M10 20a1 1 0 0 0 .553.895l2 1A1 1 0 0 0 14 21v-7a2 2 0 0 1 .517-1.341L21.74 4.67A1 1 0 0 0 21 3H3a1 1 0 0 0-.742 1.67l7.225 7.989A2 2 0 0 1 10 14z"
       }
     ]
-  ];
-
-  const GalleryHorizontalEnd = [
-    ["path", { d: "M2 7v10" }],
-    ["path", { d: "M6 5v14" }],
-    ["rect", { width: "12", height: "18", x: "10", y: "3", rx: "2" }]
   ];
 
   const GalleryHorizontal = [
@@ -6066,6 +6517,33 @@
     ]
   ];
 
+  const GamepadDirectional = [
+    [
+      "path",
+      {
+        d: "M11.146 15.854a1.207 1.207 0 0 1 1.708 0l1.56 1.56A2 2 0 0 1 15 18.828V21a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1v-2.172a2 2 0 0 1 .586-1.414z"
+      }
+    ],
+    [
+      "path",
+      {
+        d: "M18.828 15a2 2 0 0 1-1.414-.586l-1.56-1.56a1.207 1.207 0 0 1 0-1.708l1.56-1.56A2 2 0 0 1 18.828 9H21a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1z"
+      }
+    ],
+    [
+      "path",
+      {
+        d: "M6.586 14.414A2 2 0 0 1 5.172 15H3a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1h2.172a2 2 0 0 1 1.414.586l1.56 1.56a1.207 1.207 0 0 1 0 1.708z"
+      }
+    ],
+    [
+      "path",
+      {
+        d: "M9 3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2.172a2 2 0 0 1-.586 1.414l-1.56 1.56a1.207 1.207 0 0 1-1.708 0l-1.56-1.56A2 2 0 0 1 9 5.172z"
+      }
+    ]
+  ];
+
   const Gamepad = [
     ["line", { x1: "6", x2: "10", y1: "12", y2: "12" }],
     ["line", { x1: "8", x2: "8", y1: "10", y2: "14" }],
@@ -6098,6 +6576,12 @@
     ["path", { d: "M2 9h20" }]
   ];
 
+  const Ghost = [
+    ["path", { d: "M9 10h.01" }],
+    ["path", { d: "M15 10h.01" }],
+    ["path", { d: "M12 2a8 8 0 0 0-8 8v12l3-3 2.5 2.5L12 19l2.5 2.5L17 19l3 3V10a8 8 0 0 0-8-8z" }]
+  ];
+
   const GeorgianLari = [
     ["path", { d: "M11.5 21a7.5 7.5 0 1 1 7.35-9" }],
     ["path", { d: "M13 12V3" }],
@@ -6105,17 +6589,18 @@
     ["path", { d: "M9 12V3" }]
   ];
 
-  const Ghost = [
-    ["path", { d: "M9 10h.01" }],
-    ["path", { d: "M15 10h.01" }],
-    ["path", { d: "M12 2a8 8 0 0 0-8 8v12l3-3 2.5 2.5L12 19l2.5 2.5L17 19l3 3V10a8 8 0 0 0-8-8z" }]
+  const GitBranchMinus = [
+    ["path", { d: "M15 6a9 9 0 0 0-9 9V3" }],
+    ["path", { d: "M21 18h-6" }],
+    ["circle", { cx: "18", cy: "6", r: "3" }],
+    ["circle", { cx: "6", cy: "18", r: "3" }]
   ];
 
   const Gift = [
-    ["rect", { x: "3", y: "8", width: "18", height: "4", rx: "1" }],
-    ["path", { d: "M12 8v13" }],
-    ["path", { d: "M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7" }],
-    ["path", { d: "M7.5 8a2.5 2.5 0 0 1 0-5A4.8 8 0 0 1 12 8a4.8 8 0 0 1 4.5-5 2.5 2.5 0 0 1 0 5" }]
+    ["path", { d: "M12 7v14" }],
+    ["path", { d: "M20 11v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8" }],
+    ["path", { d: "M7.5 7a1 1 0 0 1 0-5A4.8 8 0 0 1 12 7a4.8 8 0 0 1 4.5-5 1 1 0 0 1 0 5" }],
+    ["rect", { x: "3", y: "7", width: "18", height: "4", rx: "1" }]
   ];
 
   const GitBranchPlus = [
@@ -6128,10 +6613,9 @@
   ];
 
   const GitBranch = [
-    ["line", { x1: "6", x2: "6", y1: "3", y2: "15" }],
+    ["path", { d: "M15 6a9 9 0 0 0-9 9V3" }],
     ["circle", { cx: "18", cy: "6", r: "3" }],
-    ["circle", { cx: "6", cy: "18", r: "3" }],
-    ["path", { d: "M18 9a9 9 0 0 1-9 9" }]
+    ["circle", { cx: "6", cy: "18", r: "3" }]
   ];
 
   const GitCommitHorizontal = [
@@ -6185,6 +6669,14 @@
     ["path", { d: "M6 21V9a9 9 0 0 0 9 9" }]
   ];
 
+  const GitMergeConflict = [
+    ["path", { d: "M12 6h4a2 2 0 0 1 2 2v7" }],
+    ["path", { d: "M6 12v9" }],
+    ["path", { d: "M9 3 3 9" }],
+    ["path", { d: "M9 9 3 3" }],
+    ["circle", { cx: "18", cy: "18", r: "3" }]
+  ];
+
   const GitPullRequestArrow = [
     ["circle", { cx: "5", cy: "6", r: "3" }],
     ["path", { d: "M5 9v12" }],
@@ -6227,30 +6719,11 @@
     ["line", { x1: "6", x2: "6", y1: "9", y2: "21" }]
   ];
 
-  const Github = [
-    [
-      "path",
-      {
-        d: "M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"
-      }
-    ],
-    ["path", { d: "M9 18c-4.51 2-5-2-7-2" }]
-  ];
-
   const GitPullRequest = [
     ["circle", { cx: "18", cy: "18", r: "3" }],
     ["circle", { cx: "6", cy: "6", r: "3" }],
     ["path", { d: "M13 6h3a2 2 0 0 1 2 2v7" }],
     ["line", { x1: "6", x2: "6", y1: "9", y2: "21" }]
-  ];
-
-  const Gitlab = [
-    [
-      "path",
-      {
-        d: "m22 13.29-3.33-10a.42.42 0 0 0-.14-.18.38.38 0 0 0-.22-.11.39.39 0 0 0-.23.07.42.42 0 0 0-.14.18l-2.26 6.67H8.32L6.1 3.26a.42.42 0 0 0-.1-.18.38.38 0 0 0-.26-.08.39.39 0 0 0-.23.07.42.42 0 0 0-.14.18L2 13.29a.74.74 0 0 0 .27.83L12 21l9.69-6.88a.71.71 0 0 0 .31-.83Z"
-      }
-    ]
   ];
 
   const GlassWater = [
@@ -6278,6 +6751,22 @@
     ["rect", { width: "8", height: "5", x: "14", y: "6", rx: "1" }]
   ];
 
+  const GlobeX = [
+    ["path", { d: "m16 3 5 5" }],
+    ["path", { d: "M2 12h20A10 10 0 1 1 12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 4-10" }],
+    ["path", { d: "m21 3-5 5" }]
+  ];
+
+  const GlobeOff = [
+    ["path", { d: "M10.114 4.462A14.5 14.5 0 0 1 12 2a10 10 0 0 1 9.313 13.643" }],
+    ["path", { d: "M15.557 15.556A14.5 14.5 0 0 1 12 22 10 10 0 0 1 4.929 4.929" }],
+    ["path", { d: "M15.892 10.234A14.5 14.5 0 0 0 12 2a10 10 0 0 0-3.643.687" }],
+    ["path", { d: "M17.656 12H22" }],
+    ["path", { d: "M19.071 19.071A10 10 0 0 1 12 22 14.5 14.5 0 0 1 8.44 8.45" }],
+    ["path", { d: "M2 12h10" }],
+    ["path", { d: "m2 2 20 20" }]
+  ];
+
   const Globe = [
     ["circle", { cx: "12", cy: "12", r: "10" }],
     ["path", { d: "M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" }],
@@ -6291,8 +6780,8 @@
   ];
 
   const Gpu = [
+    ["path", { d: "M2 17h18a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H2" }],
     ["path", { d: "M2 21V3" }],
-    ["path", { d: "M2 5h18a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H2.26" }],
     ["path", { d: "M7 17v3a1 1 0 0 0 1 1h5a1 1 0 0 0 1-1v-3" }],
     ["circle", { cx: "16", cy: "11", r: "2" }],
     ["circle", { cx: "8", cy: "11", r: "2" }]
@@ -6331,17 +6820,6 @@
     ["path", { d: "m16 19 2 2 4-4" }]
   ];
 
-  const Grid2x2X = [
-    [
-      "path",
-      {
-        d: "M12 3v17a1 1 0 0 1-1 1H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v6a1 1 0 0 1-1 1H3"
-      }
-    ],
-    ["path", { d: "m16 16 5 5" }],
-    ["path", { d: "m16 21 5-5" }]
-  ];
-
   const Grid2x2Plus = [
     [
       "path",
@@ -6351,6 +6829,17 @@
     ],
     ["path", { d: "M16 19h6" }],
     ["path", { d: "M19 22v-6" }]
+  ];
+
+  const Grid2x2X = [
+    [
+      "path",
+      {
+        d: "M12 3v17a1 1 0 0 1-1 1H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v6a1 1 0 0 1-1 1H3"
+      }
+    ],
+    ["path", { d: "m16 16 5 5" }],
+    ["path", { d: "m16 21 5-5" }]
   ];
 
   const Grid2x2 = [
@@ -6599,23 +7088,23 @@
     ["path", { d: "M10 18h.01" }]
   ];
 
-  const HardDrive = [
-    ["line", { x1: "22", x2: "2", y1: "12", y2: "12" }],
-    [
-      "path",
-      {
-        d: "M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
-      }
-    ],
-    ["line", { x1: "6", x2: "6.01", y1: "16", y2: "16" }],
-    ["line", { x1: "10", x2: "10.01", y1: "16", y2: "16" }]
-  ];
-
   const HardHat = [
     ["path", { d: "M10 10V5a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v5" }],
     ["path", { d: "M14 6a6 6 0 0 1 6 6v3" }],
     ["path", { d: "M4 15v-3a6 6 0 0 1 6-6" }],
     ["rect", { x: "2", y: "15", width: "20", height: "4", rx: "1" }]
+  ];
+
+  const HardDrive = [
+    ["path", { d: "M10 16h.01" }],
+    [
+      "path",
+      {
+        d: "M2.212 11.577a2 2 0 0 0-.212.896V18a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-5.527a2 2 0 0 0-.212-.896L18.55 5.11A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
+      }
+    ],
+    ["path", { d: "M21.946 12.013H2.054" }],
+    ["path", { d: "M6 16h.01" }]
   ];
 
   const Hash = [
@@ -6647,6 +7136,19 @@
     ["path", { d: "M22 21H2" }],
     ["path", { d: "M16 13a4 4 0 0 0-8 0" }],
     ["path", { d: "M12 5V2.5" }]
+  ];
+
+  const Hd = [
+    ["path", { d: "M10 12H6" }],
+    ["path", { d: "M10 15V9" }],
+    [
+      "path",
+      {
+        d: "M14 14.5a.5.5 0 0 0 .5.5h1a2.5 2.5 0 0 0 2.5-2.5v-1A2.5 2.5 0 0 0 15.5 9h-1a.5.5 0 0 0-.5.5z"
+      }
+    ],
+    ["path", { d: "M6 15V9" }],
+    ["rect", { x: "2", y: "5", width: "20", height: "14", rx: "2" }]
   ];
 
   const HdmiPort = [
@@ -6717,15 +7219,6 @@
     ["path", { d: "M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 2.636-6.364" }]
   ];
 
-  const Headphones = [
-    [
-      "path",
-      {
-        d: "M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 18 0v7a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3"
-      }
-    ]
-  ];
-
   const Headset = [
     [
       "path",
@@ -6734,6 +7227,15 @@
       }
     ],
     ["path", { d: "M21 16v2a4 4 0 0 1-4 4h-5" }]
+  ];
+
+  const Headphones = [
+    [
+      "path",
+      {
+        d: "M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 18 0v7a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3"
+      }
+    ]
   ];
 
   const HeartCrack = [
@@ -6807,6 +7309,17 @@
     ["path", { d: "M3.22 13H9.5l.5-1 2 4.5 2-7 1.5 3.5h5.27" }]
   ];
 
+  const HeartX = [
+    ["path", { d: "m15.5 12.5 5 5" }],
+    ["path", { d: "m20.5 12.5-5 5" }],
+    [
+      "path",
+      {
+        d: "M21.955 8.774a5.5 5.5 0 0 0-9.546-2.95.6.6 0 0 1-.818 0A5.5 5.5 0 0 0 2 9.5c0 2.3 1.5 4 3 5.5l5.508 5.332a2 2 0 0 0 2.57.352"
+      }
+    ]
+  ];
+
   const Heart = [
     [
       "path",
@@ -6829,6 +7342,17 @@
     ["path", { d: "M19 20v2" }]
   ];
 
+  const Helicopter = [
+    ["path", { d: "M11 17v4" }],
+    ["path", { d: "M14 3v8a2 2 0 0 0 2 2h5.865" }],
+    ["path", { d: "M17 17v4" }],
+    ["path", { d: "M18 17a4 4 0 0 0 4-4 8 6 0 0 0-8-6 6 5 0 0 0-6 5v3a2 2 0 0 0 2 2z" }],
+    ["path", { d: "M2 10v5" }],
+    ["path", { d: "M6 3h16" }],
+    ["path", { d: "M7 21h14" }],
+    ["path", { d: "M8 13H2" }]
+  ];
+
   const Hexagon = [
     [
       "path",
@@ -6847,32 +7371,6 @@
     ["path", { d: "M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" }],
     ["path", { d: "M3 3v5h5" }],
     ["path", { d: "M12 7v5l4 2" }]
-  ];
-
-  const HopOff = [
-    ["path", { d: "M10.82 16.12c1.69.6 3.91.79 5.18.85.28.01.53-.09.7-.27" }],
-    [
-      "path",
-      { d: "M11.14 20.57c.52.24 2.44 1.12 4.08 1.37.46.06.86-.25.9-.71.12-1.52-.3-3.43-.5-4.28" }
-    ],
-    ["path", { d: "M16.13 21.05c1.65.63 3.68.84 4.87.91a.9.9 0 0 0 .7-.26" }],
-    [
-      "path",
-      { d: "M17.99 5.52a20.83 20.83 0 0 1 3.15 4.5.8.8 0 0 1-.68 1.13c-1.17.1-2.5.02-3.9-.25" }
-    ],
-    ["path", { d: "M20.57 11.14c.24.52 1.12 2.44 1.37 4.08.04.3-.08.59-.31.75" }],
-    [
-      "path",
-      {
-        d: "M4.93 4.93a10 10 0 0 0-.67 13.4c.35.43.96.4 1.17-.12.69-1.71 1.07-5.07 1.07-6.71 1.34.45 3.1.9 4.88.62a.85.85 0 0 0 .48-.24"
-      }
-    ],
-    [
-      "path",
-      { d: "M5.52 17.99c1.05.95 2.91 2.42 4.5 3.15a.8.8 0 0 0 1.13-.68c.2-2.34-.33-5.3-1.57-8.28" }
-    ],
-    ["path", { d: "M8.35 2.68a10 10 0 0 1 9.98 1.58c.43.35.4.96-.12 1.17-1.5.6-4.3.98-6.07 1.05" }],
-    ["path", { d: "m2 2 20 20" }]
   ];
 
   const Hop = [
@@ -6911,6 +7409,32 @@
     ]
   ];
 
+  const HopOff = [
+    ["path", { d: "M10.82 16.12c1.69.6 3.91.79 5.18.85.28.01.53-.09.7-.27" }],
+    [
+      "path",
+      { d: "M11.14 20.57c.52.24 2.44 1.12 4.08 1.37.46.06.86-.25.9-.71.12-1.52-.3-3.43-.5-4.28" }
+    ],
+    ["path", { d: "M16.13 21.05c1.65.63 3.68.84 4.87.91a.9.9 0 0 0 .7-.26" }],
+    [
+      "path",
+      { d: "M17.99 5.52a20.83 20.83 0 0 1 3.15 4.5.8.8 0 0 1-.68 1.13c-1.17.1-2.5.02-3.9-.25" }
+    ],
+    ["path", { d: "M20.57 11.14c.24.52 1.12 2.44 1.37 4.08.04.3-.08.59-.31.75" }],
+    [
+      "path",
+      {
+        d: "M4.93 4.93a10 10 0 0 0-.67 13.4c.35.43.96.4 1.17-.12.69-1.71 1.07-5.07 1.07-6.71 1.34.45 3.1.9 4.88.62a.85.85 0 0 0 .48-.24"
+      }
+    ],
+    [
+      "path",
+      { d: "M5.52 17.99c1.05.95 2.91 2.42 4.5 3.15a.8.8 0 0 0 1.13-.68c.2-2.34-.33-5.3-1.57-8.28" }
+    ],
+    ["path", { d: "M8.35 2.68a10 10 0 0 1 9.98 1.58c.43.35.4.96-.12 1.17-1.5.6-4.3.98-6.07 1.05" }],
+    ["path", { d: "m2 2 20 20" }]
+  ];
+
   const Hospital = [
     ["path", { d: "M12 7v4" }],
     ["path", { d: "M14 21v-3a2 2 0 0 0-4 0v3" }],
@@ -6932,18 +7456,6 @@
     ["rect", { x: "4", y: "2", width: "16", height: "20", rx: "2" }]
   ];
 
-  const HousePlug = [
-    ["path", { d: "M10 12V8.964" }],
-    ["path", { d: "M14 12V8.964" }],
-    ["path", { d: "M15 12a1 1 0 0 1 1 1v2a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-2a1 1 0 0 1 1-1z" }],
-    [
-      "path",
-      {
-        d: "M8.5 21H5a2 2 0 0 1-2-2v-9a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2h-5a2 2 0 0 1-2-2v-2"
-      }
-    ]
-  ];
-
   const Hourglass = [
     ["path", { d: "M5 22h14" }],
     ["path", { d: "M5 2h14" }],
@@ -6951,26 +7463,31 @@
     ["path", { d: "M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2" }]
   ];
 
-  const House = [
-    ["path", { d: "M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8" }],
+  const HouseHeart = [
     [
       "path",
       {
-        d: "M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"
+        d: "M8.62 13.8A2.25 2.25 0 1 1 12 10.836a2.25 2.25 0 1 1 3.38 2.966l-2.626 2.856a.998.998 0 0 1-1.507 0z"
+      }
+    ],
+    [
+      "path",
+      {
+        d: "M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"
       }
     ]
   ];
 
-  const HousePlus = [
+  const HousePlug = [
+    ["path", { d: "M10 12V8.964" }],
+    ["path", { d: "M14 12V8.964" }],
+    ["path", { d: "M15 12a1 1 0 0 1 1 1v2a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-2a1 1 0 0 1 1-1z" }],
     [
       "path",
       {
-        d: "M12.662 21H5a2 2 0 0 1-2-2v-9a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v2.475"
+        d: "M8.5 21H5a2 2 0 0 1-2-2v-9a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2h-5a2 2 0 0 1-2-2v-2"
       }
-    ],
-    ["path", { d: "M14.959 12.717A1 1 0 0 0 14 12h-4a1 1 0 0 0-1 1v8" }],
-    ["path", { d: "M15 18h6" }],
-    ["path", { d: "M18 15v6" }]
+    ]
   ];
 
   const HouseWifi = [
@@ -6979,16 +7496,32 @@
     [
       "path",
       {
-        d: "M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"
+        d: "M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"
       }
     ],
     ["path", { d: "M7 10.754a8 8 0 0 1 10 0" }]
   ];
 
-  const IceCreamCone = [
-    ["path", { d: "m7 11 4.08 10.35a1 1 0 0 0 1.84 0L17 11" }],
-    ["path", { d: "M17 7A5 5 0 0 0 7 7" }],
-    ["path", { d: "M17 7a2 2 0 0 1 0 4H7a2 2 0 0 1 0-4" }]
+  const HousePlus = [
+    [
+      "path",
+      {
+        d: "M12.35 21H5a2 2 0 0 1-2-2v-9a2 2 0 0 1 .71-1.53l7-6a2 2 0 0 1 2.58 0l7 6A2 2 0 0 1 21 10v2.35"
+      }
+    ],
+    ["path", { d: "M14.8 12.4A1 1 0 0 0 14 12h-4a1 1 0 0 0-1 1v8" }],
+    ["path", { d: "M15 18h6" }],
+    ["path", { d: "M18 15v6" }]
+  ];
+
+  const House = [
+    ["path", { d: "M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8" }],
+    [
+      "path",
+      {
+        d: "M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"
+      }
+    ]
   ];
 
   const IceCreamBowl = [
@@ -6998,6 +7531,12 @@
     ],
     ["path", { d: "M12.14 11a3.5 3.5 0 1 1 6.71 0" }],
     ["path", { d: "M15.5 6.5a3.5 3.5 0 1 0-7 0" }]
+  ];
+
+  const IceCreamCone = [
+    ["path", { d: "m7 11 4.08 10.35a1 1 0 0 0 1.84 0L17 11" }],
+    ["path", { d: "M17 7A5 5 0 0 0 7 7" }],
+    ["path", { d: "M17 7a2 2 0 0 1 0 4H7a2 2 0 0 1 0-4" }]
   ];
 
   const IdCardLanyard = [
@@ -7116,20 +7655,6 @@
     ]
   ];
 
-  const IndentDecrease = [
-    ["path", { d: "M21 12H11" }],
-    ["path", { d: "M21 18H11" }],
-    ["path", { d: "M21 6H11" }],
-    ["path", { d: "m7 8-4 4 4 4" }]
-  ];
-
-  const IndentIncrease = [
-    ["path", { d: "M21 12H11" }],
-    ["path", { d: "M21 18H11" }],
-    ["path", { d: "M21 6H11" }],
-    ["path", { d: "m3 8 4 4-4 4" }]
-  ];
-
   const IndianRupee = [
     ["path", { d: "M6 3h12" }],
     ["path", { d: "M6 8h12" }],
@@ -7154,12 +7679,6 @@
     ["path", { d: "M17 7h.01" }],
     ["path", { d: "M7 17h.01" }],
     ["path", { d: "M17 17h.01" }]
-  ];
-
-  const Instagram = [
-    ["rect", { width: "20", height: "20", x: "2", y: "2", rx: "5", ry: "5" }],
-    ["path", { d: "M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" }],
-    ["line", { x1: "17.5", x2: "17.51", y1: "6.5", y2: "6.5" }]
   ];
 
   const Italic = [
@@ -7192,9 +7711,9 @@
   ];
 
   const Kanban = [
-    ["path", { d: "M6 5v11" }],
-    ["path", { d: "M12 5v6" }],
-    ["path", { d: "M18 5v14" }]
+    ["path", { d: "M5 3v14" }],
+    ["path", { d: "M12 3v8" }],
+    ["path", { d: "M19 3v18" }]
   ];
 
   const Kayak = [
@@ -7207,16 +7726,6 @@
     ],
     ["path", { d: "m6.707 6.707 10.586 10.586" }],
     ["path", { d: "M7 5a2 2 0 1 0-2 2h1a1 1 0 0 0 1-1z" }]
-  ];
-
-  const KeyRound = [
-    [
-      "path",
-      {
-        d: "M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"
-      }
-    ],
-    ["circle", { cx: "16.5", cy: "7.5", r: ".5", fill: "currentColor" }]
   ];
 
   const KeySquare = [
@@ -7235,10 +7744,32 @@
     ]
   ];
 
+  const KeyRound = [
+    [
+      "path",
+      {
+        d: "M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"
+      }
+    ],
+    ["circle", { cx: "16.5", cy: "7.5", r: ".5", fill: "currentColor" }]
+  ];
+
   const Key = [
     ["path", { d: "m15.5 7.5 2.3 2.3a1 1 0 0 0 1.4 0l2.1-2.1a1 1 0 0 0 0-1.4L19 4" }],
     ["path", { d: "m21 2-9.6 9.6" }],
     ["circle", { cx: "7.5", cy: "15.5", r: "5.5" }]
+  ];
+
+  const KeyboardMusic = [
+    ["rect", { width: "20", height: "16", x: "2", y: "4", rx: "2" }],
+    ["path", { d: "M6 8h4" }],
+    ["path", { d: "M14 8h.01" }],
+    ["path", { d: "M18 8h.01" }],
+    ["path", { d: "M2 12h20" }],
+    ["path", { d: "M6 12v4" }],
+    ["path", { d: "M10 12v4" }],
+    ["path", { d: "M14 12v4" }],
+    ["path", { d: "M18 12v4" }]
   ];
 
   const KeyboardOff = [
@@ -7252,18 +7783,6 @@
     ["path", { d: "M20 20H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2" }],
     ["path", { d: "M6 8h.01" }],
     ["path", { d: "M8 12h.01" }]
-  ];
-
-  const KeyboardMusic = [
-    ["rect", { width: "20", height: "16", x: "2", y: "4", rx: "2" }],
-    ["path", { d: "M6 8h4" }],
-    ["path", { d: "M14 8h.01" }],
-    ["path", { d: "M18 8h.01" }],
-    ["path", { d: "M2 12h20" }],
-    ["path", { d: "M6 12v4" }],
-    ["path", { d: "M10 12v4" }],
-    ["path", { d: "M14 12v4" }],
-    ["path", { d: "M18 12v4" }]
   ];
 
   const Keyboard = [
@@ -7312,17 +7831,6 @@
     ["path", { d: "M9 22h6" }]
   ];
 
-  const LampWallUp = [
-    [
-      "path",
-      {
-        d: "M19.929 9.629A1 1 0 0 1 19 11H9a1 1 0 0 1-.928-1.371l2-5A1 1 0 0 1 11 4h6a1 1 0 0 1 .928.629z"
-      }
-    ],
-    ["path", { d: "M6 15a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2H5a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1z" }],
-    ["path", { d: "M8 18h4a2 2 0 0 0 2-2v-5" }]
-  ];
-
   const LampWallDown = [
     [
       "path",
@@ -7332,6 +7840,17 @@
     ],
     ["path", { d: "M6 3a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" }],
     ["path", { d: "M8 6h4a2 2 0 0 1 2 2v5" }]
+  ];
+
+  const LampWallUp = [
+    [
+      "path",
+      {
+        d: "M19.929 9.629A1 1 0 0 1 19 11H9a1 1 0 0 1-.928-1.371l2-5A1 1 0 0 1 11 4h6a1 1 0 0 1 .928.629z"
+      }
+    ],
+    ["path", { d: "M6 15a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2H5a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1z" }],
+    ["path", { d: "M8 18h4a2 2 0 0 0 2-2v-5" }]
   ];
 
   const Lamp = [
@@ -7417,20 +7936,17 @@
     ]
   ];
 
-  const Lasso = [
-    [
-      "path",
-      { d: "M3.704 14.467A10 8 0 0 1 2 10a10 8 0 0 1 20 0 10 8 0 0 1-10 8 10 8 0 0 1-5.181-1.158" }
-    ],
-    ["path", { d: "M7 22a5 5 0 0 1-2-3.994" }],
-    ["circle", { cx: "5", cy: "16", r: "2" }]
-  ];
-
   const Laugh = [
     ["circle", { cx: "12", cy: "12", r: "10" }],
     ["path", { d: "M18 13a6 6 0 0 1-6 5 6 6 0 0 1-6-5h12Z" }],
     ["line", { x1: "9", x2: "9.01", y1: "9", y2: "9" }],
     ["line", { x1: "15", x2: "15.01", y1: "9", y2: "9" }]
+  ];
+
+  const Lasso = [
+    ["path", { d: "M3.704 14.467a10 8 0 1 1 3.115 2.375" }],
+    ["path", { d: "M7 22a5 5 0 0 1-2-3.994" }],
+    ["circle", { cx: "5", cy: "16", r: "2" }]
   ];
 
   const Layers2 = [
@@ -7448,6 +7964,42 @@
     ]
   ];
 
+  const LayersMinus = [
+    [
+      "path",
+      {
+        d: "M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 .83.18 2 2 0 0 0 .83-.18l8.58-3.9a1 1 0 0 0 0-1.832z"
+      }
+    ],
+    ["path", { d: "M16 17h6" }],
+    ["path", { d: "M2.003 11.995a1 1 0 0 0 .597.915l8.58 3.91a2 2 0 0 0 .83.18" }],
+    [
+      "path",
+      { d: "M2.003 16.995a1 1 0 0 0 .597.915l8.58 3.91a2 2 0 0 0 .83.18 2 2 0 0 0 .83-.18l2.11-.96" }
+    ],
+    ["path", { d: "M22.018 12.004a1 1 0 0 1-.598.916l-.177.08" }]
+  ];
+
+  const LayersPlus = [
+    [
+      "path",
+      {
+        d: "M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 .83.18 2 2 0 0 0 .83-.18l8.58-3.9a1 1 0 0 0 0-1.831z"
+      }
+    ],
+    ["path", { d: "M16 17h6" }],
+    ["path", { d: "M19 14v6" }],
+    ["path", { d: "M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 .825.178" }],
+    ["path", { d: "M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l2.116-.962" }]
+  ];
+
+  const LayoutDashboard = [
+    ["rect", { width: "7", height: "9", x: "3", y: "3", rx: "1" }],
+    ["rect", { width: "7", height: "5", x: "14", y: "3", rx: "1" }],
+    ["rect", { width: "7", height: "9", x: "14", y: "12", rx: "1" }],
+    ["rect", { width: "7", height: "5", x: "3", y: "16", rx: "1" }]
+  ];
+
   const Layers = [
     [
       "path",
@@ -7457,13 +8009,6 @@
     ],
     ["path", { d: "M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12" }],
     ["path", { d: "M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17" }]
-  ];
-
-  const LayoutDashboard = [
-    ["rect", { width: "7", height: "9", x: "3", y: "3", rx: "1" }],
-    ["rect", { width: "7", height: "5", x: "14", y: "3", rx: "1" }],
-    ["rect", { width: "7", height: "9", x: "14", y: "12", rx: "1" }],
-    ["rect", { width: "7", height: "5", x: "3", y: "16", rx: "1" }]
   ];
 
   const LayoutGrid = [
@@ -7488,16 +8033,16 @@
     ["rect", { width: "7", height: "7", x: "14", y: "14", rx: "1" }]
   ];
 
-  const LayoutPanelTop = [
-    ["rect", { width: "18", height: "7", x: "3", y: "3", rx: "1" }],
-    ["rect", { width: "7", height: "7", x: "3", y: "14", rx: "1" }],
-    ["rect", { width: "7", height: "7", x: "14", y: "14", rx: "1" }]
-  ];
-
   const LayoutTemplate = [
     ["rect", { width: "18", height: "7", x: "3", y: "3", rx: "1" }],
     ["rect", { width: "9", height: "7", x: "3", y: "14", rx: "1" }],
     ["rect", { width: "5", height: "7", x: "16", y: "14", rx: "1" }]
+  ];
+
+  const LayoutPanelTop = [
+    ["rect", { width: "18", height: "7", x: "3", y: "3", rx: "1" }],
+    ["rect", { width: "7", height: "7", x: "3", y: "14", rx: "1" }],
+    ["rect", { width: "7", height: "7", x: "14", y: "14", rx: "1" }]
   ];
 
   const Leaf = [
@@ -7529,12 +8074,22 @@
     ["rect", { width: "8", height: "12", x: "8", y: "10", rx: "1" }]
   ];
 
-  const LetterText = [
-    ["path", { d: "M15 12h6" }],
-    ["path", { d: "M15 6h6" }],
-    ["path", { d: "m3 13 3.553-7.724a.5.5 0 0 1 .894 0L11 13" }],
-    ["path", { d: "M3 18h18" }],
-    ["path", { d: "M3.92 11h6.16" }]
+  const LensConcave = [
+    [
+      "path",
+      {
+        d: "M7 2a1 1 0 0 0-.8 1.6 14 14 0 0 1 0 16.8A1 1 0 0 0 7 22h10a1 1 0 0 0 .8-1.6 14 14 0 0 1 0-16.8A1 1 0 0 0 17 2z"
+      }
+    ]
+  ];
+
+  const LensConvex = [
+    [
+      "path",
+      {
+        d: "M13.433 2a1 1 0 0 1 .824.448 18 18 0 0 1 0 19.104 1 1 0 0 1-.824.448h-2.866a1 1 0 0 1-.824-.448 18 18 0 0 1 0-19.104A1 1 0 0 1 10.567 2z"
+      }
+    ]
   ];
 
   const LibraryBig = [
@@ -7548,6 +8103,13 @@
     ]
   ];
 
+  const Library = [
+    ["path", { d: "m16 6 4 14" }],
+    ["path", { d: "M12 6v14" }],
+    ["path", { d: "M8 8v12" }],
+    ["path", { d: "M4 4v16" }]
+  ];
+
   const LifeBuoy = [
     ["circle", { cx: "12", cy: "12", r: "10" }],
     ["path", { d: "m4.93 4.93 4.24 4.24" }],
@@ -7557,27 +8119,12 @@
     ["circle", { cx: "12", cy: "12", r: "4" }]
   ];
 
-  const Library = [
-    ["path", { d: "m16 6 4 14" }],
-    ["path", { d: "M12 6v14" }],
-    ["path", { d: "M8 8v12" }],
-    ["path", { d: "M4 4v16" }]
-  ];
-
   const Ligature = [
     ["path", { d: "M14 12h2v8" }],
     ["path", { d: "M14 20h4" }],
     ["path", { d: "M6 12h4" }],
     ["path", { d: "M6 20h4" }],
     ["path", { d: "M8 20V8a4 4 0 0 1 7.464-2" }]
-  ];
-
-  const LightbulbOff = [
-    ["path", { d: "M16.8 11.2c.8-.9 1.2-2 1.2-3.2a6 6 0 0 0-9.3-5" }],
-    ["path", { d: "m2 2 20 20" }],
-    ["path", { d: "M6.3 6.3a4.67 4.67 0 0 0 1.2 5.2c.7.7 1.3 1.5 1.5 2.5" }],
-    ["path", { d: "M9 18h6" }],
-    ["path", { d: "M10 22h4" }]
   ];
 
   const Lightbulb = [
@@ -7589,6 +8136,28 @@
     ],
     ["path", { d: "M9 18h6" }],
     ["path", { d: "M10 22h4" }]
+  ];
+
+  const LightbulbOff = [
+    ["path", { d: "M16.8 11.2c.8-.9 1.2-2 1.2-3.2a6 6 0 0 0-9.3-5" }],
+    ["path", { d: "m2 2 20 20" }],
+    ["path", { d: "M6.3 6.3a4.67 4.67 0 0 0 1.2 5.2c.7.7 1.3 1.5 1.5 2.5" }],
+    ["path", { d: "M9 18h6" }],
+    ["path", { d: "M10 22h4" }]
+  ];
+
+  const LineDotRightHorizontal = [
+    ["path", { d: "M 3 12 L 15 12" }],
+    ["circle", { cx: "18", cy: "12", r: "3" }]
+  ];
+
+  const LineStyle = [
+    ["path", { d: "M11 5h2" }],
+    ["path", { d: "M15 12h6" }],
+    ["path", { d: "M19 5h2" }],
+    ["path", { d: "M3 12h6" }],
+    ["path", { d: "M3 19h18" }],
+    ["path", { d: "M3 5h2" }]
   ];
 
   const LineSquiggle = [
@@ -7616,156 +8185,172 @@
     ["path", { d: "M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" }]
   ];
 
-  const Linkedin = [
-    ["path", { d: "M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z" }],
-    ["rect", { width: "4", height: "12", x: "2", y: "9" }],
-    ["circle", { cx: "4", cy: "4", r: "2" }]
-  ];
-
   const ListCheck = [
-    ["path", { d: "M11 18H3" }],
-    ["path", { d: "m15 18 2 2 4-4" }],
+    ["path", { d: "M16 5H3" }],
     ["path", { d: "M16 12H3" }],
-    ["path", { d: "M16 6H3" }]
-  ];
-
-  const ListChevronsDownUp = [
-    ["path", { d: "m15 18 3-3 3 3" }],
-    ["path", { d: "m15 6 3 3 3-3" }],
-    ["path", { d: "M3 12h8" }],
-    ["path", { d: "M3 18h8" }],
-    ["path", { d: "M3 6h8" }]
+    ["path", { d: "M11 19H3" }],
+    ["path", { d: "m15 18 2 2 4-4" }]
   ];
 
   const ListChecks = [
-    ["path", { d: "m3 17 2 2 4-4" }],
-    ["path", { d: "m3 7 2 2 4-4" }],
-    ["path", { d: "M13 6h8" }],
+    ["path", { d: "M13 5h8" }],
     ["path", { d: "M13 12h8" }],
-    ["path", { d: "M13 18h8" }]
+    ["path", { d: "M13 19h8" }],
+    ["path", { d: "m3 17 2 2 4-4" }],
+    ["path", { d: "m3 7 2 2 4-4" }]
+  ];
+
+  const ListChevronsDownUp = [
+    ["path", { d: "M3 5h8" }],
+    ["path", { d: "M3 12h8" }],
+    ["path", { d: "M3 19h8" }],
+    ["path", { d: "m15 5 3 3 3-3" }],
+    ["path", { d: "m15 19 3-3 3 3" }]
+  ];
+
+  const ListChevronsUpDown = [
+    ["path", { d: "M3 5h8" }],
+    ["path", { d: "M3 12h8" }],
+    ["path", { d: "M3 19h8" }],
+    ["path", { d: "m15 8 3-3 3 3" }],
+    ["path", { d: "m15 16 3 3 3-3" }]
   ];
 
   const ListCollapse = [
+    ["path", { d: "M10 5h11" }],
     ["path", { d: "M10 12h11" }],
-    ["path", { d: "M10 18h11" }],
-    ["path", { d: "M10 6h11" }],
+    ["path", { d: "M10 19h11" }],
     ["path", { d: "m3 10 3-3-3-3" }],
     ["path", { d: "m3 20 3-3-3-3" }]
   ];
 
   const ListEnd = [
+    ["path", { d: "M16 5H3" }],
     ["path", { d: "M16 12H3" }],
-    ["path", { d: "M16 6H3" }],
-    ["path", { d: "M10 18H3" }],
-    ["path", { d: "M21 6v10a2 2 0 0 1-2 2h-5" }],
-    ["path", { d: "m16 16-2 2 2 2" }]
+    ["path", { d: "M9 19H3" }],
+    ["path", { d: "m16 16-3 3 3 3" }],
+    ["path", { d: "M21 5v12a2 2 0 0 1-2 2h-6" }]
   ];
 
   const ListFilterPlus = [
-    ["path", { d: "M10 18h4" }],
-    ["path", { d: "M11 6H3" }],
-    ["path", { d: "M15 6h6" }],
-    ["path", { d: "M18 9V3" }],
-    ["path", { d: "M7 12h8" }]
+    ["path", { d: "M12 5H2" }],
+    ["path", { d: "M6 12h12" }],
+    ["path", { d: "M9 19h6" }],
+    ["path", { d: "M16 5h6" }],
+    ["path", { d: "M19 8V2" }]
   ];
 
   const ListFilter = [
-    ["path", { d: "M3 6h18" }],
-    ["path", { d: "M7 12h10" }],
-    ["path", { d: "M10 18h4" }]
+    ["path", { d: "M2 5h20" }],
+    ["path", { d: "M6 12h12" }],
+    ["path", { d: "M9 19h6" }]
+  ];
+
+  const ListIndentDecrease = [
+    ["path", { d: "M21 5H11" }],
+    ["path", { d: "M21 12H11" }],
+    ["path", { d: "M21 19H11" }],
+    ["path", { d: "m7 8-4 4 4 4" }]
+  ];
+
+  const ListIndentIncrease = [
+    ["path", { d: "M21 5H11" }],
+    ["path", { d: "M21 12H11" }],
+    ["path", { d: "M21 19H11" }],
+    ["path", { d: "m3 8 4 4-4 4" }]
   ];
 
   const ListMinus = [
+    ["path", { d: "M16 5H3" }],
     ["path", { d: "M11 12H3" }],
-    ["path", { d: "M16 6H3" }],
-    ["path", { d: "M16 18H3" }],
+    ["path", { d: "M16 19H3" }],
     ["path", { d: "M21 12h-6" }]
   ];
 
   const ListMusic = [
-    ["path", { d: "M21 15V6" }],
-    ["path", { d: "M18.5 18a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" }],
-    ["path", { d: "M12 12H3" }],
-    ["path", { d: "M16 6H3" }],
-    ["path", { d: "M12 18H3" }]
+    ["path", { d: "M16 5H3" }],
+    ["path", { d: "M11 12H3" }],
+    ["path", { d: "M11 19H3" }],
+    ["path", { d: "M21 16V5" }],
+    ["circle", { cx: "18", cy: "16", r: "3" }]
   ];
 
   const ListOrdered = [
-    ["path", { d: "M10 12h11" }],
-    ["path", { d: "M10 18h11" }],
-    ["path", { d: "M10 6h11" }],
-    ["path", { d: "M4 10h2" }],
-    ["path", { d: "M4 6h1v4" }],
-    ["path", { d: "M6 18H4c0-1 2-2 2-3s-1-1.5-2-1" }]
+    ["path", { d: "M11 5h10" }],
+    ["path", { d: "M11 12h10" }],
+    ["path", { d: "M11 19h10" }],
+    ["path", { d: "M4 4h1v5" }],
+    ["path", { d: "M4 9h2" }],
+    ["path", { d: "M6.5 20H3.4c0-1 2.6-1.925 2.6-3.5a1.5 1.5 0 0 0-2.6-1.02" }]
   ];
 
   const ListPlus = [
+    ["path", { d: "M16 5H3" }],
     ["path", { d: "M11 12H3" }],
-    ["path", { d: "M16 6H3" }],
-    ["path", { d: "M16 18H3" }],
+    ["path", { d: "M16 19H3" }],
     ["path", { d: "M18 9v6" }],
     ["path", { d: "M21 12h-6" }]
   ];
 
-  const ListStart = [
-    ["path", { d: "M16 12H3" }],
-    ["path", { d: "M16 18H3" }],
-    ["path", { d: "M10 6H3" }],
-    ["path", { d: "M21 18V8a2 2 0 0 0-2-2h-5" }],
-    ["path", { d: "m16 8-2-2 2-2" }]
-  ];
-
   const ListRestart = [
-    ["path", { d: "M21 6H3" }],
+    ["path", { d: "M21 5H3" }],
     ["path", { d: "M7 12H3" }],
-    ["path", { d: "M7 18H3" }],
+    ["path", { d: "M7 19H3" }],
     ["path", { d: "M12 18a5 5 0 0 0 9-3 4.5 4.5 0 0 0-4.5-4.5c-1.33 0-2.54.54-3.41 1.41L11 14" }],
     ["path", { d: "M11 10v4h4" }]
   ];
 
+  const ListStart = [
+    ["path", { d: "M3 5h6" }],
+    ["path", { d: "M3 12h13" }],
+    ["path", { d: "M3 19h13" }],
+    ["path", { d: "m16 8-3-3 3-3" }],
+    ["path", { d: "M21 19V7a2 2 0 0 0-2-2h-6" }]
+  ];
+
   const ListTodo = [
-    ["rect", { x: "3", y: "5", width: "6", height: "6", rx: "1" }],
-    ["path", { d: "m3 17 2 2 4-4" }],
-    ["path", { d: "M13 6h8" }],
+    ["path", { d: "M13 5h8" }],
     ["path", { d: "M13 12h8" }],
-    ["path", { d: "M13 18h8" }]
+    ["path", { d: "M13 19h8" }],
+    ["path", { d: "m3 17 2 2 4-4" }],
+    ["rect", { x: "3", y: "4", width: "6", height: "6", rx: "1" }]
   ];
 
   const ListTree = [
-    ["path", { d: "M21 12h-8" }],
-    ["path", { d: "M21 6H8" }],
-    ["path", { d: "M21 18h-8" }],
-    ["path", { d: "M3 6v4c0 1.1.9 2 2 2h3" }],
-    ["path", { d: "M3 10v6c0 1.1.9 2 2 2h3" }]
+    ["path", { d: "M8 5h13" }],
+    ["path", { d: "M13 12h8" }],
+    ["path", { d: "M13 19h8" }],
+    ["path", { d: "M3 10a2 2 0 0 0 2 2h3" }],
+    ["path", { d: "M3 5v12a2 2 0 0 0 2 2h3" }]
   ];
 
   const ListVideo = [
-    ["path", { d: "M12 12H3" }],
-    ["path", { d: "M12 18H3" }],
-    ["path", { d: "M16 6H3" }],
+    ["path", { d: "M21 5H3" }],
+    ["path", { d: "M10 12H3" }],
+    ["path", { d: "M10 19H3" }],
     [
       "path",
       {
-        d: "M21.033 14.44a.647.647 0 0 1 0 1.12l-4.065 2.352a.645.645 0 0 1-.968-.56v-4.704a.645.645 0 0 1 .968-.56z"
+        d: "M15 12.003a1 1 0 0 1 1.517-.859l4.997 2.997a1 1 0 0 1 0 1.718l-4.997 2.997a1 1 0 0 1-1.517-.86z"
       }
     ]
   ];
 
-  const List = [
-    ["path", { d: "M3 12h.01" }],
-    ["path", { d: "M3 18h.01" }],
-    ["path", { d: "M3 6h.01" }],
-    ["path", { d: "M8 12h13" }],
-    ["path", { d: "M8 18h13" }],
-    ["path", { d: "M8 6h13" }]
+  const ListX = [
+    ["path", { d: "M16 5H3" }],
+    ["path", { d: "M11 12H3" }],
+    ["path", { d: "M16 19H3" }],
+    ["path", { d: "m15.5 9.5 5 5" }],
+    ["path", { d: "m20.5 9.5-5 5" }]
   ];
 
-  const ListX = [
-    ["path", { d: "M11 12H3" }],
-    ["path", { d: "M16 6H3" }],
-    ["path", { d: "M16 18H3" }],
-    ["path", { d: "m19 10-4 4" }],
-    ["path", { d: "m15 10 4 4" }]
+  const List = [
+    ["path", { d: "M3 5h.01" }],
+    ["path", { d: "M3 12h.01" }],
+    ["path", { d: "M3 19h.01" }],
+    ["path", { d: "M8 5h13" }],
+    ["path", { d: "M8 12h13" }],
+    ["path", { d: "M8 19h13" }]
   ];
 
   const LoaderCircle = [["path", { d: "M21 12a9 9 0 1 1-6.219-8.56" }]];
@@ -7807,18 +8392,18 @@
     ["path", { d: "M7.05 7.05a7 7 0 0 0 9.9 9.9" }]
   ];
 
-  const LockKeyholeOpen = [
-    ["circle", { cx: "12", cy: "16", r: "1" }],
-    ["rect", { width: "18", height: "12", x: "3", y: "10", rx: "2" }],
-    ["path", { d: "M7 10V7a5 5 0 0 1 9.33-2.5" }]
-  ];
-
   const Locate = [
     ["line", { x1: "2", x2: "5", y1: "12", y2: "12" }],
     ["line", { x1: "19", x2: "22", y1: "12", y2: "12" }],
     ["line", { x1: "12", x2: "12", y1: "2", y2: "5" }],
     ["line", { x1: "12", x2: "12", y1: "19", y2: "22" }],
     ["circle", { cx: "12", cy: "12", r: "7" }]
+  ];
+
+  const LockKeyholeOpen = [
+    ["circle", { cx: "12", cy: "16", r: "1" }],
+    ["rect", { width: "18", height: "12", x: "3", y: "10", rx: "2" }],
+    ["path", { d: "M7 10V7a5 5 0 0 1 9.33-2.5" }]
   ];
 
   const LockKeyhole = [
@@ -7850,15 +8435,15 @@
   ];
 
   const Logs = [
-    ["path", { d: "M13 12h8" }],
-    ["path", { d: "M13 18h8" }],
-    ["path", { d: "M13 6h8" }],
+    ["path", { d: "M3 5h1" }],
     ["path", { d: "M3 12h1" }],
-    ["path", { d: "M3 18h1" }],
-    ["path", { d: "M3 6h1" }],
+    ["path", { d: "M3 19h1" }],
+    ["path", { d: "M8 5h1" }],
     ["path", { d: "M8 12h1" }],
-    ["path", { d: "M8 18h1" }],
-    ["path", { d: "M8 6h1" }]
+    ["path", { d: "M8 19h1" }],
+    ["path", { d: "M13 5h8" }],
+    ["path", { d: "M13 12h8" }],
+    ["path", { d: "M13 19h8" }]
   ];
 
   const Lollipop = [
@@ -7875,6 +8460,12 @@
     ["circle", { cx: "8", cy: "20", r: "2" }]
   ];
 
+  const MailCheck = [
+    ["path", { d: "M22 13V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v12c0 1.1.9 2 2 2h8" }],
+    ["path", { d: "m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" }],
+    ["path", { d: "m16 19 2 2 4-4" }]
+  ];
+
   const Magnet = [
     ["path", { d: "m12 15 4 4" }],
     [
@@ -7884,12 +8475,6 @@
       }
     ],
     ["path", { d: "m5 8 4 4" }]
-  ];
-
-  const MailCheck = [
-    ["path", { d: "M22 13V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v12c0 1.1.9 2 2 2h8" }],
-    ["path", { d: "m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" }],
-    ["path", { d: "m16 19 2 2 4-4" }]
   ];
 
   const MailMinus = [
@@ -7944,16 +8529,16 @@
     ["path", { d: "m21 17-4 4" }]
   ];
 
-  const Mail = [
-    ["path", { d: "m22 7-8.991 5.727a2 2 0 0 1-2.009 0L2 7" }],
-    ["rect", { x: "2", y: "4", width: "20", height: "16", rx: "2" }]
-  ];
-
   const Mailbox = [
     ["path", { d: "M22 17a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9.5C2 7 4 5 6.5 5H18c2.2 0 4 1.8 4 4v8Z" }],
     ["polyline", { points: "15,9 18,9 18,11" }],
     ["path", { d: "M6.5 5C9 5 11 7 11 9.5V17a2 2 0 0 1-2 2" }],
     ["line", { x1: "6", x2: "7", y1: "10", y2: "10" }]
+  ];
+
+  const Mail = [
+    ["path", { d: "m22 7-8.991 5.727a2 2 0 0 1-2.009 0L2 7" }],
+    ["rect", { x: "2", y: "4", width: "20", height: "16", rx: "2" }]
   ];
 
   const Mails = [
@@ -8028,17 +8613,6 @@
     ["path", { d: "M16 18h6" }]
   ];
 
-  const MapPinPen = [
-    ["path", { d: "M17.97 9.304A8 8 0 0 0 2 10c0 4.69 4.887 9.562 7.022 11.468" }],
-    [
-      "path",
-      {
-        d: "M21.378 16.626a1 1 0 0 0-3.004-3.004l-4.01 4.012a2 2 0 0 0-.506.854l-.837 2.87a.5.5 0 0 0 .62.62l2.87-.837a2 2 0 0 0 .854-.506z"
-      }
-    ],
-    ["circle", { cx: "10", cy: "10", r: "3" }]
-  ];
-
   const MapPinOff = [
     ["path", { d: "M12.75 7.09a3 3 0 0 1 2.16 2.16" }],
     [
@@ -8052,6 +8626,17 @@
     ["path", { d: "M9.13 9.13a3 3 0 0 0 3.74 3.74" }]
   ];
 
+  const MapPinPen = [
+    ["path", { d: "M17.97 9.304A8 8 0 0 0 2 10c0 4.69 4.887 9.562 7.022 11.468" }],
+    [
+      "path",
+      {
+        d: "M21.378 16.626a1 1 0 0 0-3.004-3.004l-4.01 4.012a2 2 0 0 0-.506.854l-.837 2.87a.5.5 0 0 0 .62.62l2.87-.837a2 2 0 0 0 .854-.506z"
+      }
+    ],
+    ["circle", { cx: "10", cy: "10", r: "3" }]
+  ];
+
   const MapPinPlusInside = [
     [
       "path",
@@ -8061,17 +8646,6 @@
     ],
     ["path", { d: "M12 7v6" }],
     ["path", { d: "M9 10h6" }]
-  ];
-
-  const MapPinXInside = [
-    [
-      "path",
-      {
-        d: "M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"
-      }
-    ],
-    ["path", { d: "m14.5 7.5-5 5" }],
-    ["path", { d: "m9.5 7.5 5 5" }]
   ];
 
   const MapPinPlus = [
@@ -8086,6 +8660,18 @@
     ["path", { d: "M19 15v6" }]
   ];
 
+  const MapPinSearch = [
+    [
+      "path",
+      {
+        d: "M 12.248 21.969 a 1 1 0 0 1 -0.849 -0.17 C 9.539 20.193 4 14.993 4 10 a 8 8 0 0 1 16 0 C 20 10.42 19.961 10.841 19.888 11.262"
+      }
+    ],
+    ["path", { d: "m22 22-1.88-1.88" }],
+    ["circle", { cx: "12", cy: "10", r: "3" }],
+    ["circle", { cx: "18", cy: "18", r: "3" }]
+  ];
+
   const MapPinX = [
     [
       "path",
@@ -8096,6 +8682,17 @@
     ["circle", { cx: "12", cy: "10", r: "3" }],
     ["path", { d: "m21.5 15.5-5 5" }],
     ["path", { d: "m21.5 20.5-5-5" }]
+  ];
+
+  const MapPinXInside = [
+    [
+      "path",
+      {
+        d: "M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"
+      }
+    ],
+    ["path", { d: "m14.5 7.5-5 5" }],
+    ["path", { d: "m9.5 7.5 5 5" }]
   ];
 
   const MapPin = [
@@ -8221,33 +8818,40 @@
     ["line", { x1: "15", x2: "15.01", y1: "9", y2: "9" }]
   ];
 
-  const Menu = [
-    ["path", { d: "M4 12h16" }],
-    ["path", { d: "M4 18h16" }],
-    ["path", { d: "M4 6h16" }]
+  const MemoryStick = [
+    ["path", { d: "M12 12v-2" }],
+    ["path", { d: "M12 18v-2" }],
+    ["path", { d: "M16 12v-2" }],
+    ["path", { d: "M16 18v-2" }],
+    ["path", { d: "M2 11h1.5" }],
+    ["path", { d: "M20 18v-2" }],
+    ["path", { d: "M20.5 11H22" }],
+    ["path", { d: "M4 18v-2" }],
+    ["path", { d: "M8 12v-2" }],
+    ["path", { d: "M8 18v-2" }],
+    ["rect", { x: "2", y: "6", width: "20", height: "10", rx: "2" }]
   ];
 
-  const MemoryStick = [
-    ["path", { d: "M6 19v-3" }],
-    ["path", { d: "M10 19v-3" }],
-    ["path", { d: "M14 19v-3" }],
-    ["path", { d: "M18 19v-3" }],
-    ["path", { d: "M8 11V9" }],
-    ["path", { d: "M16 11V9" }],
-    ["path", { d: "M12 11V9" }],
-    ["path", { d: "M2 15h20" }],
-    [
-      "path",
-      {
-        d: "M2 7a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v1.1a2 2 0 0 0 0 3.837V17a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-5.1a2 2 0 0 0 0-3.837Z"
-      }
-    ]
+  const Menu = [
+    ["path", { d: "M4 5h16" }],
+    ["path", { d: "M4 12h16" }],
+    ["path", { d: "M4 19h16" }]
   ];
 
   const Merge = [
     ["path", { d: "m8 6 4-4 4 4" }],
     ["path", { d: "M12 2v10.3a4 4 0 0 1-1.172 2.872L4 22" }],
     ["path", { d: "m20 22-5-5" }]
+  ];
+
+  const MessageCircleCheck = [
+    [
+      "path",
+      {
+        d: "M2.992 16.342a2 2 0 0 1 .094 1.167l-1.065 3.29a1 1 0 0 0 1.236 1.168l3.413-.998a2 2 0 0 1 1.099.092 10 10 0 1 0-4.777-4.719"
+      }
+    ],
+    ["path", { d: "m9 12 2 2 4-4" }]
   ];
 
   const MessageCircleCode = [
@@ -8299,17 +8903,6 @@
     ["path", { d: "M16 12h.01" }]
   ];
 
-  const MessageCirclePlus = [
-    [
-      "path",
-      {
-        d: "M2.992 16.342a2 2 0 0 1 .094 1.167l-1.065 3.29a1 1 0 0 0 1.236 1.168l3.413-.998a2 2 0 0 1 1.099.092 10 10 0 1 0-4.777-4.719"
-      }
-    ],
-    ["path", { d: "M8 12h8" }],
-    ["path", { d: "M12 8v8" }]
-  ];
-
   const MessageCircleOff = [
     ["path", { d: "m2 2 20 20" }],
     [
@@ -8319,6 +8912,17 @@
       }
     ],
     ["path", { d: "M8.35 2.69A10 10 0 0 1 21.3 15.65" }]
+  ];
+
+  const MessageCirclePlus = [
+    [
+      "path",
+      {
+        d: "M2.992 16.342a2 2 0 0 1 .094 1.167l-1.065 3.29a1 1 0 0 0 1.236 1.168l3.413-.998a2 2 0 0 1 1.099.092 10 10 0 1 0-4.777-4.719"
+      }
+    ],
+    ["path", { d: "M8 12h8" }],
+    ["path", { d: "M12 8v8" }]
   ];
 
   const MessageCircleQuestionMark = [
@@ -8385,20 +8989,27 @@
     ["path", { d: "m14 14 3-3-3-3" }]
   ];
 
+  const MessageSquareCheck = [
+    [
+      "path",
+      {
+        d: "M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.7.7 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z"
+      }
+    ],
+    ["path", { d: "m9 11 2 2 4-4" }]
+  ];
+
   const MessageSquareDashed = [
-    ["path", { d: "M12 19h.01" }],
-    ["path", { d: "M12 3h.01" }],
-    ["path", { d: "M16 19h.01" }],
-    ["path", { d: "M16 3h.01" }],
-    ["path", { d: "M2 13h.01" }],
-    ["path", { d: "M2 17v4.286a.71.71 0 0 0 1.212.502l2.202-2.202A2 2 0 0 1 6.828 19H8" }],
-    ["path", { d: "M2 5a2 2 0 0 1 2-2" }],
-    ["path", { d: "M2 9h.01" }],
-    ["path", { d: "M20 3a2 2 0 0 1 2 2" }],
-    ["path", { d: "M22 13h.01" }],
-    ["path", { d: "M22 17a2 2 0 0 1-2 2" }],
-    ["path", { d: "M22 9h.01" }],
-    ["path", { d: "M8 3h.01" }]
+    ["path", { d: "M14 3h2" }],
+    ["path", { d: "M16 19h-2" }],
+    ["path", { d: "M2 12v-2" }],
+    ["path", { d: "M2 16v5.286a.71.71 0 0 0 1.212.502l1.149-1.149" }],
+    ["path", { d: "M20 19a2 2 0 0 0 2-2v-1" }],
+    ["path", { d: "M22 10v2" }],
+    ["path", { d: "M22 6V5a2 2 0 0 0-2-2" }],
+    ["path", { d: "M4 3a2 2 0 0 0-2 2v1" }],
+    ["path", { d: "M8 19h2" }],
+    ["path", { d: "M8 3h2" }]
   ];
 
   const MessageSquareDiff = [
@@ -8423,17 +9034,6 @@
     ["circle", { cx: "19", cy: "6", r: "3" }]
   ];
 
-  const MessageSquareLock = [
-    [
-      "path",
-      {
-        d: "M22 8.5V5a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v16.286a.71.71 0 0 0 1.212.502l2.202-2.202A2 2 0 0 1 6.828 19H10"
-      }
-    ],
-    ["path", { d: "M20 15v-2a2 2 0 0 0-4 0v2" }],
-    ["rect", { x: "14", y: "15", width: "8", height: "5", rx: "1" }]
-  ];
-
   const MessageSquareHeart = [
     [
       "path",
@@ -8449,6 +9049,17 @@
     ]
   ];
 
+  const MessageSquareLock = [
+    [
+      "path",
+      {
+        d: "M22 8.5V5a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v16.286a.71.71 0 0 0 1.212.502l2.202-2.202A2 2 0 0 1 6.828 19H10"
+      }
+    ],
+    ["path", { d: "M20 15v-2a2 2 0 0 0-4 0v2" }],
+    ["rect", { x: "14", y: "15", width: "8", height: "5", rx: "1" }]
+  ];
+
   const MessageSquareMore = [
     [
       "path",
@@ -8459,17 +9070,6 @@
     ["path", { d: "M12 11h.01" }],
     ["path", { d: "M16 11h.01" }],
     ["path", { d: "M8 11h.01" }]
-  ];
-
-  const MessageSquarePlus = [
-    [
-      "path",
-      {
-        d: "M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z"
-      }
-    ],
-    ["path", { d: "M12 8v6" }],
-    ["path", { d: "M9 11h6" }]
   ];
 
   const MessageSquareOff = [
@@ -8483,15 +9083,26 @@
     ["path", { d: "M8.656 3H20a2 2 0 0 1 2 2v11.344" }]
   ];
 
-  const MessageSquareQuote = [
+  const MessageSquarePlus = [
     [
       "path",
       {
         d: "M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z"
       }
     ],
-    ["path", { d: "M14 13a2 2 0 0 0 2-2V9h-2" }],
-    ["path", { d: "M8 13a2 2 0 0 0 2-2V9H8" }]
+    ["path", { d: "M12 8v6" }],
+    ["path", { d: "M9 11h6" }]
+  ];
+
+  const MessageSquareQuote = [
+    ["path", { d: "M14 14a2 2 0 0 0 2-2V8h-2" }],
+    [
+      "path",
+      {
+        d: "M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z"
+      }
+    ],
+    ["path", { d: "M8 14a2 2 0 0 0 2-2V8H8" }]
   ];
 
   const MessageSquareReply = [
@@ -8574,6 +9185,18 @@
     ]
   ];
 
+  const Metronome = [
+    ["path", { d: "M12 11.4V9.1" }],
+    ["path", { d: "m12 17 6.59-6.59" }],
+    [
+      "path",
+      {
+        d: "m15.05 5.7-.218-.691a3 3 0 0 0-5.663 0L4.418 19.695A1 1 0 0 0 5.37 21h13.253a1 1 0 0 0 .951-1.31L18.45 16.2"
+      }
+    ],
+    ["circle", { cx: "20", cy: "9", r: "2" }]
+  ];
+
   const MicOff = [
     ["path", { d: "M12 19v3" }],
     ["path", { d: "M15 9.34V5a3 3 0 0 0-5.68-1.33" }],
@@ -8601,22 +9224,16 @@
   ];
 
   const Microchip = [
+    ["path", { d: "M10 12h4" }],
+    ["path", { d: "M10 17h4" }],
+    ["path", { d: "M10 7h4" }],
     ["path", { d: "M18 12h2" }],
-    ["path", { d: "M18 16h2" }],
-    ["path", { d: "M18 20h2" }],
-    ["path", { d: "M18 4h2" }],
-    ["path", { d: "M18 8h2" }],
+    ["path", { d: "M18 18h2" }],
+    ["path", { d: "M18 6h2" }],
     ["path", { d: "M4 12h2" }],
-    ["path", { d: "M4 16h2" }],
-    ["path", { d: "M4 20h2" }],
-    ["path", { d: "M4 4h2" }],
-    ["path", { d: "M4 8h2" }],
-    [
-      "path",
-      {
-        d: "M8 2a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2h-1.5c-.276 0-.494.227-.562.495a2 2 0 0 1-3.876 0C9.994 2.227 9.776 2 9.5 2z"
-      }
-    ]
+    ["path", { d: "M4 18h2" }],
+    ["path", { d: "M4 6h2" }],
+    ["rect", { x: "6", y: "2", width: "12", height: "20", rx: "2" }]
   ];
 
   const Microscope = [
@@ -8628,23 +9245,23 @@
     ["path", { d: "M12 6V3a1 1 0 0 0-1-1H9a1 1 0 0 0-1 1v3" }]
   ];
 
-  const Milestone = [
-    ["path", { d: "M12 13v8" }],
-    ["path", { d: "M12 3v3" }],
-    [
-      "path",
-      {
-        d: "M4 6a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1h13a2 2 0 0 0 1.152-.365l3.424-2.317a1 1 0 0 0 0-1.635l-3.424-2.318A2 2 0 0 0 17 6z"
-      }
-    ]
-  ];
-
   const Microwave = [
     ["rect", { width: "20", height: "15", x: "2", y: "4", rx: "2" }],
     ["rect", { width: "8", height: "7", x: "6", y: "8", rx: "1" }],
     ["path", { d: "M18 8v7" }],
     ["path", { d: "M6 19v2" }],
     ["path", { d: "M18 19v2" }]
+  ];
+
+  const Milestone = [
+    ["path", { d: "M12 13v8" }],
+    ["path", { d: "M12 3v3" }],
+    [
+      "path",
+      {
+        d: "M18.172 6a2 2 0 0 1 1.414.586l2.06 2.06a1.207 1.207 0 0 1 0 1.708l-2.06 2.06a2 2 0 0 1-1.414.586H4a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1z"
+      }
+    ]
   ];
 
   const MilkOff = [
@@ -8686,11 +9303,32 @@
 
   const Minus = [["path", { d: "M5 12h14" }]];
 
+  const MirrorRectangular = [
+    ["path", { d: "M11 6 8 9" }],
+    ["path", { d: "m16 7-8 8" }],
+    ["rect", { x: "4", y: "2", width: "16", height: "20", rx: "2" }]
+  ];
+
+  const MirrorRound = [
+    ["path", { d: "M10 6.6 8.6 8" }],
+    ["path", { d: "M12 18v4" }],
+    ["path", { d: "M15 7.5 9.5 13" }],
+    ["path", { d: "M7 22h10" }],
+    ["circle", { cx: "12", cy: "10", r: "8" }]
+  ];
+
   const MonitorCheck = [
     ["path", { d: "m9 10 2 2 4-4" }],
     ["rect", { width: "20", height: "14", x: "2", y: "3", rx: "2" }],
     ["path", { d: "M12 17v4" }],
     ["path", { d: "M8 21h8" }]
+  ];
+
+  const MonitorCloud = [
+    ["path", { d: "M11 13a3 3 0 1 1 2.83-4H14a2 2 0 0 1 0 4z" }],
+    ["path", { d: "M12 17v4" }],
+    ["path", { d: "M8 21h8" }],
+    ["rect", { x: "2", y: "3", width: "20", height: "14", rx: "2" }]
   ];
 
   const MonitorCog = [
@@ -8715,20 +9353,20 @@
     ["circle", { cx: "19", cy: "6", r: "3" }]
   ];
 
+  const MonitorOff = [
+    ["path", { d: "M12 17v4" }],
+    ["path", { d: "M17 17H4a2 2 0 0 1-2-2V5a2 2 0 0 1 1.184-1.826" }],
+    ["path", { d: "m2 2 20 20" }],
+    ["path", { d: "M8 21h8" }],
+    ["path", { d: "M8.656 3H20a2 2 0 0 1 2 2v10a2 2 0 0 1-.293 1.042" }]
+  ];
+
   const MonitorDown = [
     ["path", { d: "M12 13V7" }],
     ["path", { d: "m15 10-3 3-3-3" }],
     ["rect", { width: "20", height: "14", x: "2", y: "3", rx: "2" }],
     ["path", { d: "M12 17v4" }],
     ["path", { d: "M8 21h8" }]
-  ];
-
-  const MonitorOff = [
-    ["path", { d: "M17 17H4a2 2 0 0 1-2-2V5c0-1.5 1-2 1-2" }],
-    ["path", { d: "M22 15V5a2 2 0 0 0-2-2H9" }],
-    ["path", { d: "M8 21h8" }],
-    ["path", { d: "M12 17v4" }],
-    ["path", { d: "m2 2 20 20" }]
   ];
 
   const MonitorPause = [
@@ -8766,19 +9404,19 @@
     ["circle", { cx: "17", cy: "15", r: "1" }]
   ];
 
-  const MonitorStop = [
-    ["path", { d: "M12 17v4" }],
-    ["path", { d: "M8 21h8" }],
-    ["rect", { x: "2", y: "3", width: "20", height: "14", rx: "2" }],
-    ["rect", { x: "9", y: "7", width: "6", height: "6", rx: "1" }]
-  ];
-
   const MonitorUp = [
     ["path", { d: "m9 10 3-3 3 3" }],
     ["path", { d: "M12 13V7" }],
     ["rect", { width: "20", height: "14", x: "2", y: "3", rx: "2" }],
     ["path", { d: "M12 17v4" }],
     ["path", { d: "M8 21h8" }]
+  ];
+
+  const MonitorStop = [
+    ["path", { d: "M12 17v4" }],
+    ["path", { d: "M8 21h8" }],
+    ["rect", { x: "2", y: "3", width: "20", height: "14", rx: "2" }],
+    ["rect", { x: "9", y: "7", width: "6", height: "6", rx: "1" }]
   ];
 
   const MonitorX = [
@@ -8815,6 +9453,14 @@
     ]
   ];
 
+  const Motorbike = [
+    ["path", { d: "m18 14-1-3" }],
+    ["path", { d: "m3 9 6 2a2 2 0 0 1 2-2h2a2 2 0 0 1 1.99 1.81" }],
+    ["path", { d: "M8 17h3a1 1 0 0 0 1-1 6 6 0 0 1 6-6 1 1 0 0 0 1-1v-.75A5 5 0 0 0 17 5" }],
+    ["circle", { cx: "19", cy: "17", r: "3" }],
+    ["circle", { cx: "5", cy: "17", r: "3" }]
+  ];
+
   const MountainSnow = [
     ["path", { d: "m8 3 4 8 5-5 5 15H2L8 3z" }],
     ["path", { d: "M4.14 15.08c2.62-1.57 5.24-1.43 7.86.42 2.74 1.94 5.49 2 8.23.19" }]
@@ -8822,11 +9468,28 @@
 
   const Mountain = [["path", { d: "m8 3 4 8 5-5 5 15H2L8 3z" }]];
 
+  const MouseLeft = [
+    ["path", { d: "M12 7.318V10" }],
+    ["path", { d: "M5 10v5a7 7 0 0 0 14 0V9c0-3.527-2.608-6.515-6-7" }],
+    ["circle", { cx: "7", cy: "4", r: "2" }]
+  ];
+
   const MouseOff = [
     ["path", { d: "M12 6v.343" }],
     ["path", { d: "M18.218 18.218A7 7 0 0 1 5 15V9a7 7 0 0 1 .782-3.218" }],
     ["path", { d: "M19 13.343V9A7 7 0 0 0 8.56 2.902" }],
     ["path", { d: "M22 22 2 2" }]
+  ];
+
+  const MousePointer2Off = [
+    [
+      "path",
+      {
+        d: "m15.55 8.45 5.138 2.087a.5.5 0 0 1-.063.947l-6.124 1.58a2 2 0 0 0-1.438 1.435l-1.579 6.126a.5.5 0 0 1-.947.063L8.45 15.551"
+      }
+    ],
+    ["path", { d: "M22 2 2 22" }],
+    ["path", { d: "m6.816 11.528-2.779-6.84a.495.495 0 0 1 .651-.651l6.84 2.779" }]
   ];
 
   const MousePointer2 = [
@@ -8870,6 +9533,12 @@
         d: "M3.688 3.037a.497.497 0 0 0-.651.651l6.5 15.999a.501.501 0 0 0 .947-.062l1.569-6.083a2 2 0 0 1 1.448-1.479l6.124-1.579a.5.5 0 0 0 .063-.947z"
       }
     ]
+  ];
+
+  const MouseRight = [
+    ["path", { d: "M12 7.318V10" }],
+    ["path", { d: "M19 10v5a7 7 0 0 1-14 0V9c0-3.527 2.608-6.515 6-7" }],
+    ["circle", { cx: "17", cy: "4", r: "2" }]
   ];
 
   const Mouse = [
@@ -8942,6 +9611,12 @@
     ["path", { d: "M12 2V22" }]
   ];
 
+  const MoveVertical = [
+    ["path", { d: "M12 2v20" }],
+    ["path", { d: "m8 18 4 4 4-4" }],
+    ["path", { d: "m8 6 4-4 4 4" }]
+  ];
+
   const Move = [
     ["path", { d: "M12 2v20" }],
     ["path", { d: "m15 19-3 3-3-3" }],
@@ -8951,20 +9626,9 @@
     ["path", { d: "m9 5 3-3 3 3" }]
   ];
 
-  const MoveVertical = [
-    ["path", { d: "M12 2v20" }],
-    ["path", { d: "m8 18 4 4 4-4" }],
-    ["path", { d: "m8 6 4-4 4 4" }]
-  ];
-
   const Music2 = [
     ["circle", { cx: "8", cy: "18", r: "4" }],
     ["path", { d: "M12 18V2l7 4" }]
-  ];
-
-  const Music3 = [
-    ["circle", { cx: "12", cy: "18", r: "4" }],
-    ["path", { d: "M16 18V2" }]
   ];
 
   const Music4 = [
@@ -8972,6 +9636,11 @@
     ["path", { d: "m9 9 12-2" }],
     ["circle", { cx: "6", cy: "18", r: "3" }],
     ["circle", { cx: "18", cy: "16", r: "3" }]
+  ];
+
+  const Music3 = [
+    ["circle", { cx: "12", cy: "18", r: "4" }],
+    ["path", { d: "M16 18V2" }]
   ];
 
   const Music = [
@@ -9044,6 +9713,17 @@
     ]
   ];
 
+  const NotebookText = [
+    ["path", { d: "M2 6h4" }],
+    ["path", { d: "M2 10h4" }],
+    ["path", { d: "M2 14h4" }],
+    ["path", { d: "M2 18h4" }],
+    ["rect", { width: "16", height: "20", x: "4", y: "2", rx: "2" }],
+    ["path", { d: "M9.5 8h5" }],
+    ["path", { d: "M9.5 12H16" }],
+    ["path", { d: "M9.5 16H14" }]
+  ];
+
   const NotebookTabs = [
     ["path", { d: "M2 6h4" }],
     ["path", { d: "M2 10h4" }],
@@ -9054,17 +9734,6 @@
     ["path", { d: "M15 7h5" }],
     ["path", { d: "M15 12h5" }],
     ["path", { d: "M15 17h5" }]
-  ];
-
-  const NotebookText = [
-    ["path", { d: "M2 6h4" }],
-    ["path", { d: "M2 10h4" }],
-    ["path", { d: "M2 14h4" }],
-    ["path", { d: "M2 18h4" }],
-    ["rect", { width: "16", height: "20", x: "4", y: "2", rx: "2" }],
-    ["path", { d: "M9.5 8h5" }],
-    ["path", { d: "M9.5 12H16" }],
-    ["path", { d: "M9.5 16H14" }]
   ];
 
   const Notebook = [
@@ -9147,6 +9816,16 @@
     ]
   ];
 
+  const OctagonMinus = [
+    [
+      "path",
+      {
+        d: "M2.586 16.726A2 2 0 0 1 2 15.312V8.688a2 2 0 0 1 .586-1.414l4.688-4.688A2 2 0 0 1 8.688 2h6.624a2 2 0 0 1 1.414.586l4.688 4.688A2 2 0 0 1 22 8.688v6.624a2 2 0 0 1-.586 1.414l-4.688 4.688a2 2 0 0 1-1.414.586H8.688a2 2 0 0 1-1.414-.586z"
+      }
+    ],
+    ["path", { d: "M8 12h8" }]
+  ];
+
   const OctagonPause = [
     ["path", { d: "M10 15V9" }],
     ["path", { d: "M14 15V9" }],
@@ -9158,14 +9837,13 @@
     ]
   ];
 
-  const OctagonMinus = [
+  const Octagon = [
     [
       "path",
       {
         d: "M2.586 16.726A2 2 0 0 1 2 15.312V8.688a2 2 0 0 1 .586-1.414l4.688-4.688A2 2 0 0 1 8.688 2h6.624a2 2 0 0 1 1.414.586l4.688 4.688A2 2 0 0 1 22 8.688v6.624a2 2 0 0 1-.586 1.414l-4.688 4.688a2 2 0 0 1-1.414.586H8.688a2 2 0 0 1-1.414-.586z"
       }
-    ],
-    ["path", { d: "M8 12h8" }]
+    ]
   ];
 
   const OctagonX = [
@@ -9177,15 +9855,6 @@
       }
     ],
     ["path", { d: "m9 9 6 6" }]
-  ];
-
-  const Octagon = [
-    [
-      "path",
-      {
-        d: "M2.586 16.726A2 2 0 0 1 2 15.312V8.688a2 2 0 0 1 .586-1.414l4.688-4.688A2 2 0 0 1 8.688 2h6.624a2 2 0 0 1 1.414.586l4.688 4.688A2 2 0 0 1 22 8.688v6.624a2 2 0 0 1-.586 1.414l-4.688 4.688a2 2 0 0 1-1.414.586H8.688a2 2 0 0 1-1.414-.586z"
-      }
-    ]
   ];
 
   const Omega = [
@@ -9200,6 +9869,14 @@
   const Option = [
     ["path", { d: "M3 3h6l6 18h6" }],
     ["path", { d: "M14 3h7" }]
+  ];
+
+  const Orbit = [
+    ["path", { d: "M20.341 6.484A10 10 0 0 1 10.266 21.85" }],
+    ["path", { d: "M3.659 17.516A10 10 0 0 1 13.74 2.152" }],
+    ["circle", { cx: "12", cy: "12", r: "3" }],
+    ["circle", { cx: "19", cy: "5", r: "2" }],
+    ["circle", { cx: "5", cy: "19", r: "2" }]
   ];
 
   const Origami = [
@@ -9227,38 +9904,30 @@
     ["path", { d: "M3.054 9.013h17.893" }]
   ];
 
-  const Orbit = [
-    ["path", { d: "M20.341 6.484A10 10 0 0 1 10.266 21.85" }],
-    ["path", { d: "M3.659 17.516A10 10 0 0 1 13.74 2.152" }],
-    ["circle", { cx: "12", cy: "12", r: "3" }],
-    ["circle", { cx: "19", cy: "5", r: "2" }],
-    ["circle", { cx: "5", cy: "19", r: "2" }]
-  ];
-
   const PackageCheck = [
-    ["path", { d: "m16 16 2 2 4-4" }],
+    ["path", { d: "M12 22V12" }],
+    ["path", { d: "m16 17 2 2 4-4" }],
     [
       "path",
       {
-        d: "M21 10V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l2-1.14"
+        d: "M21 11.127V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.729l7 4a2 2 0 0 0 2 .001l1.32-.753"
       }
     ],
-    ["path", { d: "m7.5 4.27 9 5.15" }],
-    ["polyline", { points: "3.29 7 12 12 20.71 7" }],
-    ["line", { x1: "12", x2: "12", y1: "22", y2: "12" }]
+    ["path", { d: "M3.29 7 12 12l8.71-5" }],
+    ["path", { d: "m7.5 4.27 8.997 5.148" }]
   ];
 
   const PackageMinus = [
-    ["path", { d: "M16 16h6" }],
+    ["path", { d: "M12 22V12" }],
+    ["path", { d: "M16 17h6" }],
     [
       "path",
       {
-        d: "M21 10V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l2-1.14"
+        d: "M21 13V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.729l7 4a2 2 0 0 0 2 .001l1.675-.955"
       }
     ],
-    ["path", { d: "m7.5 4.27 9 5.15" }],
-    ["polyline", { points: "3.29 7 12 12 20.71 7" }],
-    ["line", { x1: "12", x2: "12", y1: "22", y2: "12" }]
+    ["path", { d: "M3.29 7 12 12l8.71-5" }],
+    ["path", { d: "m7.5 4.27 8.997 5.148" }]
   ];
 
   const PackageOpen = [
@@ -9284,44 +9953,31 @@
   ];
 
   const PackagePlus = [
-    ["path", { d: "M16 16h6" }],
-    ["path", { d: "M19 13v6" }],
+    ["path", { d: "M12 22V12" }],
+    ["path", { d: "M16 17h6" }],
+    ["path", { d: "M19 14v6" }],
     [
       "path",
       {
-        d: "M21 10V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l2-1.14"
+        d: "M21 10.535V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.729l7 4a2 2 0 0 0 2 .001l1.675-.955"
       }
     ],
-    ["path", { d: "m7.5 4.27 9 5.15" }],
-    ["polyline", { points: "3.29 7 12 12 20.71 7" }],
-    ["line", { x1: "12", x2: "12", y1: "22", y2: "12" }]
+    ["path", { d: "M3.29 7 12 12l8.71-5" }],
+    ["path", { d: "m7.5 4.27 8.997 5.148" }]
   ];
 
   const PackageSearch = [
+    ["path", { d: "M12 22V12" }],
+    ["path", { d: "M20.27 18.27 22 20" }],
     [
       "path",
       {
-        d: "M21 10V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l2-1.14"
+        d: "M21 10.498V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.729l7 4a2 2 0 0 0 2 .001l.98-.559"
       }
     ],
-    ["path", { d: "m7.5 4.27 9 5.15" }],
-    ["polyline", { points: "3.29 7 12 12 20.71 7" }],
-    ["line", { x1: "12", x2: "12", y1: "22", y2: "12" }],
-    ["circle", { cx: "18.5", cy: "15.5", r: "2.5" }],
-    ["path", { d: "M20.27 17.27 22 19" }]
-  ];
-
-  const PackageX = [
-    [
-      "path",
-      {
-        d: "M21 10V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l2-1.14"
-      }
-    ],
-    ["path", { d: "m7.5 4.27 9 5.15" }],
-    ["polyline", { points: "3.29 7 12 12 20.71 7" }],
-    ["line", { x1: "12", x2: "12", y1: "22", y2: "12" }],
-    ["path", { d: "m17 13 5 5m-5 0 5-5" }]
+    ["path", { d: "M3.29 7 12 12l8.71-5" }],
+    ["path", { d: "m7.5 4.27 8.997 5.148" }],
+    ["circle", { cx: "18.5", cy: "16.5", r: "2.5" }]
   ];
 
   const Package = [
@@ -9336,11 +9992,35 @@
     ["path", { d: "m7.5 4.27 9 5.15" }]
   ];
 
+  const PackageX = [
+    ["path", { d: "M12 22V12" }],
+    ["path", { d: "m16.5 14.5 5 5" }],
+    ["path", { d: "m16.5 19.5 5-5" }],
+    [
+      "path",
+      {
+        d: "M21 10.5V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.729l7 4a2 2 0 0 0 2 .001l.13-.074"
+      }
+    ],
+    ["path", { d: "M3.29 7 12 12l8.71-5" }],
+    ["path", { d: "m7.5 4.27 8.997 5.148" }]
+  ];
+
   const PaintBucket = [
-    ["path", { d: "m19 11-8-8-8.6 8.6a2 2 0 0 0 0 2.8l5.2 5.2c.8.8 2 .8 2.8 0L19 11Z" }],
-    ["path", { d: "m5 2 5 5" }],
-    ["path", { d: "M2 13h15" }],
-    ["path", { d: "M22 20a2 2 0 1 1-4 0c0-1.6 1.7-2.4 2-4 .3 1.6 2 2.4 2 4Z" }]
+    ["path", { d: "M11 7 6 2" }],
+    ["path", { d: "M18.992 12H2.041" }],
+    [
+      "path",
+      {
+        d: "M21.145 18.38A3.34 3.34 0 0 1 20 16.5a3.3 3.3 0 0 1-1.145 1.88c-.575.46-.855 1.02-.855 1.595A2 2 0 0 0 20 22a2 2 0 0 0 2-2.025c0-.58-.285-1.13-.855-1.595"
+      }
+    ],
+    [
+      "path",
+      {
+        d: "m8.5 4.5 2.148-2.148a1.205 1.205 0 0 1 1.704 0l7.296 7.296a1.205 1.205 0 0 1 0 1.704l-7.592 7.592a3.615 3.615 0 0 1-5.112 0l-3.888-3.888a3.615 3.615 0 0 1 0-5.112L5.67 7.33"
+      }
+    ]
   ];
 
   const PaintRoller = [
@@ -9390,6 +10070,12 @@
     ["circle", { cx: "8.5", cy: "7.5", r: ".5", fill: "currentColor" }]
   ];
 
+  const PanelBottomClose = [
+    ["rect", { width: "18", height: "18", x: "3", y: "3", rx: "2" }],
+    ["path", { d: "M3 15h18" }],
+    ["path", { d: "m15 8-3 3-3-3" }]
+  ];
+
   const Panda = [
     ["path", { d: "M11.25 17.25h1.5L12 18z" }],
     ["path", { d: "m15 12 2 2" }],
@@ -9402,12 +10088,6 @@
     ],
     ["path", { d: "M6 6.5a.495.495 0 0 1 .5-.5" }],
     ["path", { d: "m9 12-2 2" }]
-  ];
-
-  const PanelBottomClose = [
-    ["rect", { width: "18", height: "18", x: "3", y: "3", rx: "2" }],
-    ["path", { d: "M3 15h18" }],
-    ["path", { d: "m15 8-3 3-3-3" }]
   ];
 
   const PanelBottomDashed = [
@@ -9450,14 +10130,14 @@
   ];
 
   const PanelLeftRightDashed = [
-    ["path", { d: "M16 10V9" }],
-    ["path", { d: "M16 15v-1" }],
-    ["path", { d: "M16 21v-2" }],
-    ["path", { d: "M16 5V3" }],
-    ["path", { d: "M8 10V9" }],
-    ["path", { d: "M8 15v-1" }],
-    ["path", { d: "M8 21v-2" }],
-    ["path", { d: "M8 5V3" }],
+    ["path", { d: "M15 10V9" }],
+    ["path", { d: "M15 15v-1" }],
+    ["path", { d: "M15 21v-2" }],
+    ["path", { d: "M15 5V3" }],
+    ["path", { d: "M9 10V9" }],
+    ["path", { d: "M9 15v-1" }],
+    ["path", { d: "M9 21v-2" }],
+    ["path", { d: "M9 5V3" }],
     ["rect", { x: "3", y: "3", width: "18", height: "18", rx: "2" }]
   ];
 
@@ -9486,21 +10166,21 @@
     ["path", { d: "m10 15-3-3 3-3" }]
   ];
 
+  const PanelTopBottomDashed = [
+    ["path", { d: "M14 15h1" }],
+    ["path", { d: "M14 9h1" }],
+    ["path", { d: "M19 15h2" }],
+    ["path", { d: "M19 9h2" }],
+    ["path", { d: "M3 15h2" }],
+    ["path", { d: "M3 9h2" }],
+    ["path", { d: "M9 15h1" }],
+    ["path", { d: "M9 9h1" }],
+    ["rect", { x: "3", y: "3", width: "18", height: "18", rx: "2" }]
+  ];
+
   const PanelRight = [
     ["rect", { width: "18", height: "18", x: "3", y: "3", rx: "2" }],
     ["path", { d: "M15 3v18" }]
-  ];
-
-  const PanelTopBottomDashed = [
-    ["path", { d: "M14 16h1" }],
-    ["path", { d: "M14 8h1" }],
-    ["path", { d: "M19 16h2" }],
-    ["path", { d: "M19 8h2" }],
-    ["path", { d: "M3 16h2" }],
-    ["path", { d: "M3 8h2" }],
-    ["path", { d: "M9 16h1" }],
-    ["path", { d: "M9 8h1" }],
-    ["rect", { x: "3", y: "3", width: "18", height: "18", rx: "2" }]
   ];
 
   const PanelTopClose = [
@@ -9573,6 +10253,11 @@
     ["path", { d: "M9 9a3 3 0 1 1 6 0" }]
   ];
 
+  const Pause = [
+    ["rect", { x: "14", y: "3", width: "5", height: "18", rx: "1" }],
+    ["rect", { x: "5", y: "3", width: "5", height: "18", rx: "1" }]
+  ];
+
   const PartyPopper = [
     ["path", { d: "M5.8 11.3 2 22l10.7-3.79" }],
     ["path", { d: "M4 3h.01" }],
@@ -9593,11 +10278,6 @@
         d: "M11 13c1.93 1.93 2.83 4.17 2 5-.83.83-3.07-.07-5-2-1.93-1.93-2.83-4.17-2-5 .83-.83 3.07.07 5 2Z"
       }
     ]
-  ];
-
-  const Pause = [
-    ["rect", { x: "14", y: "3", width: "5", height: "18", rx: "1" }],
-    ["rect", { x: "5", y: "3", width: "5", height: "18", rx: "1" }]
   ];
 
   const PawPrint = [
@@ -9689,11 +10369,7 @@
     ["path", { d: "m2 2 20 20" }]
   ];
 
-  const PencilRuler = [
-    ["path", { d: "M13 7 8.7 2.7a2.41 2.41 0 0 0-3.4 0L2.7 5.3a2.41 2.41 0 0 0 0 3.4L7 13" }],
-    ["path", { d: "m8 6 2-2" }],
-    ["path", { d: "m18 16 2-2" }],
-    ["path", { d: "m17 11 4.3 4.3c.94.94.94 2.46 0 3.4l-2.6 2.6c-.94.94-2.46.94-3.4 0L11 17" }],
+  const Pencil = [
     [
       "path",
       {
@@ -9703,7 +10379,11 @@
     ["path", { d: "m15 5 4 4" }]
   ];
 
-  const Pencil = [
+  const PencilRuler = [
+    ["path", { d: "M13 7 8.7 2.7a2.41 2.41 0 0 0-3.4 0L2.7 5.3a2.41 2.41 0 0 0 0 3.4L7 13" }],
+    ["path", { d: "m8 6 2-2" }],
+    ["path", { d: "m18 16 2-2" }],
+    ["path", { d: "m17 11 4.3 4.3c.94.94.94 2.46 0 3.4l-2.6 2.6c-.94.94-2.46.94-3.4 0L11 17" }],
     [
       "path",
       {
@@ -9728,17 +10408,17 @@
     ["circle", { cx: "17.5", cy: "17.5", r: "2.5" }]
   ];
 
-  const PhilippinePeso = [
-    ["path", { d: "M20 11H4" }],
-    ["path", { d: "M20 7H4" }],
-    ["path", { d: "M7 21V4a1 1 0 0 1 1-1h4a1 1 0 0 1 0 12H7" }]
-  ];
-
   const PersonStanding = [
     ["circle", { cx: "12", cy: "5", r: "1" }],
     ["path", { d: "m9 20 3-6 3 6" }],
     ["path", { d: "m6 8 6 2 6-2" }],
     ["path", { d: "M12 10v4" }]
+  ];
+
+  const PhilippinePeso = [
+    ["path", { d: "M20 11H4" }],
+    ["path", { d: "M20 7H4" }],
+    ["path", { d: "M7 21V4a1 1 0 0 1 1-1h4a1 1 0 0 1 0 12H7" }]
   ];
 
   const PhoneCall = [
@@ -9812,6 +10492,12 @@
     ]
   ];
 
+  const Pi = [
+    ["line", { x1: "9", x2: "9", y1: "4", y2: "20" }],
+    ["path", { d: "M4 7c0-1.7 1.3-3 3-3h13" }],
+    ["path", { d: "M18 20c-1.7 0-3-1.3-3-3V4" }]
+  ];
+
   const Phone = [
     [
       "path",
@@ -9819,12 +10505,6 @@
         d: "M13.832 16.568a1 1 0 0 0 1.213-.303l.355-.465A2 2 0 0 1 17 15h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2A18 18 0 0 1 2 4a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3a2 2 0 0 1-.8 1.6l-.468.351a1 1 0 0 0-.292 1.233 14 14 0 0 0 6.392 6.384"
       }
     ]
-  ];
-
-  const Pi = [
-    ["line", { x1: "9", x2: "9", y1: "4", y2: "20" }],
-    ["path", { d: "M4 7c0-1.7 1.3-3 3-3h13" }],
-    ["path", { d: "M18 20c-1.7 0-3-1.3-3-3V4" }]
   ];
 
   const Piano = [
@@ -9915,16 +10595,16 @@
     ["rect", { width: "16", height: "5", x: "4", y: "2", rx: "1" }]
   ];
 
-  const Pill = [
-    ["path", { d: "m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z" }],
-    ["path", { d: "m8.5 8.5 7 7" }]
-  ];
-
   const PinOff = [
     ["path", { d: "M12 17v5" }],
     ["path", { d: "M15 9.34V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H7.89" }],
     ["path", { d: "m2 2 20 20" }],
     ["path", { d: "M9 9v1.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h11" }]
+  ];
+
+  const Pill = [
+    ["path", { d: "m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z" }],
+    ["path", { d: "m8.5 8.5 7 7" }]
   ];
 
   const Pin = [
@@ -10015,9 +10695,9 @@
 
   const Plug = [
     ["path", { d: "M12 22v-5" }],
-    ["path", { d: "M9 8V2" }],
     ["path", { d: "M15 8V2" }],
-    ["path", { d: "M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z" }]
+    ["path", { d: "M17 8a1 1 0 0 1 1 1v4a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1z" }],
+    ["path", { d: "M9 8V2" }]
   ];
 
   const Plus = [
@@ -10033,28 +10713,11 @@
     ["path", { d: "M18 11.66V22a4 4 0 0 0 4-4V6" }]
   ];
 
-  const Pocket = [
-    ["path", { d: "M20 3a2 2 0 0 1 2 2v6a1 1 0 0 1-20 0V5a2 2 0 0 1 2-2z" }],
-    ["path", { d: "m8 10 4 4 4-4" }]
-  ];
-
   const Podcast = [
     ["path", { d: "M13 17a1 1 0 1 0-2 0l.5 4.5a0.5 0.5 0 0 0 1 0z", fill: "currentColor" }],
     ["path", { d: "M16.85 18.58a9 9 0 1 0-9.7 0" }],
     ["path", { d: "M8 14a5 5 0 1 1 8 0" }],
     ["circle", { cx: "12", cy: "11", r: "1", fill: "currentColor" }]
-  ];
-
-  const PointerOff = [
-    ["path", { d: "M10 4.5V4a2 2 0 0 0-2.41-1.957" }],
-    ["path", { d: "M13.9 8.4a2 2 0 0 0-1.26-1.295" }],
-    ["path", { d: "M21.7 16.2A8 8 0 0 0 22 14v-3a2 2 0 1 0-4 0v-1a2 2 0 0 0-3.63-1.158" }],
-    [
-      "path",
-      { d: "m7 15-1.8-1.8a2 2 0 0 0-2.79 2.86L6 19.7a7.74 7.74 0 0 0 6 2.3h2a8 8 0 0 0 5.657-2.343" }
-    ],
-    ["path", { d: "M6 6v8" }],
-    ["path", { d: "m2 2 20 20" }]
   ];
 
   const Pointer = [
@@ -10068,6 +10731,18 @@
         d: "M18 11a2 2 0 1 1 4 0v3a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"
       }
     ]
+  ];
+
+  const PointerOff = [
+    ["path", { d: "M10 4.5V4a2 2 0 0 0-2.41-1.957" }],
+    ["path", { d: "M13.9 8.4a2 2 0 0 0-1.26-1.295" }],
+    ["path", { d: "M21.7 16.2A8 8 0 0 0 22 14v-3a2 2 0 1 0-4 0v-1a2 2 0 0 0-3.63-1.158" }],
+    [
+      "path",
+      { d: "m7 15-1.8-1.8a2 2 0 0 0-2.79 2.86L6 19.7a7.74 7.74 0 0 0 6 2.3h2a8 8 0 0 0 5.657-2.343" }
+    ],
+    ["path", { d: "M6 6v8" }],
+    ["path", { d: "m2 2 20 20" }]
   ];
 
   const Popcorn = [
@@ -10115,6 +10790,14 @@
     ["path", { d: "m7 21 5-5 5 5" }]
   ];
 
+  const PrinterX = [
+    ["path", { d: "M12.531 22H7a1 1 0 0 1-1-1v-6a1 1 0 0 1 1-1h6.377" }],
+    ["path", { d: "m16.5 16.5 5 5" }],
+    ["path", { d: "m16.5 21.5 5-5" }],
+    ["path", { d: "M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v1.5" }],
+    ["path", { d: "M6 9V3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6" }]
+  ];
+
   const PrinterCheck = [
     ["path", { d: "M13.5 22H7a1 1 0 0 1-1-1v-6a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v.5" }],
     ["path", { d: "m16 19 2 2 4-4" }],
@@ -10126,18 +10809,6 @@
     ["path", { d: "M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" }],
     ["path", { d: "M6 9V3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6" }],
     ["rect", { x: "6", y: "14", width: "12", height: "8", rx: "1" }]
-  ];
-
-  const Projector = [
-    ["path", { d: "M5 7 3 5" }],
-    ["path", { d: "M9 6V3" }],
-    ["path", { d: "m13 7 2-2" }],
-    ["circle", { cx: "9", cy: "13", r: "3" }],
-    [
-      "path",
-      { d: "M11.83 12H20a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h2.17" }
-    ],
-    ["path", { d: "M16 16h2" }]
   ];
 
   const Proportions = [
@@ -10153,6 +10824,18 @@
         d: "M15.39 4.39a1 1 0 0 0 1.68-.474 2.5 2.5 0 1 1 3.014 3.015 1 1 0 0 0-.474 1.68l1.683 1.682a2.414 2.414 0 0 1 0 3.414L19.61 15.39a1 1 0 0 1-1.68-.474 2.5 2.5 0 1 0-3.014 3.015 1 1 0 0 1 .474 1.68l-1.683 1.682a2.414 2.414 0 0 1-3.414 0L8.61 19.61a1 1 0 0 0-1.68.474 2.5 2.5 0 1 1-3.014-3.015 1 1 0 0 0 .474-1.68l-1.683-1.682a2.414 2.414 0 0 1 0-3.414L4.39 8.61a1 1 0 0 1 1.68.474 2.5 2.5 0 1 0 3.014-3.015 1 1 0 0 1-.474-1.68l1.683-1.682a2.414 2.414 0 0 1 3.414 0z"
       }
     ]
+  ];
+
+  const Projector = [
+    ["path", { d: "M5 7 3 5" }],
+    ["path", { d: "M9 6V3" }],
+    ["path", { d: "m13 7 2-2" }],
+    ["circle", { cx: "9", cy: "13", r: "3" }],
+    [
+      "path",
+      { d: "M11.83 12H20a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h2.17" }
+    ],
+    ["path", { d: "M16 16h2" }]
   ];
 
   const Pyramid = [
@@ -10195,6 +10878,17 @@
     ["path", { d: "M12 21v-1" }]
   ];
 
+  const Radar = [
+    ["path", { d: "M19.07 4.93A10 10 0 0 0 6.99 3.34" }],
+    ["path", { d: "M4 6h.01" }],
+    ["path", { d: "M2.29 9.62A10 10 0 1 0 21.31 8.35" }],
+    ["path", { d: "M16.24 7.76A6 6 0 1 0 8.23 16.67" }],
+    ["path", { d: "M12 18h.01" }],
+    ["path", { d: "M17.99 11.66A6 6 0 0 1 15.77 16.67" }],
+    ["circle", { cx: "12", cy: "12", r: "2" }],
+    ["path", { d: "m13.41 10.59 5.66-5.66" }]
+  ];
+
   const Rabbit = [
     ["path", { d: "M13 16a3 3 0 0 1 2.24 5" }],
     ["path", { d: "M18 12h.01" }],
@@ -10206,17 +10900,6 @@
     ],
     ["path", { d: "M20 8.54V4a2 2 0 1 0-4 0v3" }],
     ["path", { d: "M7.612 12.524a3 3 0 1 0-1.6 4.3" }]
-  ];
-
-  const Radar = [
-    ["path", { d: "M19.07 4.93A10 10 0 0 0 6.99 3.34" }],
-    ["path", { d: "M4 6h.01" }],
-    ["path", { d: "M2.29 9.62A10 10 0 1 0 21.31 8.35" }],
-    ["path", { d: "M16.24 7.76A6 6 0 1 0 8.23 16.67" }],
-    ["path", { d: "M12 18h.01" }],
-    ["path", { d: "M17.99 11.66A6 6 0 0 1 15.77 16.67" }],
-    ["circle", { cx: "12", cy: "12", r: "2" }],
-    ["path", { d: "m13.41 10.59 5.66-5.66" }]
   ];
 
   const Radiation = [
@@ -10248,6 +10931,15 @@
         d: "M3 12h3.28a1 1 0 0 1 .948.684l2.298 7.934a.5.5 0 0 0 .96-.044L13.82 4.771A1 1 0 0 1 14.792 4H21"
       }
     ]
+  ];
+
+  const RadioOff = [
+    ["path", { d: "M13.414 13.414a2 2 0 1 1-2.828-2.828" }],
+    ["path", { d: "M16.247 7.761a6 6 0 0 1 1.744 4.572" }],
+    ["path", { d: "M19.075 4.933a10 10 0 0 1 2.234 10.72" }],
+    ["path", { d: "m2 2 20 20" }],
+    ["path", { d: "M4.925 19.067a10 10 0 0 1 0-14.134" }],
+    ["path", { d: "M7.753 16.239a6 6 0 0 1 0-8.478" }]
   ];
 
   const RadioReceiver = [
@@ -10282,12 +10974,6 @@
     ["circle", { cx: "12", cy: "12", r: "2" }]
   ];
 
-  const RailSymbol = [
-    ["path", { d: "M5 15h14" }],
-    ["path", { d: "M5 9h14" }],
-    ["path", { d: "m14 20-5-5 6-6-5-5" }]
-  ];
-
   const Rainbow = [
     ["path", { d: "M22 17a10 10 0 0 0-20 0" }],
     ["path", { d: "M6 17a6 6 0 0 1 12 0" }],
@@ -10313,69 +10999,119 @@
   ];
 
   const ReceiptCent = [
-    ["path", { d: "M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z" }],
-    ["path", { d: "M12 6.5v11" }],
-    ["path", { d: "M15 9.4a4 4 0 1 0 0 5.2" }]
+    ["path", { d: "M12 7v10" }],
+    ["path", { d: "M14.828 14.829a4 4 0 0 1-5.656 0 4 4 0 0 1 0-5.657 4 4 0 0 1 5.656 0" }],
+    [
+      "path",
+      {
+        d: "M4 3a1 1 0 0 1 1-1 1.3 1.3 0 0 1 .7.2l.933.6a1.3 1.3 0 0 0 1.4 0l.934-.6a1.3 1.3 0 0 1 1.4 0l.933.6a1.3 1.3 0 0 0 1.4 0l.933-.6a1.3 1.3 0 0 1 1.4 0l.934.6a1.3 1.3 0 0 0 1.4 0l.933-.6A1.3 1.3 0 0 1 19 2a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1 1.3 1.3 0 0 1-.7-.2l-.933-.6a1.3 1.3 0 0 0-1.4 0l-.934.6a1.3 1.3 0 0 1-1.4 0l-.933-.6a1.3 1.3 0 0 0-1.4 0l-.933.6a1.3 1.3 0 0 1-1.4 0l-.934-.6a1.3 1.3 0 0 0-1.4 0l-.933.6a1.3 1.3 0 0 1-.7.2 1 1 0 0 1-1-1z"
+      }
+    ]
   ];
 
   const ReceiptEuro = [
-    ["path", { d: "M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z" }],
-    ["path", { d: "M8 12h5" }],
-    ["path", { d: "M16 9.5a4 4 0 1 0 0 5.2" }]
+    ["path", { d: "M15.828 14.829a4 4 0 0 1-5.656 0 4 4 0 0 1 0-5.657 4 4 0 0 1 5.656 0" }],
+    [
+      "path",
+      {
+        d: "M4 3a1 1 0 0 1 1-1 1.3 1.3 0 0 1 .7.2l.933.6a1.3 1.3 0 0 0 1.4 0l.934-.6a1.3 1.3 0 0 1 1.4 0l.933.6a1.3 1.3 0 0 0 1.4 0l.933-.6a1.3 1.3 0 0 1 1.4 0l.934.6a1.3 1.3 0 0 0 1.4 0l.933-.6A1.3 1.3 0 0 1 19 2a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1 1.3 1.3 0 0 1-.7-.2l-.933-.6a1.3 1.3 0 0 0-1.4 0l-.934.6a1.3 1.3 0 0 1-1.4 0l-.933-.6a1.3 1.3 0 0 0-1.4 0l-.933.6a1.3 1.3 0 0 1-1.4 0l-.934-.6a1.3 1.3 0 0 0-1.4 0l-.933.6a1.3 1.3 0 0 1-.7.2 1 1 0 0 1-1-1z"
+      }
+    ],
+    ["path", { d: "M8 12h5" }]
   ];
 
   const ReceiptIndianRupee = [
-    ["path", { d: "M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z" }],
+    [
+      "path",
+      {
+        d: "M4 3a1 1 0 0 1 1-1 1.3 1.3 0 0 1 .7.2l.933.6a1.3 1.3 0 0 0 1.4 0l.934-.6a1.3 1.3 0 0 1 1.4 0l.933.6a1.3 1.3 0 0 0 1.4 0l.933-.6a1.3 1.3 0 0 1 1.4 0l.934.6a1.3 1.3 0 0 0 1.4 0l.933-.6A1.3 1.3 0 0 1 19 2a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1 1.3 1.3 0 0 1-.7-.2l-.933-.6a1.3 1.3 0 0 0-1.4 0l-.934.6a1.3 1.3 0 0 1-1.4 0l-.933-.6a1.3 1.3 0 0 0-1.4 0l-.933.6a1.3 1.3 0 0 1-1.4 0l-.934-.6a1.3 1.3 0 0 0-1.4 0l-.933.6a1.3 1.3 0 0 1-.7.2 1 1 0 0 1-1-1z"
+      }
+    ],
+    ["path", { d: "M8 11h8" }],
     ["path", { d: "M8 7h8" }],
-    ["path", { d: "M12 17.5 8 15h1a4 4 0 0 0 0-8" }],
-    ["path", { d: "M8 11h8" }]
-  ];
-
-  const ReceiptJapaneseYen = [
-    ["path", { d: "M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z" }],
-    ["path", { d: "m12 10 3-3" }],
-    ["path", { d: "m9 7 3 3v7.5" }],
-    ["path", { d: "M9 11h6" }],
-    ["path", { d: "M9 15h6" }]
+    ["path", { d: "M9 7a4 4 0 0 1 0 8H8l3 2" }]
   ];
 
   const ReceiptPoundSterling = [
-    ["path", { d: "M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z" }],
+    ["path", { d: "M10 17V9.5a1 1 0 0 1 5 0" }],
+    [
+      "path",
+      {
+        d: "M4 3a1 1 0 0 1 1-1 1.3 1.3 0 0 1 .7.2l.933.6a1.3 1.3 0 0 0 1.4 0l.934-.6a1.3 1.3 0 0 1 1.4 0l.933.6a1.3 1.3 0 0 0 1.4 0l.933-.6a1.3 1.3 0 0 1 1.4 0l.934.6a1.3 1.3 0 0 0 1.4 0l.933-.6A1.3 1.3 0 0 1 19 2a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1 1.3 1.3 0 0 1-.7-.2l-.933-.6a1.3 1.3 0 0 0-1.4 0l-.934.6a1.3 1.3 0 0 1-1.4 0l-.933-.6a1.3 1.3 0 0 0-1.4 0l-.933.6a1.3 1.3 0 0 1-1.4 0l-.934-.6a1.3 1.3 0 0 0-1.4 0l-.933.6a1.3 1.3 0 0 1-.7.2 1 1 0 0 1-1-1z"
+      }
+    ],
     ["path", { d: "M8 13h5" }],
-    ["path", { d: "M10 17V9.5a2.5 2.5 0 0 1 5 0" }],
     ["path", { d: "M8 17h7" }]
   ];
 
-  const ReceiptRussianRuble = [
-    ["path", { d: "M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z" }],
-    ["path", { d: "M8 15h5" }],
-    ["path", { d: "M8 11h5a2 2 0 1 0 0-4h-3v10" }]
+  const ReceiptJapaneseYen = [
+    ["path", { d: "m12 10 3-3" }],
+    [
+      "path",
+      {
+        d: "M4 3a1 1 0 0 1 1-1 1.3 1.3 0 0 1 .7.2l.933.6a1.3 1.3 0 0 0 1.4 0l.934-.6a1.3 1.3 0 0 1 1.4 0l.933.6a1.3 1.3 0 0 0 1.4 0l.933-.6a1.3 1.3 0 0 1 1.4 0l.934.6a1.3 1.3 0 0 0 1.4 0l.933-.6A1.3 1.3 0 0 1 19 2a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1 1.3 1.3 0 0 1-.7-.2l-.933-.6a1.3 1.3 0 0 0-1.4 0l-.934.6a1.3 1.3 0 0 1-1.4 0l-.933-.6a1.3 1.3 0 0 0-1.4 0l-.933.6a1.3 1.3 0 0 1-1.4 0l-.934-.6a1.3 1.3 0 0 0-1.4 0l-.933.6a1.3 1.3 0 0 1-.7.2 1 1 0 0 1-1-1z"
+      }
+    ],
+    ["path", { d: "M9 11h6" }],
+    ["path", { d: "M9 15h6" }],
+    ["path", { d: "m9 7 3 3v7" }]
   ];
 
-  const ReceiptSwissFranc = [
-    ["path", { d: "M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z" }],
-    ["path", { d: "M10 17V7h5" }],
-    ["path", { d: "M10 11h4" }],
+  const ReceiptRussianRuble = [
+    [
+      "path",
+      {
+        d: "M4 3a1 1 0 0 1 1-1 1.3 1.3 0 0 1 .7.2l.933.6a1.3 1.3 0 0 0 1.4 0l.934-.6a1.3 1.3 0 0 1 1.4 0l.933.6a1.3 1.3 0 0 0 1.4 0l.933-.6a1.3 1.3 0 0 1 1.4 0l.934.6a1.3 1.3 0 0 0 1.4 0l.933-.6A1.3 1.3 0 0 1 19 2a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1 1.3 1.3 0 0 1-.7-.2l-.933-.6a1.3 1.3 0 0 0-1.4 0l-.934.6a1.3 1.3 0 0 1-1.4 0l-.933-.6a1.3 1.3 0 0 0-1.4 0l-.933.6a1.3 1.3 0 0 1-1.4 0l-.934-.6a1.3 1.3 0 0 0-1.4 0l-.933.6a1.3 1.3 0 0 1-.7.2 1 1 0 0 1-1-1z"
+      }
+    ],
+    ["path", { d: "M8 11h5a2 2 0 0 0 0-4h-3v10" }],
     ["path", { d: "M8 15h5" }]
   ];
 
   const ReceiptText = [
-    ["path", { d: "M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z" }],
+    ["path", { d: "M13 16H8" }],
     ["path", { d: "M14 8H8" }],
     ["path", { d: "M16 12H8" }],
-    ["path", { d: "M13 16H8" }]
+    [
+      "path",
+      {
+        d: "M4 3a1 1 0 0 1 1-1 1.3 1.3 0 0 1 .7.2l.933.6a1.3 1.3 0 0 0 1.4 0l.934-.6a1.3 1.3 0 0 1 1.4 0l.933.6a1.3 1.3 0 0 0 1.4 0l.933-.6a1.3 1.3 0 0 1 1.4 0l.934.6a1.3 1.3 0 0 0 1.4 0l.933-.6A1.3 1.3 0 0 1 19 2a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1 1.3 1.3 0 0 1-.7-.2l-.933-.6a1.3 1.3 0 0 0-1.4 0l-.934.6a1.3 1.3 0 0 1-1.4 0l-.933-.6a1.3 1.3 0 0 0-1.4 0l-.933.6a1.3 1.3 0 0 1-1.4 0l-.934-.6a1.3 1.3 0 0 0-1.4 0l-.933.6a1.3 1.3 0 0 1-.7.2 1 1 0 0 1-1-1z"
+      }
+    ]
   ];
 
-  const ReceiptTurkishLira = [
-    ["path", { d: "M10 6.5v11a5.5 5.5 0 0 0 5.5-5.5" }],
-    ["path", { d: "m14 8-6 3" }],
-    ["path", { d: "M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1z" }]
+  const ReceiptSwissFranc = [
+    ["path", { d: "M10 11h4" }],
+    ["path", { d: "M10 17V7h5" }],
+    [
+      "path",
+      {
+        d: "M4 3a1 1 0 0 1 1-1 1.3 1.3 0 0 1 .7.2l.933.6a1.3 1.3 0 0 0 1.4 0l.934-.6a1.3 1.3 0 0 1 1.4 0l.933.6a1.3 1.3 0 0 0 1.4 0l.933-.6a1.3 1.3 0 0 1 1.4 0l.934.6a1.3 1.3 0 0 0 1.4 0l.933-.6A1.3 1.3 0 0 1 19 2a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1 1.3 1.3 0 0 1-.7-.2l-.933-.6a1.3 1.3 0 0 0-1.4 0l-.934.6a1.3 1.3 0 0 1-1.4 0l-.933-.6a1.3 1.3 0 0 0-1.4 0l-.933.6a1.3 1.3 0 0 1-1.4 0l-.934-.6a1.3 1.3 0 0 0-1.4 0l-.933.6a1.3 1.3 0 0 1-.7.2 1 1 0 0 1-1-1z"
+      }
+    ],
+    ["path", { d: "M8 15h5" }]
   ];
 
   const Receipt = [
-    ["path", { d: "M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z" }],
-    ["path", { d: "M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8" }],
-    ["path", { d: "M12 17.5v-11" }]
+    ["path", { d: "M12 17V7" }],
+    ["path", { d: "M16 8h-6a2 2 0 0 0 0 4h4a2 2 0 0 1 0 4H8" }],
+    [
+      "path",
+      {
+        d: "M4 3a1 1 0 0 1 1-1 1.3 1.3 0 0 1 .7.2l.933.6a1.3 1.3 0 0 0 1.4 0l.934-.6a1.3 1.3 0 0 1 1.4 0l.933.6a1.3 1.3 0 0 0 1.4 0l.933-.6a1.3 1.3 0 0 1 1.4 0l.934.6a1.3 1.3 0 0 0 1.4 0l.933-.6A1.3 1.3 0 0 1 19 2a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1 1.3 1.3 0 0 1-.7-.2l-.933-.6a1.3 1.3 0 0 0-1.4 0l-.934.6a1.3 1.3 0 0 1-1.4 0l-.933-.6a1.3 1.3 0 0 0-1.4 0l-.933.6a1.3 1.3 0 0 1-1.4 0l-.934-.6a1.3 1.3 0 0 0-1.4 0l-.933.6a1.3 1.3 0 0 1-.7.2 1 1 0 0 1-1-1z"
+      }
+    ]
+  ];
+
+  const ReceiptTurkishLira = [
+    ["path", { d: "M10 7v10a5 5 0 0 0 5-5" }],
+    ["path", { d: "m14 8-6 3" }],
+    [
+      "path",
+      {
+        d: "M4 3a1 1 0 0 1 1-1 1.3 1.3 0 0 1 .7.2l.933.6a1.3 1.3 0 0 0 1.4 0l.934-.6a1.3 1.3 0 0 1 1.4 0l.933.6a1.3 1.3 0 0 0 1.4 0l.933-.6a1.3 1.3 0 0 1 1.4 0l.934.6a1.3 1.3 0 0 0 1.4 0l.933-.6A1.3 1.3 0 0 1 19 2a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1 1.3 1.3 0 0 1-.7-.2l-.933-.6a1.3 1.3 0 0 0-1.4 0l-.934.6a1.3 1.3 0 0 1-1.4 0l-.933-.6a1.3 1.3 0 0 0-1.4 0l-.933.6a1.3 1.3 0 0 1-1.4 0l-.934-.6a1.3 1.3 0 0 0-1.4 0l-.933.6a1.3 1.3 0 0 1-.7.2 1 1 0 0 1-1-1z"
+      }
+    ]
   ];
 
   const RectangleCircle = [
@@ -10426,13 +11162,13 @@
     ["path", { d: "M20 9H9.5A5.5 5.5 0 0 0 4 14.5A5.5 5.5 0 0 0 9.5 20H13" }]
   ];
 
-  const Redo = [
+  const RedoDot = [
+    ["circle", { cx: "12", cy: "17", r: "1" }],
     ["path", { d: "M21 7v6h-6" }],
     ["path", { d: "M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3l3 2.7" }]
   ];
 
-  const RedoDot = [
-    ["circle", { cx: "12", cy: "17", r: "1" }],
+  const Redo = [
     ["path", { d: "M21 7v6h-6" }],
     ["path", { d: "M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3l3 2.7" }]
   ];
@@ -10490,6 +11226,13 @@
     ["path", { d: "m20 15-5 5" }]
   ];
 
+  const Repeat2 = [
+    ["path", { d: "m2 9 3-3 3 3" }],
+    ["path", { d: "M13 18H7a2 2 0 0 1-2-2V6" }],
+    ["path", { d: "m22 15-3 3-3-3" }],
+    ["path", { d: "M11 6h6a2 2 0 0 1 2 2v10" }]
+  ];
+
   const Repeat1 = [
     ["path", { d: "m17 2 4 4-4 4" }],
     ["path", { d: "M3 11v-1a4 4 0 0 1 4-4h14" }],
@@ -10498,23 +11241,14 @@
     ["path", { d: "M11 10h1v4" }]
   ];
 
-  const Repeat2 = [
-    ["path", { d: "m2 9 3-3 3 3" }],
-    ["path", { d: "M13 18H7a2 2 0 0 1-2-2V6" }],
-    ["path", { d: "m22 15-3 3-3-3" }],
-    ["path", { d: "M11 6h6a2 2 0 0 1 2 2v10" }]
-  ];
-
-  const ReplaceAll = [
-    ["path", { d: "M14 14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2" }],
-    ["path", { d: "M14 4a2 2 0 0 1 2-2" }],
-    ["path", { d: "M16 10a2 2 0 0 1-2-2" }],
-    ["path", { d: "M20 14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2" }],
-    ["path", { d: "M20 2a2 2 0 0 1 2 2" }],
-    ["path", { d: "M22 8a2 2 0 0 1-2 2" }],
-    ["path", { d: "m3 7 3 3 3-3" }],
-    ["path", { d: "M6 10V5a 3 3 0 0 1 3-3h1" }],
-    ["rect", { x: "2", y: "14", width: "8", height: "8", rx: "2" }]
+  const RepeatOff = [
+    ["path", { d: "M11.656 6H21l-4-4" }],
+    ["path", { d: "M17.898 17.898A4 4 0 0 1 17 18H3l4-4" }],
+    ["path", { d: "m2 2 20 20" }],
+    ["path", { d: "M21 13v1a4 4 0 0 1-.171 1.159" }],
+    ["path", { d: "m21 6-4 4" }],
+    ["path", { d: "M3 11v-1a4 4 0 0 1 3.102-3.898" }],
+    ["path", { d: "m7 22-4-4" }]
   ];
 
   const Repeat = [
@@ -10524,14 +11258,26 @@
     ["path", { d: "M21 13v1a4 4 0 0 1-4 4H3" }]
   ];
 
-  const Replace = [
-    ["path", { d: "M14 4a2 2 0 0 1 2-2" }],
-    ["path", { d: "M16 10a2 2 0 0 1-2-2" }],
-    ["path", { d: "M20 2a2 2 0 0 1 2 2" }],
-    ["path", { d: "M22 8a2 2 0 0 1-2 2" }],
+  const ReplaceAll = [
+    ["path", { d: "M14 14a1 1 0 0 1 1 1v5a1 1 0 0 1-1 1" }],
+    ["path", { d: "M14 4a1 1 0 0 1 1-1" }],
+    ["path", { d: "M15 10a1 1 0 0 1-1-1" }],
+    ["path", { d: "M19 14a1 1 0 0 1 1 1v5a1 1 0 0 1-1 1" }],
+    ["path", { d: "M21 4a1 1 0 0 0-1-1" }],
+    ["path", { d: "M21 9a1 1 0 0 1-1 1" }],
     ["path", { d: "m3 7 3 3 3-3" }],
-    ["path", { d: "M6 10V5a3 3 0 0 1 3-3h1" }],
-    ["rect", { x: "2", y: "14", width: "8", height: "8", rx: "2" }]
+    ["path", { d: "M6 10V5a2 2 0 0 1 2-2h2" }],
+    ["rect", { x: "3", y: "14", width: "7", height: "7", rx: "1" }]
+  ];
+
+  const Replace = [
+    ["path", { d: "M14 4a1 1 0 0 1 1-1" }],
+    ["path", { d: "M15 10a1 1 0 0 1-1-1" }],
+    ["path", { d: "M21 4a1 1 0 0 0-1-1" }],
+    ["path", { d: "M21 9a1 1 0 0 1-1 1" }],
+    ["path", { d: "m3 7 3 3 3-3" }],
+    ["path", { d: "M6 10V5a2 2 0 0 1 2-2h2" }],
+    ["rect", { x: "3", y: "14", width: "7", height: "7", rx: "1" }]
   ];
 
   const ReplyAll = [
@@ -10543,11 +11289,6 @@
   const Reply = [
     ["path", { d: "M20 18v-2a4 4 0 0 0-4-4H4" }],
     ["path", { d: "m9 17-5-5 5-5" }]
-  ];
-
-  const Rewind = [
-    ["path", { d: "M12 6a2 2 0 0 0-3.414-1.414l-6 6a2 2 0 0 0 0 2.828l6 6A2 2 0 0 0 12 18z" }],
-    ["path", { d: "M22 6a2 2 0 0 0-3.414-1.414l-6 6a2 2 0 0 0 0 2.828l6 6A2 2 0 0 0 22 18z" }]
   ];
 
   const Ribbon = [
@@ -10563,28 +11304,45 @@
     ]
   ];
 
+  const Rewind = [
+    ["path", { d: "M12 6a2 2 0 0 0-3.414-1.414l-6 6a2 2 0 0 0 0 2.828l6 6A2 2 0 0 0 12 18z" }],
+    ["path", { d: "M22 6a2 2 0 0 0-3.414-1.414l-6 6a2 2 0 0 0 0 2.828l6 6A2 2 0 0 0 22 18z" }]
+  ];
+
+  const Road = [
+    ["path", { d: "M12 17v4" }],
+    ["path", { d: "M12 5V3" }],
+    ["path", { d: "M12 9v3" }],
+    [
+      "path",
+      {
+        d: "M2.077 18.449A2 2 0 0 0 4 21h16a2 2 0 0 0 1.924-2.55l-4-14A2 2 0 0 0 16 3H8a2 2 0 0 0-1.924 1.45z"
+      }
+    ]
+  ];
+
   const Rocket = [
+    ["path", { d: "M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5" }],
     [
       "path",
       {
-        d: "M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"
+        d: "M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09"
       }
     ],
     [
       "path",
       {
-        d: "m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"
+        d: "M9 12a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.4 22.4 0 0 1-4 2z"
       }
     ],
-    ["path", { d: "M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0" }],
-    ["path", { d: "M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5" }]
+    ["path", { d: "M9 12H4s.55-3.03 2-4c1.62-1.08 5 .05 5 .05" }]
   ];
 
   const RockingChair = [
-    ["polyline", { points: "3.5 2 6.5 12.5 18 12.5" }],
-    ["line", { x1: "9.5", x2: "5.5", y1: "12.5", y2: "20" }],
-    ["line", { x1: "15", x2: "18.5", y1: "12.5", y2: "20" }],
-    ["path", { d: "M2.75 18a13 13 0 0 0 18.5 0" }]
+    ["path", { d: "m15 13 3.708 7.416" }],
+    ["path", { d: "M3 19a15 15 0 0 0 18 0" }],
+    ["path", { d: "m3 2 3.21 9.633A2 2 0 0 0 8.109 13H18" }],
+    ["path", { d: "m9 13-3.708 7.416" }]
   ];
 
   const RollerCoaster = [
@@ -10595,22 +11353,6 @@
     ["path", { d: "M18 19v-6" }],
     ["path", { d: "M22 19V9" }],
     ["path", { d: "M2 19V9a4 4 0 0 1 4-4c2 0 4 1.33 6 4s4 4 6 4a4 4 0 1 0-3-6.65" }]
-  ];
-
-  const Rotate3d = [
-    [
-      "path",
-      {
-        d: "M16.466 7.5C15.643 4.237 13.952 2 12 2 9.239 2 7 6.477 7 12s2.239 10 5 10c.342 0 .677-.069 1-.2"
-      }
-    ],
-    ["path", { d: "m15.194 13.707 3.814 1.86-1.86 3.814" }],
-    [
-      "path",
-      {
-        d: "M19 15.57c-1.804.885-4.274 1.43-7 1.43-5.523 0-10-2.239-10-5s4.477-5 10-5c4.838 0 8.873 1.718 9.8 4"
-      }
-    ]
   ];
 
   const Rose = [
@@ -10624,12 +11366,18 @@
     ["circle", { cx: "17", cy: "8", r: "2" }]
   ];
 
+  const Rotate3d = [
+    ["path", { d: "m15.194 13.707 3.814 1.86-1.86 3.814" }],
+    ["path", { d: "M16.47214 7.52786 A 5 10 0 1 0 13 21.79796" }],
+    ["path", { d: "M21.79796 11 A 10 5 0 1 0 19 15.57071" }]
+  ];
+
   const RotateCcwKey = [
-    ["path", { d: "m14.5 9.5 1 1" }],
-    ["path", { d: "m15.5 8.5-4 4" }],
+    ["path", { d: "M12 7v6" }],
+    ["path", { d: "M12 9h2" }],
     ["path", { d: "M3 12a9 9 0 1 0 9-9 9.74 9.74 0 0 0-6.74 2.74L3 8" }],
     ["path", { d: "M3 3v5h5" }],
-    ["circle", { cx: "10", cy: "14", r: "2" }]
+    ["circle", { cx: "12", cy: "15", r: "2" }]
   ];
 
   const RotateCcwSquare = [
@@ -10654,12 +11402,6 @@
     ["path", { d: "M21 3v5h-5" }]
   ];
 
-  const Route = [
-    ["circle", { cx: "6", cy: "19", r: "3" }],
-    ["path", { d: "M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15" }],
-    ["circle", { cx: "18", cy: "5", r: "3" }]
-  ];
-
   const RouteOff = [
     ["circle", { cx: "6", cy: "19", r: "3" }],
     ["path", { d: "M9 19h8.5c.4 0 .9-.1 1.3-.2" }],
@@ -10667,6 +11409,12 @@
     ["path", { d: "m2 2 20 20" }],
     ["path", { d: "M21 15.3a3.5 3.5 0 0 0-3.3-3.3" }],
     ["path", { d: "M15 5h-4.3" }],
+    ["circle", { cx: "18", cy: "5", r: "3" }]
+  ];
+
+  const Route = [
+    ["circle", { cx: "6", cy: "19", r: "3" }],
+    ["path", { d: "M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15" }],
     ["circle", { cx: "18", cy: "5", r: "3" }]
   ];
 
@@ -10704,13 +11452,14 @@
   ];
 
   const RulerDimensionLine = [
-    ["path", { d: "M12 15v-3.014" }],
-    ["path", { d: "M16 15v-3.014" }],
-    ["path", { d: "M20 6H4" }],
-    ["path", { d: "M20 8V4" }],
-    ["path", { d: "M4 8V4" }],
-    ["path", { d: "M8 15v-3.014" }],
-    ["rect", { x: "3", y: "12", width: "18", height: "7", rx: "1" }]
+    ["path", { d: "M10 15v-3" }],
+    ["path", { d: "M14 15v-3" }],
+    ["path", { d: "M18 15v-3" }],
+    ["path", { d: "M2 8V4" }],
+    ["path", { d: "M22 6H2" }],
+    ["path", { d: "M22 8V4" }],
+    ["path", { d: "M6 15v-3" }],
+    ["rect", { x: "2", y: "12", width: "20", height: "8", rx: "2" }]
   ];
 
   const Ruler = [
@@ -10726,6 +11475,11 @@
     ["path", { d: "m17.5 15.5 2-2" }]
   ];
 
+  const RussianRuble = [
+    ["path", { d: "M6 11h8a4 4 0 0 0 0-8H9v18" }],
+    ["path", { d: "M6 15h8" }]
+  ];
+
   const Sailboat = [
     ["path", { d: "M10 2v15" }],
     ["path", { d: "M7 22a4 4 0 0 1-4-4 1 1 0 0 1 1-1h16a1 1 0 0 1 1 1 4 4 0 0 1-4 4z" }],
@@ -10733,11 +11487,6 @@
       "path",
       { d: "M9.159 2.46a1 1 0 0 1 1.521-.193l9.977 8.98A1 1 0 0 1 20 13H4a1 1 0 0 1-.824-1.567z" }
     ]
-  ];
-
-  const RussianRuble = [
-    ["path", { d: "M6 11h8a4 4 0 0 0 0-8H9v18" }],
-    ["path", { d: "M6 15h8" }]
   ];
 
   const Salad = [
@@ -10759,13 +11508,6 @@
     ["path", { d: "M3 15a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h9" }],
     ["path", { d: "m6.67 15 6.13 4.6a2 2 0 0 0 2.8-.4l3.15-4.2" }],
     ["rect", { width: "20", height: "4", x: "2", y: "11", rx: "1" }]
-  ];
-
-  const SatelliteDish = [
-    ["path", { d: "M4 10a7.31 7.31 0 0 0 10 10Z" }],
-    ["path", { d: "m9 15 3-3" }],
-    ["path", { d: "M17 13a6 6 0 0 0-6-6" }],
-    ["path", { d: "M21 13A10 10 0 0 0 11 3" }]
   ];
 
   const Satellite = [
@@ -10791,11 +11533,28 @@
     ]
   ];
 
+  const SatelliteDish = [
+    ["path", { d: "M4 10a7.31 7.31 0 0 0 10 10Z" }],
+    ["path", { d: "m9 15 3-3" }],
+    ["path", { d: "M17 13a6 6 0 0 0-6-6" }],
+    ["path", { d: "M21 13A10 10 0 0 0 11 3" }]
+  ];
+
   const SaudiRiyal = [
     ["path", { d: "m20 19.5-5.5 1.2" }],
     ["path", { d: "M14.5 4v11.22a1 1 0 0 0 1.242.97L20 15.2" }],
     ["path", { d: "m2.978 19.351 5.549-1.363A2 2 0 0 0 10 16V2" }],
     ["path", { d: "M20 10 4 13.5" }]
+  ];
+
+  const SaveOff = [
+    ["path", { d: "M13 13H8a1 1 0 0 0-1 1v7" }],
+    ["path", { d: "M14 8h1" }],
+    ["path", { d: "M17 21v-4" }],
+    ["path", { d: "m2 2 20 20" }],
+    ["path", { d: "M20.41 20.41A2 2 0 0 1 19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 .59-1.41" }],
+    ["path", { d: "M29.5 11.5s5 5 4 5" }],
+    ["path", { d: "M9 3h6.2a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V15" }]
   ];
 
   const SaveAll = [
@@ -10808,16 +11567,6 @@
         d: "M8 18a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9.172a2 2 0 0 1 1.414.586l2.828 2.828A2 2 0 0 1 22 6.828V16a2 2 0 0 1-2.01 2z"
       }
     ]
-  ];
-
-  const SaveOff = [
-    ["path", { d: "M13 13H8a1 1 0 0 0-1 1v7" }],
-    ["path", { d: "M14 8h1" }],
-    ["path", { d: "M17 21v-4" }],
-    ["path", { d: "m2 2 20 20" }],
-    ["path", { d: "M20.41 20.41A2 2 0 0 1 19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 .59-1.41" }],
-    ["path", { d: "M29.5 11.5s5 5 4 5" }],
-    ["path", { d: "M9 3h6.2a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V15" }]
   ];
 
   const Save = [
@@ -10839,18 +11588,11 @@
   ];
 
   const Scale = [
-    ["path", { d: "m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z" }],
-    ["path", { d: "m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z" }],
-    ["path", { d: "M7 21h10" }],
     ["path", { d: "M12 3v18" }],
-    ["path", { d: "M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2" }]
-  ];
-
-  const Scaling = [
-    ["path", { d: "M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" }],
-    ["path", { d: "M14 15H9v-5" }],
-    ["path", { d: "M16 3h5v5" }],
-    ["path", { d: "M21 3 9 15" }]
+    ["path", { d: "m19 8 3 8a5 5 0 0 1-6 0zV7" }],
+    ["path", { d: "M3 7h1a17 17 0 0 0 8-2 17 17 0 0 0 8 2h1" }],
+    ["path", { d: "m5 8 3 8a5 5 0 0 1-6 0zV7" }],
+    ["path", { d: "M7 21h10" }]
   ];
 
   const ScanBarcode = [
@@ -10861,6 +11603,13 @@
     ["path", { d: "M8 7v10" }],
     ["path", { d: "M12 7v10" }],
     ["path", { d: "M17 7v10" }]
+  ];
+
+  const Scaling = [
+    ["path", { d: "M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" }],
+    ["path", { d: "M14 15H9v-5" }],
+    ["path", { d: "M16 3h5v5" }],
+    ["path", { d: "M21 3 9 15" }]
   ];
 
   const ScanEye = [
@@ -10945,7 +11694,7 @@
 
   const School = [
     ["path", { d: "M14 21v-3a2 2 0 0 0-4 0v3" }],
-    ["path", { d: "M18 5v16" }],
+    ["path", { d: "M18 4.933V21" }],
     ["path", { d: "m4 6 7.106-3.79a2 2 0 0 1 1.788 0L20 6" }],
     [
       "path",
@@ -10953,7 +11702,7 @@
         d: "m6 11-3.52 2.147a1 1 0 0 0-.48.854V19a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-5a1 1 0 0 0-.48-.853L18 11"
       }
     ],
-    ["path", { d: "M6 5v16" }],
+    ["path", { d: "M6 4.933V21" }],
     ["circle", { cx: "12", cy: "9", r: "2" }]
   ];
 
@@ -10973,6 +11722,13 @@
     ["path", { d: "M20 4 8.12 15.88" }],
     ["circle", { cx: "6", cy: "18", r: "3" }],
     ["path", { d: "M14.8 14.8 20 20" }]
+  ];
+
+  const Scooter = [
+    ["path", { d: "M21 4h-3.5l2 11.05" }],
+    ["path", { d: "M6.95 17h5.142c.523 0 .95-.406 1.063-.916a6.5 6.5 0 0 1 5.345-5.009" }],
+    ["circle", { cx: "19.5", cy: "17.5", r: "2.5" }],
+    ["circle", { cx: "4.5", cy: "17.5", r: "2.5" }]
   ];
 
   const ScreenShareOff = [
@@ -11011,6 +11767,13 @@
         d: "M8 21h12a2 2 0 0 0 2-2v-1a1 1 0 0 0-1-1H11a1 1 0 0 0-1 1v1a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v2a1 1 0 0 0 1 1h3"
       }
     ]
+  ];
+
+  const SearchAlert = [
+    ["circle", { cx: "11", cy: "11", r: "8" }],
+    ["path", { d: "m21 21-4.3-4.3" }],
+    ["path", { d: "M11 7v4" }],
+    ["path", { d: "M11 15h.01" }]
   ];
 
   const SearchCheck = [
@@ -11076,16 +11839,16 @@
     ["path", { d: "m21.854 2.147-10.94 10.939" }]
   ];
 
-  const SeparatorVertical = [
-    ["path", { d: "M12 3v18" }],
-    ["path", { d: "m16 16 4-4-4-4" }],
-    ["path", { d: "m8 8-4 4 4 4" }]
-  ];
-
   const SeparatorHorizontal = [
     ["path", { d: "m16 16-4 4-4-4" }],
     ["path", { d: "M3 12h18" }],
     ["path", { d: "m8 8 4-4 4 4" }]
+  ];
+
+  const SeparatorVertical = [
+    ["path", { d: "M12 3v18" }],
+    ["path", { d: "m16 16 4-4-4-4" }],
+    ["path", { d: "m8 8-4 4 4 4" }]
   ];
 
   const ServerCog = [
@@ -11134,16 +11897,6 @@
     ["circle", { cx: "7", cy: "7", r: "3" }]
   ];
 
-  const Settings = [
-    [
-      "path",
-      {
-        d: "M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"
-      }
-    ],
-    ["circle", { cx: "12", cy: "12", r: "3" }]
-  ];
-
   const Shapes = [
     [
       "path",
@@ -11153,6 +11906,16 @@
     ],
     ["rect", { x: "3", y: "14", width: "7", height: "7", rx: "1" }],
     ["circle", { cx: "17.5", cy: "17.5", r: "3.5" }]
+  ];
+
+  const Settings = [
+    [
+      "path",
+      {
+        d: "M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"
+      }
+    ],
+    ["circle", { cx: "12", cy: "12", r: "3" }]
   ];
 
   const Share2 = [
@@ -11169,6 +11932,15 @@
     ["path", { d: "M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" }]
   ];
 
+  const Shell = [
+    [
+      "path",
+      {
+        d: "M14 11a2 2 0 1 1-4 0 4 4 0 0 1 8 0 6 6 0 0 1-12 0 8 8 0 0 1 16 0 10 10 0 1 1-20 0 11.93 11.93 0 0 1 2.42-7.22 2 2 0 1 1 3.16 2.44"
+      }
+    ]
+  ];
+
   const Sheet = [
     ["rect", { width: "18", height: "18", x: "3", y: "3", rx: "2", ry: "2" }],
     ["line", { x1: "3", x2: "21", y1: "9", y2: "9" }],
@@ -11177,13 +11949,14 @@
     ["line", { x1: "15", x2: "15", y1: "9", y2: "21" }]
   ];
 
-  const Shell = [
-    [
-      "path",
-      {
-        d: "M14 11a2 2 0 1 1-4 0 4 4 0 0 1 8 0 6 6 0 0 1-12 0 8 8 0 0 1 16 0 10 10 0 1 1-20 0 11.93 11.93 0 0 1 2.42-7.22 2 2 0 1 1 3.16 2.44"
-      }
-    ]
+  const ShelvingUnit = [
+    ["path", { d: "M12 12V9a1 1 0 0 0-1-1H9a1 1 0 0 0-1 1v3" }],
+    ["path", { d: "M16 20v-3a1 1 0 0 0-1-1h-2a1 1 0 0 0-1 1v3" }],
+    ["path", { d: "M20 22V2" }],
+    ["path", { d: "M4 12h16" }],
+    ["path", { d: "M4 20h16" }],
+    ["path", { d: "M4 2v20" }],
+    ["path", { d: "M4 4h16" }]
   ];
 
   const ShieldAlert = [
@@ -11217,6 +11990,24 @@
     ["path", { d: "m9 12 2 2 4-4" }]
   ];
 
+  const ShieldCogCorner = [
+    [
+      "path",
+      {
+        d: "M11 22c-3.806-1.45-7-3.966-7-9V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1v4"
+      }
+    ],
+    ["path", { d: "M14.923 16.547 14 16.164" }],
+    ["path", { d: "m14.923 18.843-.923.383" }],
+    ["path", { d: "M16.547 14.923 16.164 14" }],
+    ["path", { d: "m16.547 20.467-.383.924" }],
+    ["path", { d: "m18.843 14.923.383-.923" }],
+    ["path", { d: "m19.225 21.391-.382-.924" }],
+    ["path", { d: "m20.467 16.547.923-.383" }],
+    ["path", { d: "m20.467 18.843.923.383" }],
+    ["circle", { cx: "17.695", cy: "17.695", r: "3" }]
+  ];
+
   const ShieldEllipsis = [
     [
       "path",
@@ -11227,6 +12018,24 @@
     ["path", { d: "M8 12h.01" }],
     ["path", { d: "M12 12h.01" }],
     ["path", { d: "M16 12h.01" }]
+  ];
+
+  const ShieldCog = [
+    ["path", { d: "m10.929 14.467-.383.924" }],
+    ["path", { d: "M10.929 8.923 10.546 8" }],
+    ["path", { d: "M13.225 8.923 13.608 8" }],
+    ["path", { d: "m13.607 15.391-.382-.924" }],
+    ["path", { d: "m14.849 10.547.923-.383" }],
+    ["path", { d: "m14.849 12.843.923.383" }],
+    [
+      "path",
+      {
+        d: "M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"
+      }
+    ],
+    ["path", { d: "m9.305 10.547-.923-.383" }],
+    ["path", { d: "m9.305 12.843-.923.383" }],
+    ["circle", { cx: "12.077", cy: "11.695", r: "3" }]
   ];
 
   const ShieldHalf = [
@@ -11318,19 +12127,6 @@
     ]
   ];
 
-  const ShipWheel = [
-    ["circle", { cx: "12", cy: "12", r: "8" }],
-    ["path", { d: "M12 2v7.5" }],
-    ["path", { d: "m19 5-5.23 5.23" }],
-    ["path", { d: "M22 12h-7.5" }],
-    ["path", { d: "m19 19-5.23-5.23" }],
-    ["path", { d: "M12 14.5V22" }],
-    ["path", { d: "M10.23 13.77 5 19" }],
-    ["path", { d: "M9.5 12H2" }],
-    ["path", { d: "M10.23 10.23 5 5" }],
-    ["circle", { cx: "12", cy: "12", r: "2.5" }]
-  ];
-
   const Ship = [
     ["path", { d: "M12 10.189V14" }],
     ["path", { d: "M12 2v3" }],
@@ -11347,6 +12143,19 @@
         d: "M2 21c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1s1.2 1 2.5 1c2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"
       }
     ]
+  ];
+
+  const ShipWheel = [
+    ["circle", { cx: "12", cy: "12", r: "8" }],
+    ["path", { d: "M12 2v7.5" }],
+    ["path", { d: "m19 5-5.23 5.23" }],
+    ["path", { d: "M22 12h-7.5" }],
+    ["path", { d: "m19 19-5.23-5.23" }],
+    ["path", { d: "M12 14.5V22" }],
+    ["path", { d: "M10.23 13.77 5 19" }],
+    ["path", { d: "M9.5 12H2" }],
+    ["path", { d: "M10.23 10.23 5 5" }],
+    ["circle", { cx: "12", cy: "12", r: "2.5" }]
   ];
 
   const Shirt = [
@@ -11418,13 +12227,23 @@
   ];
 
   const Shredder = [
+    [
+      "path",
+      { d: "M4 13V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.706.706l3.588 3.588A2.4 2.4 0 0 1 20 8v5" }
+    ],
+    ["path", { d: "M14 2v5a1 1 0 0 0 1 1h5" }],
     ["path", { d: "M10 22v-5" }],
     ["path", { d: "M14 19v-2" }],
-    ["path", { d: "M14 2v4a2 2 0 0 0 2 2h4" }],
     ["path", { d: "M18 20v-3" }],
     ["path", { d: "M2 13h20" }],
-    ["path", { d: "M20 13V7l-5-5H6a2 2 0 0 0-2 2v9" }],
     ["path", { d: "M6 20v-3" }]
+  ];
+
+  const Shrink = [
+    ["path", { d: "m15 15 6 6m-6-6v4.8m0-4.8h4.8" }],
+    ["path", { d: "M9 19.8V15m0 0H4.2M9 15l-6 6" }],
+    ["path", { d: "M15 4.2V9m0 0h4.8M15 9l6-6" }],
+    ["path", { d: "M9 4.2V9m0 0H4.2M9 9 3 3" }]
   ];
 
   const Shrimp = [
@@ -11438,13 +12257,6 @@
     ],
     ["path", { d: "M14 8a8.5 8.5 0 0 1 0 8" }],
     ["path", { d: "M16 16c2 0 4.5-4 4-6" }]
-  ];
-
-  const Shrink = [
-    ["path", { d: "m15 15 6 6m-6-6v4.8m0-4.8h4.8" }],
-    ["path", { d: "M9 19.8V15m0 0H4.2M9 15l-6 6" }],
-    ["path", { d: "M15 4.2V9m0 0h4.8M15 9l6-6" }],
-    ["path", { d: "M9 4.2V9m0 0H4.2M9 9 3 3" }]
   ];
 
   const Shrub = [
@@ -11521,7 +12333,7 @@
     [
       "path",
       {
-        d: "M18 6a2 2 0 0 1 1.387.56l2.307 2.22a1 1 0 0 1 0 1.44l-2.307 2.22A2 2 0 0 1 18 13H6a2 2 0 0 1-1.387-.56l-2.306-2.22a1 1 0 0 1 0-1.44l2.306-2.22A2 2 0 0 1 6 6z"
+        d: "M2.354 10.354a1.207 1.207 0 0 1 0-1.708l2.06-2.06A2 2 0 0 1 5.828 6h12.344a2 2 0 0 1 1.414.586l2.06 2.06a1.207 1.207 0 0 1 0 1.708l-2.06 2.06a2 2 0 0 1-1.414.586H5.828a2 2 0 0 1-1.414-.586z"
       }
     ]
   ];
@@ -11567,18 +12379,19 @@
     ["circle", { cx: "9", cy: "12", r: "1" }]
   ];
 
-  const Slack = [
-    ["rect", { width: "3", height: "8", x: "13", y: "2", rx: "1.5" }],
-    ["path", { d: "M19 8.5V10h1.5A1.5 1.5 0 1 0 19 8.5" }],
-    ["rect", { width: "3", height: "8", x: "8", y: "14", rx: "1.5" }],
-    ["path", { d: "M5 15.5V14H3.5A1.5 1.5 0 1 0 5 15.5" }],
-    ["rect", { width: "8", height: "3", x: "14", y: "13", rx: "1.5" }],
-    ["path", { d: "M15.5 19H14v1.5a1.5 1.5 0 1 0 1.5-1.5" }],
-    ["rect", { width: "8", height: "3", x: "2", y: "8", rx: "1.5" }],
-    ["path", { d: "M8.5 5H10V3.5A1.5 1.5 0 1 0 8.5 5" }]
-  ];
-
   const Slash = [["path", { d: "M22 2 2 22" }]];
+
+  const SlidersHorizontal = [
+    ["path", { d: "M10 5H3" }],
+    ["path", { d: "M12 19H3" }],
+    ["path", { d: "M14 3v4" }],
+    ["path", { d: "M16 17v4" }],
+    ["path", { d: "M21 12h-9" }],
+    ["path", { d: "M21 19h-5" }],
+    ["path", { d: "M21 5h-7" }],
+    ["path", { d: "M8 10v4" }],
+    ["path", { d: "M8 12H3" }]
+  ];
 
   const Slice = [
     [
@@ -11589,38 +12402,21 @@
     ]
   ];
 
-  const SlidersHorizontal = [
-    ["line", { x1: "21", x2: "14", y1: "4", y2: "4" }],
-    ["line", { x1: "10", x2: "3", y1: "4", y2: "4" }],
-    ["line", { x1: "21", x2: "12", y1: "12", y2: "12" }],
-    ["line", { x1: "8", x2: "3", y1: "12", y2: "12" }],
-    ["line", { x1: "21", x2: "16", y1: "20", y2: "20" }],
-    ["line", { x1: "12", x2: "3", y1: "20", y2: "20" }],
-    ["line", { x1: "14", x2: "14", y1: "2", y2: "6" }],
-    ["line", { x1: "8", x2: "8", y1: "10", y2: "14" }],
-    ["line", { x1: "16", x2: "16", y1: "18", y2: "22" }]
-  ];
-
   const SlidersVertical = [
-    ["line", { x1: "4", x2: "4", y1: "21", y2: "14" }],
-    ["line", { x1: "4", x2: "4", y1: "10", y2: "3" }],
-    ["line", { x1: "12", x2: "12", y1: "21", y2: "12" }],
-    ["line", { x1: "12", x2: "12", y1: "8", y2: "3" }],
-    ["line", { x1: "20", x2: "20", y1: "21", y2: "16" }],
-    ["line", { x1: "20", x2: "20", y1: "12", y2: "3" }],
-    ["line", { x1: "2", x2: "6", y1: "14", y2: "14" }],
-    ["line", { x1: "10", x2: "14", y1: "8", y2: "8" }],
-    ["line", { x1: "18", x2: "22", y1: "16", y2: "16" }]
+    ["path", { d: "M10 8h4" }],
+    ["path", { d: "M12 21v-9" }],
+    ["path", { d: "M12 8V3" }],
+    ["path", { d: "M17 16h4" }],
+    ["path", { d: "M19 12V3" }],
+    ["path", { d: "M19 21v-5" }],
+    ["path", { d: "M3 14h4" }],
+    ["path", { d: "M5 10V3" }],
+    ["path", { d: "M5 21v-7" }]
   ];
 
   const SmartphoneCharging = [
     ["rect", { width: "14", height: "20", x: "5", y: "2", rx: "2", ry: "2" }],
     ["path", { d: "M12.667 8 10 12h4l-2.667 4" }]
-  ];
-
-  const Smartphone = [
-    ["rect", { width: "14", height: "20", x: "5", y: "2", rx: "2", ry: "2" }],
-    ["path", { d: "M12 18h.01" }]
   ];
 
   const SmartphoneNfc = [
@@ -11639,12 +12435,9 @@
     ["path", { d: "M19 2v6" }]
   ];
 
-  const Snail = [
-    ["path", { d: "M2 13a6 6 0 1 0 12 0 4 4 0 1 0-8 0 2 2 0 0 0 4 0" }],
-    ["circle", { cx: "10", cy: "13", r: "8" }],
-    ["path", { d: "M2 21h12c4.4 0 8-3.6 8-8V7a2 2 0 1 0-4 0v6" }],
-    ["path", { d: "M18 3 19.1 5.2" }],
-    ["path", { d: "M22 3 20.9 5.2" }]
+  const Smartphone = [
+    ["rect", { width: "14", height: "20", x: "5", y: "2", rx: "2", ry: "2" }],
+    ["path", { d: "M12 18h.01" }]
   ];
 
   const Smile = [
@@ -11652,6 +12445,14 @@
     ["path", { d: "M8 14s1.5 2 4 2 4-2 4-2" }],
     ["line", { x1: "9", x2: "9.01", y1: "9", y2: "9" }],
     ["line", { x1: "15", x2: "15.01", y1: "9", y2: "9" }]
+  ];
+
+  const Snail = [
+    ["path", { d: "M2 13a6 6 0 1 0 12 0 4 4 0 1 0-8 0 2 2 0 0 0 4 0" }],
+    ["circle", { cx: "10", cy: "13", r: "8" }],
+    ["path", { d: "M2 21h12c4.4 0 8-3.6 8-8V7a2 2 0 1 0-4 0v6" }],
+    ["path", { d: "M18 3 19.1 5.2" }],
+    ["path", { d: "M22 3 20.9 5.2" }]
   ];
 
   const Snowflake = [
@@ -11692,6 +12493,21 @@
     ["path", { d: "M4 18v2" }],
     ["path", { d: "M20 18v2" }],
     ["path", { d: "M12 4v9" }]
+  ];
+
+  const SolarPanel = [
+    ["path", { d: "M11 2h2" }],
+    ["path", { d: "m14.28 14-4.56 8" }],
+    ["path", { d: "m21 22-1.558-4H4.558" }],
+    ["path", { d: "M3 10v2" }],
+    [
+      "path",
+      {
+        d: "M6.245 15.04A2 2 0 0 1 8 14h12a1 1 0 0 1 .864 1.505l-3.11 5.457A2 2 0 0 1 16 22H4a1 1 0 0 1-.863-1.506z"
+      }
+    ],
+    ["path", { d: "M7 2a4 4 0 0 1-4 4" }],
+    ["path", { d: "m8.66 7.66 1.41 1.41" }]
   ];
 
   const Soup = [
@@ -11754,6 +12570,12 @@
     ["path", { d: "M17 15a3.5 3.5 0 0 0-.025-4.975" }]
   ];
 
+  const SpellCheck = [
+    ["path", { d: "m6 16 6-12 6 12" }],
+    ["path", { d: "M8 12h8" }],
+    ["path", { d: "m16 20 2 2 4-4" }]
+  ];
+
   const SpellCheck2 = [
     ["path", { d: "m6 16 6-12 6 12" }],
     ["path", { d: "M8 12h8" }],
@@ -11763,12 +12585,6 @@
         d: "M4 21c1.1 0 1.1-1 2.3-1s1.1 1 2.3 1c1.1 0 1.1-1 2.3-1 1.1 0 1.1 1 2.3 1 1.1 0 1.1-1 2.3-1 1.1 0 1.1 1 2.3 1 1.1 0 1.1-1 2.3-1"
       }
     ]
-  ];
-
-  const SpellCheck = [
-    ["path", { d: "m6 16 6-12 6 12" }],
-    ["path", { d: "M8 12h8" }],
-    ["path", { d: "m16 20 2 2 4-4" }]
   ];
 
   const SplinePointer = [
@@ -11811,17 +12627,15 @@
     ]
   ];
 
-  const Spotlight = [
-    ["path", { d: "M15.295 19.562 16 22" }],
-    ["path", { d: "m17 16 3.758 2.098" }],
-    ["path", { d: "m19 12.5 3.026-.598" }],
+  const SportShoe = [
+    ["path", { d: "m15 10.42 4.8-5.07" }],
+    ["path", { d: "M19 18h3" }],
     [
       "path",
       {
-        d: "M7.61 6.3a3 3 0 0 0-3.92 1.3l-1.38 2.79a3 3 0 0 0 1.3 3.91l6.89 3.597a1 1 0 0 0 1.342-.447l3.106-6.211a1 1 0 0 0-.447-1.341z"
+        d: "M9.5 22 21.414 9.415A2 2 0 0 0 21.2 6.4l-5.61-4.208A1 1 0 0 0 14 3v2a2 2 0 0 1-1.394 1.906L8.677 8.053A1 1 0 0 0 8 9c-.155 6.393-2.082 9-4 9a2 2 0 0 0 0 4h14"
       }
-    ],
-    ["path", { d: "M8 9V2" }]
+    ]
   ];
 
   const SprayCan = [
@@ -11846,6 +12660,19 @@
     ],
     ["path", { d: "M4 9a5 5 0 0 1 8 4 5 5 0 0 1-8-4" }],
     ["path", { d: "M5 21h14" }]
+  ];
+
+  const Spotlight = [
+    ["path", { d: "M15.295 19.562 16 22" }],
+    ["path", { d: "m17 16 3.758 2.098" }],
+    ["path", { d: "m19 12.5 3.026-.598" }],
+    [
+      "path",
+      {
+        d: "M7.61 6.3a3 3 0 0 0-3.92 1.3l-1.38 2.79a3 3 0 0 0 1.3 3.91l6.89 3.597a1 1 0 0 0 1.342-.447l3.106-6.211a1 1 0 0 0-.447-1.341z"
+      }
+    ],
+    ["path", { d: "M8 9V2" }]
   ];
 
   const SquareActivity = [
@@ -11901,6 +12728,21 @@
     ["path", { d: "M15 3h6v6" }]
   ];
 
+  const SquareArrowRightEnter = [
+    ["path", { d: "m10 16 4-4-4-4" }],
+    ["path", { d: "M3 12h11" }],
+    ["path", { d: "M3 8V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-3" }]
+  ];
+
+  const SquareArrowRightExit = [
+    ["path", { d: "M10 12h11" }],
+    ["path", { d: "m17 16 4-4-4-4" }],
+    [
+      "path",
+      { d: "M21 6.344V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-1.344" }
+    ]
+  ];
+
   const SquareArrowRight = [
     ["rect", { width: "18", height: "18", x: "3", y: "3", rx: "2" }],
     ["path", { d: "M8 12h8" }],
@@ -11933,14 +12775,38 @@
   ];
 
   const SquareBottomDashedScissors = [
-    ["path", { d: "M4 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2" }],
-    ["path", { d: "M10 22H8" }],
-    ["path", { d: "M16 22h-2" }],
-    ["circle", { cx: "8", cy: "8", r: "2" }],
-    ["path", { d: "M9.414 9.414 12 12" }],
-    ["path", { d: "M14.8 14.8 18 18" }],
-    ["circle", { cx: "8", cy: "16", r: "2" }],
-    ["path", { d: "m18 6-8.586 8.586" }]
+    ["line", { x1: "5", y1: "3", x2: "19", y2: "3" }],
+    ["line", { x1: "3", y1: "5", x2: "3", y2: "19" }],
+    ["line", { x1: "21", y1: "5", x2: "21", y2: "19" }],
+    ["line", { x1: "9", y1: "21", x2: "10", y2: "21" }],
+    ["line", { x1: "14", y1: "21", x2: "15", y2: "21" }],
+    ["path", { d: "M 3 5 A2 2 0 0 1 5 3" }],
+    ["path", { d: "M 19 3 A2 2 0 0 1 21 5" }],
+    ["path", { d: "M 5 21 A2 2 0 0 1 3 19" }],
+    ["path", { d: "M 21 19 A2 2 0 0 1 19 21" }],
+    ["circle", { cx: "8.5", cy: "8.5", r: "1.5" }],
+    ["line", { x1: "9.56066", y1: "9.56066", x2: "12", y2: "12" }],
+    ["line", { x1: "17", y1: "17", x2: "14.82", y2: "14.82" }],
+    ["circle", { cx: "8.5", cy: "15.5", r: "1.5" }],
+    ["line", { x1: "9.56066", y1: "14.43934", x2: "17", y2: "7" }]
+  ];
+
+  const SquareCenterlineDashedHorizontal = [
+    ["path", { d: "M8 3H5a2 2 0 0 0-2 2v14c0 1.1.9 2 2 2h3" }],
+    ["path", { d: "M16 3h3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-3" }],
+    ["path", { d: "M12 20v2" }],
+    ["path", { d: "M12 14v2" }],
+    ["path", { d: "M12 8v2" }],
+    ["path", { d: "M12 2v2" }]
+  ];
+
+  const SquareCenterlineDashedVertical = [
+    ["path", { d: "M21 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v3" }],
+    ["path", { d: "M21 16v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-3" }],
+    ["path", { d: "M4 12H2" }],
+    ["path", { d: "M10 12H8" }],
+    ["path", { d: "M16 12h-2" }],
+    ["path", { d: "M22 12h-2" }]
   ];
 
   const SquareChartGantt = [
@@ -12036,6 +12902,24 @@
     ["path", { d: "M3 14v1" }]
   ];
 
+  const SquareDashedText = [
+    ["path", { d: "M14 21h1" }],
+    ["path", { d: "M14 3h1" }],
+    ["path", { d: "M19 3a2 2 0 0 1 2 2" }],
+    ["path", { d: "M21 14v1" }],
+    ["path", { d: "M21 19a2 2 0 0 1-2 2" }],
+    ["path", { d: "M21 9v1" }],
+    ["path", { d: "M3 14v1" }],
+    ["path", { d: "M3 9v1" }],
+    ["path", { d: "M5 21a2 2 0 0 1-2-2" }],
+    ["path", { d: "M5 3a2 2 0 0 0-2 2" }],
+    ["path", { d: "M7 12h10" }],
+    ["path", { d: "M7 16h6" }],
+    ["path", { d: "M7 8h8" }],
+    ["path", { d: "M9 21h1" }],
+    ["path", { d: "M9 3h1" }]
+  ];
+
   const SquareDashedTopSolid = [
     ["path", { d: "M14 21h1" }],
     ["path", { d: "M21 14v1" }],
@@ -12063,16 +12947,16 @@
     ["path", { d: "M21 14v1" }]
   ];
 
+  const SquareDot = [
+    ["rect", { width: "18", height: "18", x: "3", y: "3", rx: "2" }],
+    ["circle", { cx: "12", cy: "12", r: "1" }]
+  ];
+
   const SquareDivide = [
     ["rect", { width: "18", height: "18", x: "3", y: "3", rx: "2", ry: "2" }],
     ["line", { x1: "8", x2: "16", y1: "12", y2: "12" }],
     ["line", { x1: "12", x2: "12", y1: "16", y2: "16" }],
     ["line", { x1: "12", x2: "12", y1: "8", y2: "8" }]
-  ];
-
-  const SquareDot = [
-    ["rect", { width: "18", height: "18", x: "3", y: "3", rx: "2" }],
-    ["circle", { cx: "12", cy: "12", r: "1" }]
   ];
 
   const SquareEqual = [
@@ -12087,13 +12971,6 @@
     ["path", { d: "M9 11.2h5.7" }]
   ];
 
-  const SquareKanban = [
-    ["rect", { width: "18", height: "18", x: "3", y: "3", rx: "2" }],
-    ["path", { d: "M8 7v7" }],
-    ["path", { d: "M12 7v4" }],
-    ["path", { d: "M16 7v9" }]
-  ];
-
   const SquareLibrary = [
     ["rect", { width: "18", height: "18", x: "3", y: "3", rx: "2" }],
     ["path", { d: "M7 7v10" }],
@@ -12102,8 +12979,18 @@
   ];
 
   const SquareM = [
+    [
+      "path",
+      { d: "M8 16V8.5a.5.5 0 0 1 .9-.3l2.7 3.599a.5.5 0 0 0 .8 0l2.7-3.6a.5.5 0 0 1 .9.3V16" }
+    ],
+    ["rect", { x: "3", y: "3", width: "18", height: "18", rx: "2" }]
+  ];
+
+  const SquareKanban = [
     ["rect", { width: "18", height: "18", x: "3", y: "3", rx: "2" }],
-    ["path", { d: "M8 16V8l4 4 4-4v8" }]
+    ["path", { d: "M8 7v7" }],
+    ["path", { d: "M12 7v4" }],
+    ["path", { d: "M16 7v9" }]
   ];
 
   const SquareMenu = [
@@ -12141,12 +13028,6 @@
     ["path", { d: "M9 17V7h4a3 3 0 0 1 0 6H9" }]
   ];
 
-  const SquarePause = [
-    ["rect", { width: "18", height: "18", x: "3", y: "3", rx: "2" }],
-    ["line", { x1: "10", x2: "10", y1: "15", y2: "9" }],
-    ["line", { x1: "14", x2: "14", y1: "15", y2: "9" }]
-  ];
-
   const SquarePen = [
     ["path", { d: "M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" }],
     [
@@ -12164,6 +13045,12 @@
     ["path", { d: "M15 15h.01" }]
   ];
 
+  const SquarePause = [
+    ["rect", { width: "18", height: "18", x: "3", y: "3", rx: "2" }],
+    ["line", { x1: "10", x2: "10", y1: "15", y2: "9" }],
+    ["line", { x1: "14", x2: "14", y1: "15", y2: "9" }]
+  ];
+
   const SquarePi = [
     ["rect", { width: "18", height: "18", x: "3", y: "3", rx: "2" }],
     ["path", { d: "M7 7h10" }],
@@ -12178,6 +13065,12 @@
     ["path", { d: "M16 7v10" }]
   ];
 
+  const SquarePlus = [
+    ["rect", { width: "18", height: "18", x: "3", y: "3", rx: "2" }],
+    ["path", { d: "M8 12h8" }],
+    ["path", { d: "M12 8v8" }]
+  ];
+
   const SquarePlay = [
     ["rect", { x: "3", y: "3", width: "18", height: "18", rx: "2" }],
     [
@@ -12186,12 +13079,6 @@
         d: "M9 9.003a1 1 0 0 1 1.517-.859l4.997 2.997a1 1 0 0 1 0 1.718l-4.997 2.997A1 1 0 0 1 9 14.996z"
       }
     ]
-  ];
-
-  const SquarePlus = [
-    ["rect", { width: "18", height: "18", x: "3", y: "3", rx: "2" }],
-    ["path", { d: "M8 12h8" }],
-    ["path", { d: "M12 8v8" }]
   ];
 
   const SquarePower = [
@@ -12210,18 +13097,18 @@
     ["path", { d: "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" }]
   ];
 
-  const SquareScissors = [
-    ["rect", { width: "20", height: "20", x: "2", y: "2", rx: "2" }],
-    ["circle", { cx: "8", cy: "8", r: "2" }],
-    ["path", { d: "M9.414 9.414 12 12" }],
-    ["path", { d: "M14.8 14.8 18 18" }],
-    ["circle", { cx: "8", cy: "16", r: "2" }],
-    ["path", { d: "m18 6-8.586 8.586" }]
-  ];
-
   const SquareSigma = [
     ["rect", { width: "18", height: "18", x: "3", y: "3", rx: "2" }],
     ["path", { d: "M16 8.9V7H8l4 5-4 5h8v-1.9" }]
+  ];
+
+  const SquareScissors = [
+    ["rect", { width: "18", height: "18", x: "3", y: "3", rx: "2" }],
+    ["circle", { cx: "8.5", cy: "8.5", r: "1.5" }],
+    ["line", { x1: "9.56066", y1: "9.56066", x2: "12", y2: "12" }],
+    ["line", { x1: "17", y1: "17", x2: "14.82", y2: "14.82" }],
+    ["circle", { cx: "8.5", cy: "15.5", r: "1.5" }],
+    ["line", { x1: "9.56066", y1: "14.43934", x2: "17", y2: "7" }]
   ];
 
   const SquareSlash = [
@@ -12229,16 +13116,16 @@
     ["line", { x1: "9", x2: "15", y1: "15", y2: "9" }]
   ];
 
-  const SquareSplitVertical = [
-    ["path", { d: "M5 8V5c0-1 1-2 2-2h10c1 0 2 1 2 2v3" }],
-    ["path", { d: "M19 16v3c0 1-1 2-2 2H7c-1 0-2-1-2-2v-3" }],
-    ["line", { x1: "4", x2: "20", y1: "12", y2: "12" }]
-  ];
-
   const SquareSplitHorizontal = [
     ["path", { d: "M8 19H5c-1 0-2-1-2-2V7c0-1 1-2 2-2h3" }],
     ["path", { d: "M16 5h3c1 0 2 1 2 2v10c0 1-1 2-2 2h-3" }],
     ["line", { x1: "12", x2: "12", y1: "4", y2: "20" }]
+  ];
+
+  const SquareSplitVertical = [
+    ["path", { d: "M5 8V5c0-1 1-2 2-2h10c1 0 2 1 2 2v3" }],
+    ["path", { d: "M19 16v3c0 1-1 2-2 2H7c-1 0-2-1-2-2v-3" }],
+    ["line", { x1: "4", x2: "20", y1: "12", y2: "12" }]
   ];
 
   const SquareSquare = [
@@ -12279,16 +13166,16 @@
     ["rect", { width: "18", height: "18", x: "3", y: "3", rx: "2" }]
   ];
 
-  const SquareUser = [
-    ["rect", { width: "18", height: "18", x: "3", y: "3", rx: "2" }],
-    ["circle", { cx: "12", cy: "10", r: "3" }],
-    ["path", { d: "M7 21v-2a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v2" }]
-  ];
-
   const SquareX = [
     ["rect", { width: "18", height: "18", x: "3", y: "3", rx: "2", ry: "2" }],
     ["path", { d: "m15 9-6 6" }],
     ["path", { d: "m9 9 6 6" }]
+  ];
+
+  const SquareUser = [
+    ["rect", { width: "18", height: "18", x: "3", y: "3", rx: "2" }],
+    ["circle", { cx: "12", cy: "10", r: "3" }],
+    ["path", { d: "M7 21v-2a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v2" }]
   ];
 
   const Square = [["rect", { width: "18", height: "18", x: "3", y: "3", rx: "2" }]];
@@ -12393,9 +13280,19 @@
   ];
 
   const StarOff = [
-    ["path", { d: "M8.34 8.34 2 9.27l5 4.87L5.82 21 12 17.77 18.18 21l-.59-3.43" }],
-    ["path", { d: "M18.42 12.76 22 9.27l-6.91-1L12 2l-1.44 2.91" }],
-    ["line", { x1: "2", x2: "22", y1: "2", y2: "22" }]
+    [
+      "path",
+      {
+        d: "m10.344 4.688 1.181-2.393a.53.53 0 0 1 .95 0l2.31 4.679a2.12 2.12 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.237 3.152"
+      }
+    ],
+    [
+      "path",
+      {
+        d: "m17.945 17.945.43 2.505a.53.53 0 0 1-.771.56l-4.618-2.428a2.12 2.12 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.12 2.12 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a8 8 0 0 0 .4-.099"
+      }
+    ],
+    ["path", { d: "m2 2 20 20" }]
   ];
 
   const Star = [
@@ -12425,6 +13322,19 @@
     ["path", { d: "M3 4v16" }]
   ];
 
+  const Sticker = [
+    [
+      "path",
+      {
+        d: "M21 9a2.4 2.4 0 0 0-.706-1.706l-3.588-3.588A2.4 2.4 0 0 0 15 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2z"
+      }
+    ],
+    ["path", { d: "M15 3v5a1 1 0 0 0 1 1h5" }],
+    ["path", { d: "M8 13h.01" }],
+    ["path", { d: "M16 13h.01" }],
+    ["path", { d: "M10 16s.8 1 2 1c1.3 0 2-1 2-1" }]
+  ];
+
   const Stethoscope = [
     ["path", { d: "M11 2v2" }],
     ["path", { d: "M5 2v2" }],
@@ -12433,17 +13343,14 @@
     ["circle", { cx: "20", cy: "10", r: "2" }]
   ];
 
-  const Sticker = [
-    ["path", { d: "M15.5 3H5a2 2 0 0 0-2 2v14c0 1.1.9 2 2 2h14a2 2 0 0 0 2-2V8.5L15.5 3Z" }],
-    ["path", { d: "M14 3v4a2 2 0 0 0 2 2h4" }],
-    ["path", { d: "M8 13h.01" }],
-    ["path", { d: "M16 13h.01" }],
-    ["path", { d: "M10 16s.8 1 2 1c1.3 0 2-1 2-1" }]
-  ];
-
   const StickyNote = [
-    ["path", { d: "M16 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8Z" }],
-    ["path", { d: "M15 3v4a2 2 0 0 0 2 2h4" }]
+    [
+      "path",
+      {
+        d: "M21 9a2.4 2.4 0 0 0-.706-1.706l-3.588-3.588A2.4 2.4 0 0 0 15 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2z"
+      }
+    ],
+    ["path", { d: "M15 3v5a1 1 0 0 0 1 1h5" }]
   ];
 
   const Store = [
@@ -12460,6 +13367,17 @@
   const StretchHorizontal = [
     ["rect", { width: "20", height: "6", x: "2", y: "4", rx: "2" }],
     ["rect", { width: "20", height: "6", x: "2", y: "14", rx: "2" }]
+  ];
+
+  const Stone = [
+    [
+      "path",
+      {
+        d: "M11.264 2.205A4 4 0 0 0 6.42 4.211l-4 8a4 4 0 0 0 1.359 5.117l6 4a4 4 0 0 0 4.438 0l6-4a4 4 0 0 0 1.576-4.592l-2-6a4 4 0 0 0-2.53-2.53z"
+      }
+    ],
+    ["path", { d: "M11.99 22 14 12l7.822 3.184" }],
+    ["path", { d: "M14 12 8.47 2.302" }]
   ];
 
   const StretchVertical = [
@@ -12605,10 +13523,10 @@
   ];
 
   const Sword = [
-    ["polyline", { points: "14.5 17.5 3 6 3 3 6 3 17.5 14.5" }],
-    ["line", { x1: "13", x2: "19", y1: "19", y2: "13" }],
-    ["line", { x1: "16", x2: "20", y1: "16", y2: "20" }],
-    ["line", { x1: "19", x2: "21", y1: "21", y2: "19" }]
+    ["path", { d: "m11 19-6-6" }],
+    ["path", { d: "m5 21-2-2" }],
+    ["path", { d: "m8 16-4 4" }],
+    ["path", { d: "M9.5 17.5 21 6V3h-3L6.5 14.5" }]
   ];
 
   const Swords = [
@@ -12670,12 +13588,12 @@
   ];
 
   const TableOfContents = [
+    ["path", { d: "M16 5H3" }],
     ["path", { d: "M16 12H3" }],
-    ["path", { d: "M16 18H3" }],
-    ["path", { d: "M16 6H3" }],
+    ["path", { d: "M16 19H3" }],
+    ["path", { d: "M21 5h.01" }],
     ["path", { d: "M21 12h.01" }],
-    ["path", { d: "M21 18h.01" }],
-    ["path", { d: "M21 6h.01" }]
+    ["path", { d: "M21 19h.01" }]
   ];
 
   const TableProperties = [
@@ -12699,17 +13617,17 @@
     ["path", { d: "M9 2v4" }]
   ];
 
+  const TabletSmartphone = [
+    ["rect", { width: "10", height: "14", x: "3", y: "8", rx: "2" }],
+    ["path", { d: "M5 4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2h-2.4" }],
+    ["path", { d: "M8 18h.01" }]
+  ];
+
   const Table = [
     ["path", { d: "M12 3v18" }],
     ["rect", { width: "18", height: "18", x: "3", y: "3", rx: "2" }],
     ["path", { d: "M3 9h18" }],
     ["path", { d: "M3 15h18" }]
-  ];
-
-  const TabletSmartphone = [
-    ["rect", { width: "10", height: "14", x: "3", y: "8", rx: "2" }],
-    ["path", { d: "M5 4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2h-2.4" }],
-    ["path", { d: "M8 18h.01" }]
   ];
 
   const Tablet = [
@@ -12765,19 +13683,19 @@
     ["path", { d: "M19 4v16" }]
   ];
 
+  const Tangent = [
+    ["circle", { cx: "17", cy: "4", r: "2" }],
+    ["path", { d: "M15.59 5.41 5.41 15.59" }],
+    ["circle", { cx: "4", cy: "17", r: "2" }],
+    ["path", { d: "M12 22s-4-9-1.5-11.5S22 12 22 12" }]
+  ];
+
   const Tally5 = [
     ["path", { d: "M4 4v16" }],
     ["path", { d: "M9 4v16" }],
     ["path", { d: "M14 4v16" }],
     ["path", { d: "M19 4v16" }],
     ["path", { d: "M22 6 2 18" }]
-  ];
-
-  const Tangent = [
-    ["circle", { cx: "17", cy: "4", r: "2" }],
-    ["path", { d: "M15.59 5.41 5.41 15.59" }],
-    ["circle", { cx: "4", cy: "17", r: "2" }],
-    ["path", { d: "M12 22s-4-9-1.5-11.5S22 12 22 12" }]
   ];
 
   const Target = [
@@ -12840,6 +13758,12 @@
     ["path", { d: "M14.5 16h-5" }]
   ];
 
+  const TextAlignCenter = [
+    ["path", { d: "M21 5H3" }],
+    ["path", { d: "M17 12H7" }],
+    ["path", { d: "M19 19H5" }]
+  ];
+
   const TestTubes = [
     ["path", { d: "M9 2v17.5A2.5 2.5 0 0 1 6.5 22A2.5 2.5 0 0 1 4 19.5V2" }],
     ["path", { d: "M20 2v17.5a2.5 2.5 0 0 1-2.5 2.5a2.5 2.5 0 0 1-2.5-2.5V2" }],
@@ -12847,6 +13771,24 @@
     ["path", { d: "M14 2h7" }],
     ["path", { d: "M9 16H4" }],
     ["path", { d: "M20 16h-5" }]
+  ];
+
+  const TextAlignEnd = [
+    ["path", { d: "M21 5H3" }],
+    ["path", { d: "M21 12H9" }],
+    ["path", { d: "M21 19H7" }]
+  ];
+
+  const TextAlignJustify = [
+    ["path", { d: "M3 5h18" }],
+    ["path", { d: "M3 12h18" }],
+    ["path", { d: "M3 19h18" }]
+  ];
+
+  const TextAlignStart = [
+    ["path", { d: "M21 5H3" }],
+    ["path", { d: "M15 12H3" }],
+    ["path", { d: "M17 19H3" }]
   ];
 
   const TextCursorInput = [
@@ -12863,43 +13805,34 @@
     ["path", { d: "M7 2h1a4 4 0 0 1 4 4v1" }]
   ];
 
+  const TextInitial = [
+    ["path", { d: "M15 5h6" }],
+    ["path", { d: "M15 12h6" }],
+    ["path", { d: "M3 19h18" }],
+    ["path", { d: "m3 12 3.553-7.724a.5.5 0 0 1 .894 0L11 12" }],
+    ["path", { d: "M3.92 10h6.16" }]
+  ];
+
   const TextQuote = [
-    ["path", { d: "M17 6H3" }],
+    ["path", { d: "M17 5H3" }],
     ["path", { d: "M21 12H8" }],
-    ["path", { d: "M21 18H8" }],
-    ["path", { d: "M3 12v6" }]
+    ["path", { d: "M21 19H8" }],
+    ["path", { d: "M3 12v7" }]
   ];
 
   const TextSearch = [
-    ["path", { d: "M21 6H3" }],
+    ["path", { d: "M21 5H3" }],
     ["path", { d: "M10 12H3" }],
-    ["path", { d: "M10 18H3" }],
+    ["path", { d: "M10 19H3" }],
     ["circle", { cx: "17", cy: "15", r: "3" }],
     ["path", { d: "m21 19-1.9-1.9" }]
   ];
 
-  const TextSelect = [
-    ["path", { d: "M14 21h1" }],
-    ["path", { d: "M14 3h1" }],
-    ["path", { d: "M19 3a2 2 0 0 1 2 2" }],
-    ["path", { d: "M21 14v1" }],
-    ["path", { d: "M21 19a2 2 0 0 1-2 2" }],
-    ["path", { d: "M21 9v1" }],
-    ["path", { d: "M3 14v1" }],
-    ["path", { d: "M3 9v1" }],
-    ["path", { d: "M5 21a2 2 0 0 1-2-2" }],
-    ["path", { d: "M5 3a2 2 0 0 0-2 2" }],
-    ["path", { d: "M7 12h10" }],
-    ["path", { d: "M7 16h6" }],
-    ["path", { d: "M7 8h8" }],
-    ["path", { d: "M9 21h1" }],
-    ["path", { d: "M9 3h1" }]
-  ];
-
-  const Text = [
-    ["path", { d: "M15 18H3" }],
-    ["path", { d: "M17 6H3" }],
-    ["path", { d: "M21 12H3" }]
+  const TextWrap = [
+    ["path", { d: "m16 16-3 3 3 3" }],
+    ["path", { d: "M3 12h14.5a1 1 0 0 1 0 7H13" }],
+    ["path", { d: "M3 19h6" }],
+    ["path", { d: "M3 5h18" }]
   ];
 
   const Theater = [
@@ -12926,34 +13859,34 @@
   ];
 
   const ThermometerSun = [
-    ["path", { d: "M12 9a4 4 0 0 0-2 7.5" }],
-    ["path", { d: "M12 3v2" }],
-    ["path", { d: "m6.6 18.4-1.4 1.4" }],
-    ["path", { d: "M20 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0Z" }],
-    ["path", { d: "M4 13H2" }],
-    ["path", { d: "M6.34 7.34 4.93 5.93" }]
+    ["path", { d: "M12 2v2" }],
+    ["path", { d: "M12 8a4 4 0 0 0-1.645 7.647" }],
+    ["path", { d: "M2 12h2" }],
+    ["path", { d: "M20 14.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0z" }],
+    ["path", { d: "m4.93 4.93 1.41 1.41" }],
+    ["path", { d: "m6.34 17.66-1.41 1.41" }]
   ];
 
   const Thermometer = [["path", { d: "M14 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0Z" }]];
 
   const ThumbsDown = [
-    ["path", { d: "M17 14V2" }],
     [
       "path",
       {
         d: "M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22a3.13 3.13 0 0 1-3-3.88Z"
       }
-    ]
+    ],
+    ["path", { d: "M17 14V2" }]
   ];
 
   const ThumbsUp = [
-    ["path", { d: "M7 10v12" }],
     [
       "path",
       {
         d: "M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z"
       }
-    ]
+    ],
+    ["path", { d: "M7 10v12" }]
   ];
 
   const TicketCheck = [
@@ -13034,8 +13967,8 @@
 
   const TicketsPlane = [
     ["path", { d: "M10.5 17h1.227a2 2 0 0 0 1.345-.52L18 12" }],
-    ["path", { d: "m12 13.5 3.75.5" }],
-    ["path", { d: "m4.5 8 10.58-5.06a1 1 0 0 1 1.342.488L18.5 8" }],
+    ["path", { d: "m12 13.5 3.794.506" }],
+    ["path", { d: "m3.173 8.18 11-5a2 2 0 0 1 2.647.993L18.56 8" }],
     ["path", { d: "M6 10V8" }],
     ["path", { d: "M6 14v1" }],
     ["path", { d: "M6 19v2" }],
@@ -13043,11 +13976,37 @@
   ];
 
   const Tickets = [
-    ["path", { d: "m4.5 8 10.58-5.06a1 1 0 0 1 1.342.488L18.5 8" }],
+    ["path", { d: "m3.173 8.18 11-5a2 2 0 0 1 2.647.993L18.56 8" }],
     ["path", { d: "M6 10V8" }],
     ["path", { d: "M6 14v1" }],
     ["path", { d: "M6 19v2" }],
     ["rect", { x: "2", y: "8", width: "20", height: "13", rx: "2" }]
+  ];
+
+  const Timeline = [
+    ["path", { d: "M4 12h.01" }],
+    ["path", { d: "M4 16h.01" }],
+    ["path", { d: "M4 20h.01" }],
+    ["path", { d: "M4 4h.01" }],
+    ["path", { d: "M4 8h.01" }],
+    [
+      "path",
+      {
+        d: "M9.414 13.414a2 2 0 0 0 1.414.586H19a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1h-8.172a2 2 0 0 0-1.414.586L8 12z"
+      }
+    ],
+    [
+      "path",
+      {
+        d: "M9.414 21.414a2 2 0 0 0 1.414.586H19a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1h-8.172a2 2 0 0 0-1.414.586L8 20z"
+      }
+    ],
+    [
+      "path",
+      {
+        d: "M9.414 5.414A2 2 0 0 0 10.828 6H19a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1h-8.172a2 2 0 0 0-1.414.586L8 4z"
+      }
+    ]
   ];
 
   const TimerOff = [
@@ -13071,16 +14030,6 @@
     ["circle", { cx: "12", cy: "14", r: "8" }]
   ];
 
-  const ToggleLeft = [
-    ["circle", { cx: "9", cy: "12", r: "3" }],
-    ["rect", { width: "20", height: "14", x: "2", y: "5", rx: "7" }]
-  ];
-
-  const ToggleRight = [
-    ["circle", { cx: "15", cy: "12", r: "3" }],
-    ["rect", { width: "20", height: "14", x: "2", y: "5", rx: "7" }]
-  ];
-
   const Toilet = [
     [
       "path",
@@ -13091,12 +14040,14 @@
     ["path", { d: "M8 18a5 5 0 0 1-5-5V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8" }]
   ];
 
-  const Tornado = [
-    ["path", { d: "M21 4H3" }],
-    ["path", { d: "M18 8H6" }],
-    ["path", { d: "M19 12H9" }],
-    ["path", { d: "M16 16h-6" }],
-    ["path", { d: "M11 20H9" }]
+  const ToggleLeft = [
+    ["circle", { cx: "9", cy: "12", r: "3" }],
+    ["rect", { width: "20", height: "14", x: "2", y: "5", rx: "7" }]
+  ];
+
+  const ToggleRight = [
+    ["circle", { cx: "15", cy: "12", r: "3" }],
+    ["rect", { width: "20", height: "14", x: "2", y: "5", rx: "7" }]
   ];
 
   const ToolCase = [
@@ -13116,6 +14067,19 @@
     ["path", { d: "M4 12.006A1 1 0 0 1 4.994 11H19a1 1 0 0 1 1 1v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z" }]
   ];
 
+  const Toolbox = [
+    ["path", { d: "M16 12v4" }],
+    [
+      "path",
+      {
+        d: "M16 6a2 2 0 0 1 1.414.586l4 4A2 2 0 0 1 22 12v7a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 .586-1.414l4-4A2 2 0 0 1 8 6z"
+      }
+    ],
+    ["path", { d: "M16 6V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2" }],
+    ["path", { d: "M2 14h20" }],
+    ["path", { d: "M8 12v4" }]
+  ];
+
   const Torus = [
     ["ellipse", { cx: "12", cy: "11", rx: "3", ry: "2" }],
     ["ellipse", { cx: "12", cy: "12.5", rx: "10", ry: "8.5" }]
@@ -13130,10 +14094,29 @@
     ["path", { d: "M9.656 4H20a2 2 0 0 1 2 2v10.344" }]
   ];
 
+  const Tornado = [
+    ["path", { d: "M21 4H3" }],
+    ["path", { d: "M18 8H6" }],
+    ["path", { d: "M19 12H9" }],
+    ["path", { d: "M16 16h-6" }],
+    ["path", { d: "M11 20H9" }]
+  ];
+
   const Touchpad = [
     ["rect", { width: "20", height: "16", x: "2", y: "4", rx: "2" }],
     ["path", { d: "M2 14h20" }],
     ["path", { d: "M12 20v-6" }]
+  ];
+
+  const TowelRack = [
+    ["path", { d: "M22 7h-2" }],
+    [
+      "path",
+      {
+        d: "M6.5 3h11A2.5 2.5 0 0 1 20 5.5V20a1 1 0 0 1-1 1h-9a1 1 0 0 1-1-1V5.5a1 1 0 0 0-5 0V17a1 1 0 0 0 1 1h4"
+      }
+    ],
+    ["path", { d: "M9 7H2" }]
   ];
 
   const TowerControl = [
@@ -13195,16 +14178,6 @@
     ["path", { d: "m16 19 2 3" }]
   ];
 
-  const TramFront = [
-    ["rect", { width: "16", height: "16", x: "4", y: "3", rx: "2" }],
-    ["path", { d: "M4 11h16" }],
-    ["path", { d: "M12 3v8" }],
-    ["path", { d: "m8 19-2 3" }],
-    ["path", { d: "m18 22-2-3" }],
-    ["path", { d: "M8 15h.01" }],
-    ["path", { d: "M16 15h.01" }]
-  ];
-
   const TrainTrack = [
     ["path", { d: "M2 17 17 2" }],
     ["path", { d: "m2 14 8 8" }],
@@ -13213,6 +14186,16 @@
     ["path", { d: "m11 5 8 8" }],
     ["path", { d: "m14 2 8 8" }],
     ["path", { d: "M7 22 22 7" }]
+  ];
+
+  const TramFront = [
+    ["rect", { width: "16", height: "16", x: "4", y: "3", rx: "2" }],
+    ["path", { d: "M4 11h16" }],
+    ["path", { d: "M12 3v8" }],
+    ["path", { d: "m8 19-2 3" }],
+    ["path", { d: "m18 22-2-3" }],
+    ["path", { d: "M8 15h.01" }],
+    ["path", { d: "M16 15h.01" }]
   ];
 
   const Transgender = [
@@ -13284,12 +14267,6 @@
     ]
   ];
 
-  const Trello = [
-    ["rect", { width: "18", height: "18", x: "3", y: "3", rx: "2", ry: "2" }],
-    ["rect", { width: "3", height: "9", x: "7", y: "7" }],
-    ["rect", { width: "3", height: "5", x: "14", y: "7" }]
-  ];
-
   const TrendingDown = [
     ["path", { d: "M16 17h6v-6" }],
     ["path", { d: "m22 17-8.5-8.5-5 5L2 7" }]
@@ -13352,6 +14329,17 @@
     ["circle", { cx: "7", cy: "19", r: "2" }]
   ];
 
+  const Truck = [
+    ["path", { d: "M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2" }],
+    ["path", { d: "M15 18H9" }],
+    [
+      "path",
+      { d: "M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14" }
+    ],
+    ["circle", { cx: "17", cy: "18", r: "2" }],
+    ["circle", { cx: "7", cy: "18", r: "2" }]
+  ];
+
   const TurkishLira = [
     ["path", { d: "M15 4 5 9" }],
     ["path", { d: "m15 8.5-10 5" }],
@@ -13363,17 +14351,6 @@
     ["path", { d: "M18 8v4a8 8 0 0 1-1.07 4" }],
     ["circle", { cx: "10", cy: "12", r: "4" }],
     ["rect", { x: "2", y: "4", width: "20", height: "16", rx: "2" }]
-  ];
-
-  const Truck = [
-    ["path", { d: "M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2" }],
-    ["path", { d: "M15 18H9" }],
-    [
-      "path",
-      { d: "M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14" }
-    ],
-    ["circle", { cx: "17", cy: "18", r: "2" }],
-    ["circle", { cx: "7", cy: "18", r: "2" }]
   ];
 
   const Turtle = [
@@ -13407,17 +14384,6 @@
   const Tv = [
     ["path", { d: "m17 2-5 5-5-5" }],
     ["rect", { width: "20", height: "15", x: "2", y: "7", rx: "2" }]
-  ];
-
-  const Twitch = [["path", { d: "M21 2H3v16h5v4l4-4h5l4-4V2zm-10 9V7m5 4V7" }]];
-
-  const Twitter = [
-    [
-      "path",
-      {
-        d: "M22 4s-.7 2.1-2 3.4c1.6 10-9.4 17.3-18 11.6 2.2.1 4.4-.6 6-2C3 15.5.5 9.6 3 5c2.2 2.6 5.6 4.1 9 4-.9-4.2 4-6.6 7-3.8 1.1 0 3-1.2 3-1.2z"
-      }
-    ]
   ];
 
   const TypeOutline = [
@@ -13492,11 +14458,6 @@
     ["path", { d: "m15 5-3-3-3 3" }]
   ];
 
-  const Ungroup = [
-    ["rect", { width: "8", height: "6", x: "5", y: "4", rx: "1" }],
-    ["rect", { width: "8", height: "6", x: "11", y: "14", rx: "1" }]
-  ];
-
   const University = [
     ["path", { d: "M14 21v-3a2 2 0 0 0-4 0v3" }],
     ["path", { d: "M18 12h.01" }],
@@ -13512,7 +14473,21 @@
     ["circle", { cx: "12", cy: "10", r: "2" }]
   ];
 
+  const Ungroup = [
+    ["rect", { width: "8", height: "6", x: "5", y: "4", rx: "1" }],
+    ["rect", { width: "8", height: "6", x: "11", y: "14", rx: "1" }]
+  ];
+
   const Unlink2 = [["path", { d: "M15 7h2a5 5 0 0 1 0 10h-2m-6 0H7A5 5 0 0 1 7 7h2" }]];
+
+  const Unplug = [
+    ["path", { d: "m19 5 3-3" }],
+    ["path", { d: "m2 22 3-3" }],
+    ["path", { d: "M6.3 20.3a2.4 2.4 0 0 0 3.4 0L12 18l-6-6-2.3 2.3a2.4 2.4 0 0 0 0 3.4Z" }],
+    ["path", { d: "M7.5 13.5 10 11" }],
+    ["path", { d: "M10.5 16.5 13 14" }],
+    ["path", { d: "m12 6 6 6 2.3-2.3a2.4 2.4 0 0 0 0-3.4l-2.6-2.6a2.4 2.4 0 0 0-3.4 0Z" }]
+  ];
 
   const Unlink = [
     [
@@ -13529,15 +14504,6 @@
     ["line", { x1: "2", x2: "5", y1: "8", y2: "8" }],
     ["line", { x1: "16", x2: "16", y1: "19", y2: "22" }],
     ["line", { x1: "19", x2: "22", y1: "16", y2: "16" }]
-  ];
-
-  const Unplug = [
-    ["path", { d: "m19 5 3-3" }],
-    ["path", { d: "m2 22 3-3" }],
-    ["path", { d: "M6.3 20.3a2.4 2.4 0 0 0 3.4 0L12 18l-6-6-2.3 2.3a2.4 2.4 0 0 0 0 3.4Z" }],
-    ["path", { d: "M7.5 13.5 10 11" }],
-    ["path", { d: "M10.5 16.5 13 14" }],
-    ["path", { d: "m12 6 6 6 2.3-2.3a2.4 2.4 0 0 0 0-3.4l-2.6-2.6a2.4 2.4 0 0 0-3.4 0Z" }]
   ];
 
   const Upload = [
@@ -13576,11 +14542,19 @@
     ["circle", { cx: "9", cy: "7", r: "4" }]
   ];
 
-  const UserLock = [
+  const UserKey = [
+    ["path", { d: "M20 11v6" }],
+    ["path", { d: "M20 13h2" }],
+    ["path", { d: "M3 21v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 2.072.578" }],
     ["circle", { cx: "10", cy: "7", r: "4" }],
-    ["path", { d: "M10.3 15H7a4 4 0 0 0-4 4v2" }],
-    ["path", { d: "M15 15.5V14a2 2 0 0 1 4 0v1.5" }],
-    ["rect", { width: "8", height: "5", x: "13", y: "16", rx: ".899" }]
+    ["circle", { cx: "20", cy: "19", r: "2" }]
+  ];
+
+  const UserLock = [
+    ["path", { d: "M19 16v-2a2 2 0 0 0-4 0v2" }],
+    ["path", { d: "M9.5 15H7a4 4 0 0 0-4 4v2" }],
+    ["circle", { cx: "10", cy: "7", r: "4" }],
+    ["rect", { x: "13", y: "16", width: "8", height: "5", rx: ".899" }]
   ];
 
   const UserMinus = [
@@ -13600,17 +14574,17 @@
     ["circle", { cx: "10", cy: "7", r: "4" }]
   ];
 
-  const UserRoundCheck = [
-    ["path", { d: "M2 21a8 8 0 0 1 13.292-6" }],
-    ["circle", { cx: "10", cy: "8", r: "5" }],
-    ["path", { d: "m16 19 2 2 4-4" }]
-  ];
-
   const UserPlus = [
     ["path", { d: "M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" }],
     ["circle", { cx: "9", cy: "7", r: "4" }],
     ["line", { x1: "19", x2: "19", y1: "8", y2: "14" }],
     ["line", { x1: "22", x2: "16", y1: "11", y2: "11" }]
+  ];
+
+  const UserRoundCheck = [
+    ["path", { d: "M2 21a8 8 0 0 1 13.292-6" }],
+    ["circle", { cx: "10", cy: "8", r: "5" }],
+    ["path", { d: "m16 19 2 2 4-4" }]
   ];
 
   const UserRoundCog = [
@@ -13625,6 +14599,14 @@
     ["path", { d: "m20.772 19.148.924.383" }],
     ["circle", { cx: "10", cy: "8", r: "5" }],
     ["circle", { cx: "18", cy: "18", r: "3" }]
+  ];
+
+  const UserRoundKey = [
+    ["path", { d: "M19 11v6" }],
+    ["path", { d: "M19 13h2" }],
+    ["path", { d: "M2 21a8 8 0 0 1 12.868-6.349" }],
+    ["circle", { cx: "10", cy: "8", r: "5" }],
+    ["circle", { cx: "19", cy: "19", r: "2" }]
   ];
 
   const UserRoundMinus = [
@@ -13720,6 +14702,25 @@
     ["path", { d: "m19 5-7 7" }]
   ];
 
+  const Utensils = [
+    ["path", { d: "M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2" }],
+    ["path", { d: "M7 2v20" }],
+    ["path", { d: "M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7" }]
+  ];
+
+  const Van = [
+    [
+      "path",
+      {
+        d: "M13 6v5a1 1 0 0 0 1 1h6.102a1 1 0 0 1 .712.298l.898.91a1 1 0 0 1 .288.702V17a1 1 0 0 1-1 1h-3"
+      }
+    ],
+    ["path", { d: "M5 18H3a1 1 0 0 1-1-1V8a2 2 0 0 1 2-2h12c1.1 0 2.1.8 2.4 1.8l1.176 4.2" }],
+    ["path", { d: "M9 18h5" }],
+    ["circle", { cx: "16", cy: "18", r: "2" }],
+    ["circle", { cx: "7", cy: "18", r: "2" }]
+  ];
+
   const UtilityPole = [
     ["path", { d: "M12 2v20" }],
     ["path", { d: "M2 5h20" }],
@@ -13730,10 +14731,11 @@
     ["path", { d: "m19 5-7 7-7-7" }]
   ];
 
-  const Utensils = [
-    ["path", { d: "M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2" }],
-    ["path", { d: "M7 2v20" }],
-    ["path", { d: "M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7" }]
+  const Variable = [
+    ["path", { d: "M8 21s-4-3-4-9 4-9 4-9" }],
+    ["path", { d: "M16 3s4 3 4 9-4 9-4 9" }],
+    ["line", { x1: "15", x2: "9", y1: "9", y2: "15" }],
+    ["line", { x1: "9", x2: "15", y1: "9", y2: "15" }]
   ];
 
   const Vault = [
@@ -13747,13 +14749,6 @@
     ["circle", { cx: "16.5", cy: "16.5", r: ".5", fill: "currentColor" }],
     ["path", { d: "m13.4 13.4 2.7 2.7" }],
     ["circle", { cx: "12", cy: "12", r: "2" }]
-  ];
-
-  const Variable = [
-    ["path", { d: "M8 21s-4-3-4-9 4-9 4-9" }],
-    ["path", { d: "M16 3s4 3 4 9-4 9-4 9" }],
-    ["line", { x1: "15", x2: "9", y1: "9", y2: "15" }],
-    ["line", { x1: "9", x2: "15", y1: "9", y2: "15" }]
   ];
 
   const VectorSquare = [
@@ -13773,14 +14768,6 @@
     ["path", { d: "M2 2a26.6 26.6 0 0 1 10 20c.9-6.82 1.5-9.5 4-14" }]
   ];
 
-  const VenusAndMars = [
-    ["path", { d: "M10 20h4" }],
-    ["path", { d: "M12 16v6" }],
-    ["path", { d: "M17 2h4v4" }],
-    ["path", { d: "m21 2-5.46 5.46" }],
-    ["circle", { cx: "12", cy: "11", r: "5" }]
-  ];
-
   const VenetianMask = [
     ["path", { d: "M18 11c-1.5 0-2.5.5-3 2" }],
     [
@@ -13790,6 +14777,14 @@
       }
     ],
     ["path", { d: "M6 11c1.5 0 2.5.5 3 2" }]
+  ];
+
+  const VenusAndMars = [
+    ["path", { d: "M10 20h4" }],
+    ["path", { d: "M12 16v6" }],
+    ["path", { d: "M17 2h4v4" }],
+    ["path", { d: "m21 2-5.46 5.46" }],
+    ["circle", { cx: "12", cy: "11", r: "5" }]
   ];
 
   const Venus = [
@@ -13831,12 +14826,6 @@
     ["circle", { cx: "16", cy: "14", r: "2" }]
   ];
 
-  const Voicemail = [
-    ["circle", { cx: "6", cy: "12", r: "4" }],
-    ["circle", { cx: "18", cy: "12", r: "4" }],
-    ["line", { x1: "6", x2: "18", y1: "16", y2: "16" }]
-  ];
-
   const View = [
     ["path", { d: "M21 17v2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-2" }],
     ["path", { d: "M21 7V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v2" }],
@@ -13858,6 +14847,12 @@
     ["circle", { cx: "12", cy: "12", r: "10" }]
   ];
 
+  const Voicemail = [
+    ["circle", { cx: "6", cy: "12", r: "4" }],
+    ["circle", { cx: "18", cy: "12", r: "4" }],
+    ["line", { x1: "6", x2: "18", y1: "16", y2: "16" }]
+  ];
+
   const Volume1 = [
     [
       "path",
@@ -13866,6 +14861,17 @@
       }
     ],
     ["path", { d: "M16 9a5 5 0 0 1 0 6" }]
+  ];
+
+  const Volume2 = [
+    [
+      "path",
+      {
+        d: "M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z"
+      }
+    ],
+    ["path", { d: "M16 9a5 5 0 0 1 0 6" }],
+    ["path", { d: "M19.364 18.364a9 9 0 0 0 0-12.728" }]
   ];
 
   const VolumeOff = [
@@ -13879,17 +14885,6 @@
       }
     ],
     ["path", { d: "M9.828 4.172A.686.686 0 0 1 11 4.657v.686" }]
-  ];
-
-  const Volume2 = [
-    [
-      "path",
-      {
-        d: "M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z"
-      }
-    ],
-    ["path", { d: "M16 9a5 5 0 0 1 0 6" }],
-    ["path", { d: "M19.364 18.364a9 9 0 0 0 0-12.728" }]
   ];
 
   const VolumeX = [
@@ -13932,14 +14927,6 @@
     ["path", { d: "M7 7h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14" }]
   ];
 
-  const Wallpaper = [
-    ["path", { d: "M12 17v4" }],
-    ["path", { d: "M8 21h8" }],
-    ["path", { d: "m9 17 6.1-6.1a2 2 0 0 1 2.81.01L22 15" }],
-    ["circle", { cx: "8", cy: "9", r: "2" }],
-    ["rect", { x: "2", y: "3", width: "20", height: "14", rx: "2" }]
-  ];
-
   const Wallet = [
     [
       "path",
@@ -13948,6 +14935,14 @@
       }
     ],
     ["path", { d: "M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4" }]
+  ];
+
+  const Wallpaper = [
+    ["path", { d: "M12 17v4" }],
+    ["path", { d: "M8 21h8" }],
+    ["path", { d: "m9 17 6.1-6.1a2 2 0 0 1 2.81.01L22 15" }],
+    ["circle", { cx: "8", cy: "9", r: "2" }],
+    ["rect", { x: "2", y: "3", width: "20", height: "14", rx: "2" }]
   ];
 
   const WandSparkles = [
@@ -13990,6 +14985,13 @@
     ["path", { d: "M6 17h12" }]
   ];
 
+  const Watch = [
+    ["path", { d: "M12 10v2.2l1.6 1" }],
+    ["path", { d: "m16.13 7.66-.81-4.05a2 2 0 0 0-2-1.61h-2.68a2 2 0 0 0-2 1.61l-.78 4.05" }],
+    ["path", { d: "m7.88 16.36.8 4a2 2 0 0 0 2 1.61h2.72a2 2 0 0 0 2-1.61l.81-4.05" }],
+    ["circle", { cx: "12", cy: "12", r: "6" }]
+  ];
+
   const WashingMachine = [
     ["path", { d: "M3 6h3" }],
     ["path", { d: "M17 6h.01" }],
@@ -13998,11 +15000,44 @@
     ["path", { d: "M12 18a2.5 2.5 0 0 0 0-5 2.5 2.5 0 0 1 0-5" }]
   ];
 
-  const Watch = [
-    ["path", { d: "M12 10v2.2l1.6 1" }],
-    ["path", { d: "m16.13 7.66-.81-4.05a2 2 0 0 0-2-1.61h-2.68a2 2 0 0 0-2 1.61l-.78 4.05" }],
-    ["path", { d: "m7.88 16.36.8 4a2 2 0 0 0 2 1.61h2.72a2 2 0 0 0 2-1.61l.81-4.05" }],
-    ["circle", { cx: "12", cy: "12", r: "6" }]
+  const WavesArrowDown = [
+    ["path", { d: "M12 10L12 2" }],
+    ["path", { d: "M16 6L12 10L8 6" }],
+    [
+      "path",
+      {
+        d: "M2 15C2.6 15.5 3.2 16 4.5 16C7 16 7 14 9.5 14C12.1 14 11.9 16 14.5 16C17 16 17 14 19.5 14C20.8 14 21.4 14.5 22 15"
+      }
+    ],
+    [
+      "path",
+      {
+        d: "M2 21C2.6 21.5 3.2 22 4.5 22C7 22 7 20 9.5 20C12.1 20 11.9 22 14.5 22C17 22 17 20 19.5 20C20.8 20 21.4 20.5 22 21"
+      }
+    ]
+  ];
+
+  const WavesArrowUp = [
+    ["path", { d: "M12 2v8" }],
+    [
+      "path",
+      {
+        d: "M2 15c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"
+      }
+    ],
+    [
+      "path",
+      {
+        d: "M2 21c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"
+      }
+    ],
+    ["path", { d: "m8 6 4-4 4 4" }]
+  ];
+
+  const WavesHorizontal = [
+    ["path", { d: "M2 12q2.5 2 5 0t5 0 5 0 5 0" }],
+    ["path", { d: "M2 19q2.5 2 5 0t5 0 5 0 5 0" }],
+    ["path", { d: "M2 5q2.5 2 5 0t5 0 5 0 5 0" }]
   ];
 
   const WavesLadder = [
@@ -14018,23 +15053,20 @@
     ["path", { d: "M9 5a2 2 0 0 0-2 2v11" }]
   ];
 
-  const Waves = [
-    [
-      "path",
-      { d: "M2 6c.6.5 1.2 1 2.5 1C7 7 7 5 9.5 5c2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1" }
-    ],
-    [
-      "path",
-      {
-        d: "M2 12c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"
-      }
-    ],
-    [
-      "path",
-      {
-        d: "M2 18c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"
-      }
-    ]
+  const WavesVertical = [
+    ["path", { d: "M12 2q2 2.5 0 5t0 5 0 5 0 5" }],
+    ["path", { d: "M19 2q2 2.5 0 5t0 5 0 5 0 5" }],
+    ["path", { d: "M5 2q2 2.5 0 5t0 5 0 5 0 5" }]
+  ];
+
+  const Waypoints = [
+    ["path", { d: "m10.586 5.414-5.172 5.172" }],
+    ["path", { d: "m18.586 13.414-5.172 5.172" }],
+    ["path", { d: "M6 12h12" }],
+    ["circle", { cx: "12", cy: "20", r: "2" }],
+    ["circle", { cx: "12", cy: "4", r: "2" }],
+    ["circle", { cx: "20", cy: "12", r: "2" }],
+    ["circle", { cx: "4", cy: "12", r: "2" }]
   ];
 
   const Webcam = [
@@ -14060,14 +15092,15 @@
     ["path", { d: "m12 6 3.13 5.73C15.66 12.7 16.9 13 18 13a4 4 0 0 1 0 8" }]
   ];
 
-  const Waypoints = [
-    ["circle", { cx: "12", cy: "4.5", r: "2.5" }],
-    ["path", { d: "m10.2 6.3-3.9 3.9" }],
-    ["circle", { cx: "4.5", cy: "12", r: "2.5" }],
-    ["path", { d: "M7 12h10" }],
-    ["circle", { cx: "19.5", cy: "12", r: "2.5" }],
-    ["path", { d: "m13.8 17.7 3.9-3.9" }],
-    ["circle", { cx: "12", cy: "19.5", r: "2.5" }]
+  const WeightTilde = [
+    [
+      "path",
+      {
+        d: "M6.5 8a2 2 0 0 0-1.906 1.46L2.1 18.5A2 2 0 0 0 4 21h16a2 2 0 0 0 1.925-2.54L19.4 9.5A2 2 0 0 0 17.48 8z"
+      }
+    ],
+    ["path", { d: "M7.999 15a2.5 2.5 0 0 1 4 0 2.5 2.5 0 0 0 4 0" }],
+    ["circle", { cx: "12", cy: "5", r: "3" }]
   ];
 
   const Weight = [
@@ -14099,14 +15132,6 @@
     ["path", { d: "m16 16-.53.53a3.5 3.5 0 0 1-4.94 0L9 15l1.53-1.53a3.49 3.49 0 0 1 1.97-.98" }],
     ["path", { d: "M18.74 13.09c.26-.15.51-.34.73-.56L21 11l-1.53-1.53a3.5 3.5 0 0 0-4.62-.28" }],
     ["line", { x1: "2", x2: "22", y1: "2", y2: "22" }]
-  ];
-
-  const WholeWord = [
-    ["circle", { cx: "7", cy: "12", r: "3" }],
-    ["path", { d: "M10 9v6" }],
-    ["circle", { cx: "17", cy: "12", r: "3" }],
-    ["path", { d: "M14 7v8" }],
-    ["path", { d: "M22 17v1c0 .5-.5 1-1 1H3c-.5 0-1-.5-1-1v-1" }]
   ];
 
   const Wheat = [
@@ -14142,6 +15167,14 @@
         d: "M19.47 9.47 21 11l-1.53 1.53a3.5 3.5 0 0 1-4.94 0L13 11l1.53-1.53a3.5 3.5 0 0 1 4.94 0Z"
       }
     ]
+  ];
+
+  const WholeWord = [
+    ["circle", { cx: "7", cy: "12", r: "3" }],
+    ["path", { d: "M10 9v6" }],
+    ["circle", { cx: "17", cy: "12", r: "3" }],
+    ["path", { d: "M14 7v8" }],
+    ["path", { d: "M22 17v1c0 .5-.5 1-1 1H3c-.5 0-1-.5-1-1v-1" }]
   ];
 
   const WifiCog = [
@@ -14204,18 +15237,18 @@
 
   const WifiZero = [["path", { d: "M12 20h.01" }]];
 
-  const Wifi = [
-    ["path", { d: "M12 20h.01" }],
-    ["path", { d: "M2 8.82a15 15 0 0 1 20 0" }],
-    ["path", { d: "M5 12.859a10 10 0 0 1 14 0" }],
-    ["path", { d: "M8.5 16.429a5 5 0 0 1 7 0" }]
-  ];
-
   const WindArrowDown = [
     ["path", { d: "M10 2v8" }],
     ["path", { d: "M12.8 21.6A2 2 0 1 0 14 18H2" }],
     ["path", { d: "M17.5 10a2.5 2.5 0 1 1 2 4H2" }],
     ["path", { d: "m6 6 4 4 4-4" }]
+  ];
+
+  const Wifi = [
+    ["path", { d: "M12 20h.01" }],
+    ["path", { d: "M2 8.82a15 15 0 0 1 20 0" }],
+    ["path", { d: "M5 12.859a10 10 0 0 1 14 0" }],
+    ["path", { d: "M8.5 16.429a5 5 0 0 1 7 0" }]
   ];
 
   const Wind = [
@@ -14237,19 +15270,6 @@
     ["line", { x1: "2", x2: "22", y1: "2", y2: "22" }]
   ];
 
-  const Wine = [
-    ["path", { d: "M8 22h8" }],
-    ["path", { d: "M7 10h10" }],
-    ["path", { d: "M12 15v7" }],
-    ["path", { d: "M12 15a5 5 0 0 0 5-5c0-2-.5-4-2-8H9c-1.5 4-2 6-2 8a5 5 0 0 0 5 5Z" }]
-  ];
-
-  const Workflow = [
-    ["rect", { width: "8", height: "8", x: "3", y: "3", rx: "2" }],
-    ["path", { d: "M7 11v4a2 2 0 0 0 2 2h4" }],
-    ["rect", { width: "8", height: "8", x: "13", y: "13", rx: "2" }]
-  ];
-
   const Worm = [
     ["path", { d: "m19 12-1.5 3" }],
     ["path", { d: "M19.63 18.81 22 20" }],
@@ -14261,11 +15281,17 @@
     ]
   ];
 
-  const WrapText = [
-    ["path", { d: "m16 16-2 2 2 2" }],
-    ["path", { d: "M3 12h15a3 3 0 1 1 0 6h-4" }],
-    ["path", { d: "M3 18h7" }],
-    ["path", { d: "M3 6h18" }]
+  const Workflow = [
+    ["rect", { width: "8", height: "8", x: "3", y: "3", rx: "2" }],
+    ["path", { d: "M7 11v4a2 2 0 0 0 2 2h4" }],
+    ["rect", { width: "8", height: "8", x: "13", y: "13", rx: "2" }]
+  ];
+
+  const Wine = [
+    ["path", { d: "M8 22h8" }],
+    ["path", { d: "M7 10h10" }],
+    ["path", { d: "M12 15v7" }],
+    ["path", { d: "M12 15a5 5 0 0 0 5-5c0-2-.5-4-2-8H9c-1.5 4-2 6-2 8a5 5 0 0 0 5 5Z" }]
   ];
 
   const Wrench = [
@@ -14277,19 +15303,15 @@
     ]
   ];
 
+  const XLineTop = [
+    ["path", { d: "M18 4H6" }],
+    ["path", { d: "M18 8 6 20" }],
+    ["path", { d: "m6 8 12 12" }]
+  ];
+
   const X = [
     ["path", { d: "M18 6 6 18" }],
     ["path", { d: "m6 6 12 12" }]
-  ];
-
-  const Youtube = [
-    [
-      "path",
-      {
-        d: "M2.5 17a24.12 24.12 0 0 1 0-10 2 2 0 0 1 1.4-1.4 49.56 49.56 0 0 1 16.2 0A2 2 0 0 1 21.5 7a24.12 24.12 0 0 1 0 10 2 2 0 0 1-1.4 1.4 49.55 49.55 0 0 1-16.2 0A2 2 0 0 1 2.5 17"
-      }
-    ],
-    ["path", { d: "m10 15 5-3-5-3z" }]
   ];
 
   const ZapOff = [
@@ -14311,6 +15333,95 @@
         d: "M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
       }
     ]
+  ];
+
+  const ZodiacAquarius = [
+    [
+      "path",
+      {
+        d: "m2 10 2.456-3.684a.7.7 0 0 1 1.106-.013l2.39 3.413a.7.7 0 0 0 1.096-.001l2.402-3.432a.7.7 0 0 1 1.098 0l2.402 3.432a.7.7 0 0 0 1.098 0l2.389-3.413a.7.7 0 0 1 1.106.013L22 10"
+      }
+    ],
+    [
+      "path",
+      {
+        d: "m2 18.002 2.456-3.684a.7.7 0 0 1 1.106-.013l2.39 3.413a.7.7 0 0 0 1.097 0l2.402-3.432a.7.7 0 0 1 1.098 0l2.402 3.432a.7.7 0 0 0 1.098 0l2.389-3.413a.7.7 0 0 1 1.106.013L22 18.002"
+      }
+    ]
+  ];
+
+  const ZodiacAries = [
+    ["path", { d: "M12 7.5a4.5 4.5 0 1 1 5 4.5" }],
+    ["path", { d: "M7 12a4.5 4.5 0 1 1 5-4.5V21" }]
+  ];
+
+  const ZodiacCancer = [
+    ["path", { d: "M21 14.5A9 6.5 0 0 1 5.5 19" }],
+    ["path", { d: "M3 9.5A9 6.5 0 0 1 18.5 5" }],
+    ["circle", { cx: "17.5", cy: "14.5", r: "3.5" }],
+    ["circle", { cx: "6.5", cy: "9.5", r: "3.5" }]
+  ];
+
+  const ZodiacCapricorn = [
+    ["path", { d: "M11 21a3 3 0 0 0 3-3V6.5a1 1 0 0 0-7 0" }],
+    ["path", { d: "M7 19V6a3 3 0 0 0-3-3h0" }],
+    ["circle", { cx: "17", cy: "17", r: "3" }]
+  ];
+
+  const ZodiacGemini = [
+    ["path", { d: "M16 4.525v14.948" }],
+    ["path", { d: "M20 3A17 17 0 0 1 4 3" }],
+    ["path", { d: "M4 21a17 17 0 0 1 16 0" }],
+    ["path", { d: "M8 4.525v14.948" }]
+  ];
+
+  const ZodiacLeo = [
+    ["path", { d: "M10 16c0-4-3-4.5-3-8a5 5 0 0 1 10 0c0 3.466-3 6.196-3 10a3 3 0 0 0 6 0" }],
+    ["circle", { cx: "7", cy: "16", r: "3" }]
+  ];
+
+  const ZodiacLibra = [
+    [
+      "path",
+      { d: "M3 16h6.857c.162-.012.19-.323.038-.38a6 6 0 1 1 4.212 0c-.153.057-.125.368.038.38H21" }
+    ],
+    ["path", { d: "M3 20h18" }]
+  ];
+
+  const ZodiacOphiuchus = [
+    ["path", { d: "M3 10A6.06 6.06 0 0 1 12 10 A6.06 6.06 0 0 0 21 10" }],
+    ["path", { d: "M6 3v12a6 6 0 0 0 12 0V3" }]
+  ];
+
+  const ZodiacPisces = [
+    ["path", { d: "M19 21a15 15 0 0 1 0-18" }],
+    ["path", { d: "M20 12H4" }],
+    ["path", { d: "M5 3a15 15 0 0 1 0 18" }]
+  ];
+
+  const ZodiacScorpio = [
+    ["path", { d: "M10 19V5.5a1 1 0 0 1 5 0V17a2 2 0 0 0 2 2h5l-3-3" }],
+    ["path", { d: "m22 19-3 3" }],
+    ["path", { d: "M5 19V5.5a1 1 0 0 1 5 0" }],
+    ["path", { d: "M5 5.5A2.5 2.5 0 0 0 2.5 3" }]
+  ];
+
+  const ZodiacSagittarius = [
+    ["path", { d: "M15 3h6v6" }],
+    ["path", { d: "M21 3 3 21" }],
+    ["path", { d: "m9 9 6 6" }]
+  ];
+
+  const ZodiacTaurus = [
+    ["circle", { cx: "12", cy: "15", r: "6" }],
+    ["path", { d: "M18 3A6 6 0 0 1 6 3" }]
+  ];
+
+  const ZodiacVirgo = [
+    ["path", { d: "M11 5.5a1 1 0 0 1 5 0V16a5 5 0 0 0 5 5" }],
+    ["path", { d: "M16 11.5a1 1 0 0 1 5 0V16a5 5 0 0 1-5 5" }],
+    ["path", { d: "M6 19V6a3 3 0 0 0-3-3h0" }],
+    ["path", { d: "M6 5.5a1 1 0 0 1 5 0V19" }]
   ];
 
   const ZoomIn = [
@@ -14349,7 +15460,7 @@
     AlertCircle: CircleAlert,
     AlertOctagon: OctagonAlert,
     AlertTriangle: TriangleAlert,
-    AlignCenter: AlignCenter,
+    AlignCenter: TextAlignCenter,
     AlignCenterHorizontal: AlignCenterHorizontal,
     AlignCenterVertical: AlignCenterVertical,
     AlignEndHorizontal: AlignEndHorizontal,
@@ -14362,9 +15473,9 @@
     AlignHorizontalJustifyStart: AlignHorizontalJustifyStart,
     AlignHorizontalSpaceAround: AlignHorizontalSpaceAround,
     AlignHorizontalSpaceBetween: AlignHorizontalSpaceBetween,
-    AlignJustify: AlignJustify,
-    AlignLeft: AlignLeft,
-    AlignRight: AlignRight,
+    AlignJustify: TextAlignJustify,
+    AlignLeft: TextAlignStart,
+    AlignRight: TextAlignEnd,
     AlignStartHorizontal: AlignStartHorizontal,
     AlignStartVertical: AlignStartVertical,
     AlignVerticalDistributeCenter: AlignVerticalDistributeCenter,
@@ -14462,6 +15573,7 @@
     ArrowsUpFromLine: ArrowsUpFromLine,
     Asterisk: Asterisk,
     AsteriskSquare: SquareAsterisk,
+    Astroid: Astroid,
     AtSign: AtSign,
     Atom: Atom,
     AudioLines: AudioLines,
@@ -14492,6 +15604,7 @@
     BadgeTurkishLira: BadgeTurkishLira,
     BadgeX: BadgeX,
     BaggageClaim: BaggageClaim,
+    Balloon: Balloon,
     Ban: Ban,
     Banana: Banana,
     Bandage: Bandage,
@@ -14524,9 +15637,11 @@
     BedDouble: BedDouble,
     BedSingle: BedSingle,
     Beef: Beef,
+    BeefOff: BeefOff,
     Beer: Beer,
     BeerOff: BeerOff,
     Bell: Bell,
+    BellCheck: BellCheck,
     BellDot: BellDot,
     BellElectric: BellElectric,
     BellMinus: BellMinus,
@@ -14545,6 +15660,7 @@
     Binoculars: Binoculars,
     Biohazard: Biohazard,
     Bird: Bird,
+    Birdhouse: Birdhouse,
     Bitcoin: Bitcoin,
     Blend: Blend,
     Blinds: Blinds,
@@ -14576,6 +15692,7 @@
     BookOpenCheck: BookOpenCheck,
     BookOpenText: BookOpenText,
     BookPlus: BookPlus,
+    BookSearch: BookSearch,
     BookTemplate: BookDashed,
     BookText: BookText,
     BookType: BookType,
@@ -14586,6 +15703,7 @@
     Bookmark: Bookmark,
     BookmarkCheck: BookmarkCheck,
     BookmarkMinus: BookmarkMinus,
+    BookmarkOff: BookmarkOff,
     BookmarkPlus: BookmarkPlus,
     BookmarkX: BookmarkX,
     BoomBox: BoomBox,
@@ -14646,6 +15764,7 @@
     CalendarSync: CalendarSync,
     CalendarX: CalendarX,
     CalendarX2: CalendarX2,
+    Calendars: Calendars,
     Camera: Camera,
     CameraOff: CameraOff,
     CandlestickChart: ChartCandlestick,
@@ -14653,6 +15772,7 @@
     CandyCane: CandyCane,
     CandyOff: CandyOff,
     Cannabis: Cannabis,
+    CannabisOff: CannabisOff,
     Captions: Captions,
     CaptionsOff: CaptionsOff,
     Car: Car,
@@ -14669,6 +15789,7 @@
     Castle: Castle,
     Cat: Cat,
     Cctv: Cctv,
+    CctvOff: CctvOff,
     ChartArea: ChartArea,
     ChartBar: ChartBar,
     ChartBarBig: ChartBarBig,
@@ -14701,6 +15822,12 @@
     CheckSquare2: SquareCheck,
     ChefHat: ChefHat,
     Cherry: Cherry,
+    ChessBishop: ChessBishop,
+    ChessKing: ChessKing,
+    ChessKnight: ChessKnight,
+    ChessPawn: ChessPawn,
+    ChessQueen: ChessQueen,
+    ChessRook: ChessRook,
     ChevronDown: ChevronDown,
     ChevronDownCircle: CircleChevronDown,
     ChevronDownSquare: SquareChevronDown,
@@ -14724,8 +15851,6 @@
     ChevronsRightLeft: ChevronsRightLeft,
     ChevronsUp: ChevronsUp,
     ChevronsUpDown: ChevronsUpDown,
-    Chrome: Chromium,
-    Chromium: Chromium,
     Church: Church,
     Cigarette: Cigarette,
     CigaretteOff: CigaretteOff,
@@ -14762,6 +15887,7 @@
     CircleParkingOff: CircleParkingOff,
     CirclePause: CirclePause,
     CirclePercent: CirclePercent,
+    CirclePile: CirclePile,
     CirclePlay: CirclePlay,
     CirclePlus: CirclePlus,
     CirclePoundSterling: CirclePoundSterling,
@@ -14809,11 +15935,13 @@
     ClockAlert: ClockAlert,
     ClockArrowDown: ClockArrowDown,
     ClockArrowUp: ClockArrowUp,
+    ClockCheck: ClockCheck,
     ClockFading: ClockFading,
     ClockPlus: ClockPlus,
     ClosedCaption: ClosedCaption,
     Cloud: Cloud,
     CloudAlert: CloudAlert,
+    CloudBackup: CloudBackup,
     CloudCheck: CloudCheck,
     CloudCog: CloudCog,
     CloudDownload: CloudDownload,
@@ -14829,6 +15957,7 @@
     CloudSnow: CloudSnow,
     CloudSun: CloudSun,
     CloudSunRain: CloudSunRain,
+    CloudSync: CloudSync,
     CloudUpload: CloudUpload,
     Cloudy: Cloudy,
     Clover: Clover,
@@ -14837,8 +15966,6 @@
     Code2: CodeXml,
     CodeSquare: SquareCode,
     CodeXml: CodeXml,
-    Codepen: Codepen,
-    Codesandbox: Codesandbox,
     Coffee: Coffee,
     Cog: Cog,
     Coins: Coins,
@@ -14895,6 +16022,7 @@
     Dam: Dam,
     Database: Database,
     DatabaseBackup: DatabaseBackup,
+    DatabaseSearch: DatabaseSearch,
     DatabaseZap: DatabaseZap,
     DecimalsArrowLeft: DecimalsArrowLeft,
     DecimalsArrowRight: DecimalsArrowRight,
@@ -14935,7 +16063,6 @@
     DownloadCloud: CloudDownload,
     DraftingCompass: DraftingCompass,
     Drama: Drama,
-    Dribbble: Dribbble,
     Drill: Drill,
     Drone: Drone,
     Droplet: Droplet,
@@ -14955,6 +16082,7 @@
     Egg: Egg,
     EggFried: EggFried,
     EggOff: EggOff,
+    Ellipse: Ellipse,
     Ellipsis: Ellipsis,
     EllipsisVertical: EllipsisVertical,
     Equal: Equal,
@@ -14964,57 +16092,63 @@
     Eraser: Eraser,
     EthernetPort: EthernetPort,
     Euro: Euro,
+    EvCharger: EvCharger,
     Expand: Expand,
     ExternalLink: ExternalLink,
     Eye: Eye,
     EyeClosed: EyeClosed,
     EyeOff: EyeOff,
-    Facebook: Facebook,
     Factory: Factory,
     Fan: Fan,
     FastForward: FastForward,
     Feather: Feather,
     Fence: Fence,
     FerrisWheel: FerrisWheel,
-    Figma: Figma,
     File: File,
     FileArchive: FileArchive,
-    FileAudio: FileAudio,
-    FileAudio2: FileAudio2,
+    FileAudio: FileHeadphone,
+    FileAudio2: FileHeadphone,
     FileAxis3D: FileAxis3d,
     FileAxis3d: FileAxis3d,
     FileBadge: FileBadge,
-    FileBadge2: FileBadge2,
+    FileBadge2: FileBadge,
     FileBarChart: FileChartColumnIncreasing,
     FileBarChart2: FileChartColumn,
     FileBox: FileBox,
+    FileBraces: FileBraces,
+    FileBracesCorner: FileBracesCorner,
     FileChartColumn: FileChartColumn,
     FileChartColumnIncreasing: FileChartColumnIncreasing,
     FileChartLine: FileChartLine,
     FileChartPie: FileChartPie,
     FileCheck: FileCheck,
-    FileCheck2: FileCheck2,
+    FileCheck2: FileCheckCorner,
+    FileCheckCorner: FileCheckCorner,
     FileClock: FileClock,
     FileCode: FileCode,
-    FileCode2: FileCode2,
+    FileCode2: FileCodeCorner,
+    FileCodeCorner: FileCodeCorner,
     FileCog: FileCog,
     FileCog2: FileCog,
     FileDiff: FileDiff,
     FileDigit: FileDigit,
     FileDown: FileDown,
     FileEdit: FilePen,
+    FileExclamationPoint: FileExclamationPoint,
+    FileHeadphone: FileHeadphone,
     FileHeart: FileHeart,
     FileImage: FileImage,
     FileInput: FileInput,
-    FileJson: FileJson,
-    FileJson2: FileJson2,
+    FileJson: FileBraces,
+    FileJson2: FileBracesCorner,
     FileKey: FileKey,
-    FileKey2: FileKey2,
+    FileKey2: FileKey,
     FileLineChart: FileChartLine,
     FileLock: FileLock,
-    FileLock2: FileLock2,
+    FileLock2: FileLock,
     FileMinus: FileMinus,
-    FileMinus2: FileMinus2,
+    FileMinus2: FileMinusCorner,
+    FileMinusCorner: FileMinusCorner,
     FileMusic: FileMusic,
     FileOutput: FileOutput,
     FilePen: FilePen,
@@ -15022,12 +16156,15 @@
     FilePieChart: FileChartPie,
     FilePlay: FilePlay,
     FilePlus: FilePlus,
-    FilePlus2: FilePlus2,
+    FilePlus2: FilePlusCorner,
+    FilePlusCorner: FilePlusCorner,
     FileQuestion: FileQuestionMark,
     FileQuestionMark: FileQuestionMark,
     FileScan: FileScan,
     FileSearch: FileSearch,
-    FileSearch2: FileSearch2,
+    FileSearch2: FileSearchCorner,
+    FileSearchCorner: FileSearchCorner,
+    FileSignal: FileSignal,
     FileSignature: FilePenLine,
     FileSliders: FileSliders,
     FileSpreadsheet: FileSpreadsheet,
@@ -15036,26 +16173,31 @@
     FileTerminal: FileTerminal,
     FileText: FileText,
     FileType: FileType,
-    FileType2: FileType2,
+    FileType2: FileTypeCorner,
+    FileTypeCorner: FileTypeCorner,
     FileUp: FileUp,
     FileUser: FileUser,
     FileVideo: FilePlay,
     FileVideo2: FileVideoCamera,
     FileVideoCamera: FileVideoCamera,
     FileVolume: FileVolume,
-    FileVolume2: FileVolume2,
-    FileWarning: FileWarning,
+    FileVolume2: FileSignal,
+    FileWarning: FileExclamationPoint,
     FileX: FileX,
-    FileX2: FileX2,
+    FileX2: FileXCorner,
+    FileXCorner: FileXCorner,
     Files: Files,
     Film: Film,
     Filter: Funnel,
     FilterX: FunnelX,
-    Fingerprint: Fingerprint,
+    Fingerprint: FingerprintPattern,
+    FingerprintPattern: FingerprintPattern,
     FireExtinguisher: FireExtinguisher,
     Fish: Fish,
     FishOff: FishOff,
     FishSymbol: FishSymbol,
+    FishingHook: FishingHook,
+    FishingRod: FishingRod,
     Flag: Flag,
     FlagOff: FlagOff,
     FlagTriangleLeft: FlagTriangleLeft,
@@ -15067,9 +16209,9 @@
     FlaskConical: FlaskConical,
     FlaskConicalOff: FlaskConicalOff,
     FlaskRound: FlaskRound,
-    FlipHorizontal: FlipHorizontal,
+    FlipHorizontal: SquareCenterlineDashedHorizontal,
     FlipHorizontal2: FlipHorizontal2,
-    FlipVertical: FlipVertical,
+    FlipVertical: SquareCenterlineDashedVertical,
     FlipVertical2: FlipVertical2,
     Flower: Flower,
     Flower2: Flower2,
@@ -15078,6 +16220,7 @@
     FoldVertical: FoldVertical,
     Folder: Folder,
     FolderArchive: FolderArchive,
+    FolderBookmark: FolderBookmark,
     FolderCheck: FolderCheck,
     FolderClock: FolderClock,
     FolderClosed: FolderClosed,
@@ -15113,10 +16256,10 @@
     ForkKnife: Utensils,
     ForkKnifeCrossed: UtensilsCrossed,
     Forklift: Forklift,
+    Form: Form,
     FormInput: RectangleEllipsis,
     Forward: Forward,
     Frame: Frame,
-    Framer: Framer,
     Frown: Frown,
     Fuel: Fuel,
     Fullscreen: Fullscreen,
@@ -15131,6 +16274,7 @@
     GalleryVerticalEnd: GalleryVerticalEnd,
     Gamepad: Gamepad,
     Gamepad2: Gamepad2,
+    GamepadDirectional: GamepadDirectional,
     GanttChart: ChartNoAxesGantt,
     GanttChartSquare: SquareChartGantt,
     Gauge: Gauge,
@@ -15141,6 +16285,7 @@
     Ghost: Ghost,
     Gift: Gift,
     GitBranch: GitBranch,
+    GitBranchMinus: GitBranchMinus,
     GitBranchPlus: GitBranchPlus,
     GitCommit: GitCommitHorizontal,
     GitCommitHorizontal: GitCommitHorizontal,
@@ -15150,19 +16295,20 @@
     GitFork: GitFork,
     GitGraph: GitGraph,
     GitMerge: GitMerge,
+    GitMergeConflict: GitMergeConflict,
     GitPullRequest: GitPullRequest,
     GitPullRequestArrow: GitPullRequestArrow,
     GitPullRequestClosed: GitPullRequestClosed,
     GitPullRequestCreate: GitPullRequestCreate,
     GitPullRequestCreateArrow: GitPullRequestCreateArrow,
     GitPullRequestDraft: GitPullRequestDraft,
-    Github: Github,
-    Gitlab: Gitlab,
     GlassWater: GlassWater,
     Glasses: Glasses,
     Globe: Globe,
     Globe2: Earth,
     GlobeLock: GlobeLock,
+    GlobeOff: GlobeOff,
+    GlobeX: GlobeX,
     Goal: Goal,
     Gpu: Gpu,
     Grab: HandGrab,
@@ -15205,6 +16351,7 @@
     Hash: Hash,
     HatGlasses: HatGlasses,
     Haze: Haze,
+    Hd: Hd,
     HdmiPort: HdmiPort,
     Heading: Heading,
     Heading1: Heading1,
@@ -15223,7 +16370,9 @@
     HeartOff: HeartOff,
     HeartPlus: HeartPlus,
     HeartPulse: HeartPulse,
+    HeartX: HeartX,
     Heater: Heater,
+    Helicopter: Helicopter,
     HelpCircle: CircleQuestionMark,
     HelpingHand: HandHelping,
     Hexagon: Hexagon,
@@ -15236,6 +16385,7 @@
     Hotel: Hotel,
     Hourglass: Hourglass,
     House: House,
+    HouseHeart: HouseHeart,
     HousePlug: HousePlug,
     HousePlus: HousePlus,
     HouseWifi: HouseWifi,
@@ -15256,15 +16406,14 @@
     Images: Images,
     Import: Import,
     Inbox: Inbox,
-    Indent: IndentIncrease,
-    IndentDecrease: IndentDecrease,
-    IndentIncrease: IndentIncrease,
+    Indent: ListIndentIncrease,
+    IndentDecrease: ListIndentDecrease,
+    IndentIncrease: ListIndentIncrease,
     IndianRupee: IndianRupee,
     Infinity: Infinity,
     Info: Info,
     Inspect: SquareMousePointer,
     InspectionPanel: InspectionPanel,
-    Instagram: Instagram,
     Italic: Italic,
     IterationCcw: IterationCcw,
     IterationCw: IterationCw,
@@ -15299,6 +16448,8 @@
     Layers: Layers,
     Layers2: Layers2,
     Layers3: Layers,
+    LayersMinus: LayersMinus,
+    LayersPlus: LayersPlus,
     Layout: PanelsTopLeft,
     LayoutDashboard: LayoutDashboard,
     LayoutGrid: LayoutGrid,
@@ -15309,7 +16460,9 @@
     Leaf: Leaf,
     LeafyGreen: LeafyGreen,
     Lectern: Lectern,
-    LetterText: LetterText,
+    LensConcave: LensConcave,
+    LensConvex: LensConvex,
+    LetterText: TextInitial,
     Library: Library,
     LibraryBig: LibraryBig,
     LibrarySquare: SquareLibrary,
@@ -15318,19 +16471,23 @@
     Lightbulb: Lightbulb,
     LightbulbOff: LightbulbOff,
     LineChart: ChartLine,
+    LineDotRightHorizontal: LineDotRightHorizontal,
     LineSquiggle: LineSquiggle,
+    LineStyle: LineStyle,
     Link: Link,
     Link2: Link2,
     Link2Off: Link2Off,
-    Linkedin: Linkedin,
     List: List,
     ListCheck: ListCheck,
     ListChecks: ListChecks,
     ListChevronsDownUp: ListChevronsDownUp,
+    ListChevronsUpDown: ListChevronsUpDown,
     ListCollapse: ListCollapse,
     ListEnd: ListEnd,
     ListFilter: ListFilter,
     ListFilterPlus: ListFilterPlus,
+    ListIndentDecrease: ListIndentDecrease,
+    ListIndentIncrease: ListIndentIncrease,
     ListMinus: ListMinus,
     ListMusic: ListMusic,
     ListOrdered: ListOrdered,
@@ -15384,6 +16541,7 @@
     MapPinPen: MapPinPen,
     MapPinPlus: MapPinPlus,
     MapPinPlusInside: MapPinPlusInside,
+    MapPinSearch: MapPinSearch,
     MapPinX: MapPinX,
     MapPinXInside: MapPinXInside,
     MapPinned: MapPinned,
@@ -15402,6 +16560,7 @@
     MenuSquare: SquareMenu,
     Merge: Merge,
     MessageCircle: MessageCircle,
+    MessageCircleCheck: MessageCircleCheck,
     MessageCircleCode: MessageCircleCode,
     MessageCircleDashed: MessageCircleDashed,
     MessageCircleHeart: MessageCircleHeart,
@@ -15414,6 +16573,7 @@
     MessageCircleWarning: MessageCircleWarning,
     MessageCircleX: MessageCircleX,
     MessageSquare: MessageSquare,
+    MessageSquareCheck: MessageSquareCheck,
     MessageSquareCode: MessageSquareCode,
     MessageSquareDashed: MessageSquareDashed,
     MessageSquareDiff: MessageSquareDiff,
@@ -15430,6 +16590,7 @@
     MessageSquareWarning: MessageSquareWarning,
     MessageSquareX: MessageSquareX,
     MessagesSquare: MessagesSquare,
+    Metronome: Metronome,
     Mic: Mic,
     Mic2: MicVocal,
     MicOff: MicOff,
@@ -15445,8 +16606,11 @@
     Minus: Minus,
     MinusCircle: CircleMinus,
     MinusSquare: SquareMinus,
+    MirrorRectangular: MirrorRectangular,
+    MirrorRound: MirrorRound,
     Monitor: Monitor,
     MonitorCheck: MonitorCheck,
+    MonitorCloud: MonitorCloud,
     MonitorCog: MonitorCog,
     MonitorDot: MonitorDot,
     MonitorDown: MonitorDown,
@@ -15462,15 +16626,19 @@
     MoonStar: MoonStar,
     MoreHorizontal: Ellipsis,
     MoreVertical: EllipsisVertical,
+    Motorbike: Motorbike,
     Mountain: Mountain,
     MountainSnow: MountainSnow,
     Mouse: Mouse,
+    MouseLeft: MouseLeft,
     MouseOff: MouseOff,
     MousePointer: MousePointer,
     MousePointer2: MousePointer2,
+    MousePointer2Off: MousePointer2Off,
     MousePointerBan: MousePointerBan,
     MousePointerClick: MousePointerClick,
     MousePointerSquareDashed: SquareDashedMousePointer,
+    MouseRight: MouseRight,
     Move: Move,
     Move3D: Move3d,
     Move3d: Move3d,
@@ -15515,7 +16683,7 @@
     Option: Option,
     Orbit: Orbit,
     Origami: Origami,
-    Outdent: IndentDecrease,
+    Outdent: ListIndentDecrease,
     Package: Package,
     Package2: Package2,
     PackageCheck: PackageCheck,
@@ -15627,7 +16795,6 @@
     Plus: Plus,
     PlusCircle: CirclePlus,
     PlusSquare: SquarePlus,
-    Pocket: Pocket,
     PocketKnife: PocketKnife,
     Podcast: Podcast,
     Pointer: Pointer,
@@ -15642,6 +16809,7 @@
     Presentation: Presentation,
     Printer: Printer,
     PrinterCheck: PrinterCheck,
+    PrinterX: PrinterX,
     Projector: Projector,
     Proportions: Proportions,
     Puzzle: Puzzle,
@@ -15653,10 +16821,10 @@
     Radiation: Radiation,
     Radical: Radical,
     Radio: Radio,
+    RadioOff: RadioOff,
     RadioReceiver: RadioReceiver,
     RadioTower: RadioTower,
     Radius: Radius,
-    RailSymbol: RailSymbol,
     Rainbow: Rainbow,
     Rat: Rat,
     Ratio: Ratio,
@@ -15689,12 +16857,14 @@
     Repeat: Repeat,
     Repeat1: Repeat1,
     Repeat2: Repeat2,
+    RepeatOff: RepeatOff,
     Replace: Replace,
     ReplaceAll: ReplaceAll,
     Reply: Reply,
     ReplyAll: ReplyAll,
     Rewind: Rewind,
     Ribbon: Ribbon,
+    Road: Road,
     Rocket: Rocket,
     RockingChair: RockingChair,
     RollerCoaster: RollerCoaster,
@@ -15746,11 +16916,13 @@
     ScissorsLineDashed: ScissorsLineDashed,
     ScissorsSquare: SquareScissors,
     ScissorsSquareDashedBottom: SquareBottomDashedScissors,
+    Scooter: Scooter,
     ScreenShare: ScreenShare,
     ScreenShareOff: ScreenShareOff,
     Scroll: Scroll,
     ScrollText: ScrollText,
     Search: Search,
+    SearchAlert: SearchAlert,
     SearchCheck: SearchCheck,
     SearchCode: SearchCode,
     SearchSlash: SearchSlash,
@@ -15773,11 +16945,14 @@
     Share2: Share2,
     Sheet: Sheet,
     Shell: Shell,
+    ShelvingUnit: ShelvingUnit,
     Shield: Shield,
     ShieldAlert: ShieldAlert,
     ShieldBan: ShieldBan,
     ShieldCheck: ShieldCheck,
     ShieldClose: ShieldX,
+    ShieldCog: ShieldCog,
+    ShieldCogCorner: ShieldCogCorner,
     ShieldEllipsis: ShieldEllipsis,
     ShieldHalf: ShieldHalf,
     ShieldMinus: ShieldMinus,
@@ -15817,7 +16992,6 @@
     SkipBack: SkipBack,
     SkipForward: SkipForward,
     Skull: Skull,
-    Slack: Slack,
     Slash: Slash,
     SlashSquare: SquareSlash,
     Slice: Slice,
@@ -15833,6 +17007,7 @@
     Snowflake: Snowflake,
     SoapDispenserDroplet: SoapDispenserDroplet,
     Sofa: Sofa,
+    SolarPanel: SolarPanel,
     SortAsc: ArrowUpNarrowWide,
     SortDesc: ArrowDownWideNarrow,
     Soup: Soup,
@@ -15850,6 +17025,7 @@
     SplitSquareHorizontal: SquareSplitHorizontal,
     SplitSquareVertical: SquareSplitVertical,
     Spool: Spool,
+    SportShoe: SportShoe,
     Spotlight: Spotlight,
     SprayCan: SprayCan,
     Sprout: Sprout,
@@ -15864,11 +17040,15 @@
     SquareArrowOutUpLeft: SquareArrowOutUpLeft,
     SquareArrowOutUpRight: SquareArrowOutUpRight,
     SquareArrowRight: SquareArrowRight,
+    SquareArrowRightEnter: SquareArrowRightEnter,
+    SquareArrowRightExit: SquareArrowRightExit,
     SquareArrowUp: SquareArrowUp,
     SquareArrowUpLeft: SquareArrowUpLeft,
     SquareArrowUpRight: SquareArrowUpRight,
     SquareAsterisk: SquareAsterisk,
     SquareBottomDashedScissors: SquareBottomDashedScissors,
+    SquareCenterlineDashedHorizontal: SquareCenterlineDashedHorizontal,
+    SquareCenterlineDashedVertical: SquareCenterlineDashedVertical,
     SquareChartGantt: SquareChartGantt,
     SquareCheck: SquareCheck,
     SquareCheckBig: SquareCheckBig,
@@ -15882,6 +17062,7 @@
     SquareDashedBottomCode: SquareDashedBottomCode,
     SquareDashedKanban: SquareDashedKanban,
     SquareDashedMousePointer: SquareDashedMousePointer,
+    SquareDashedText: SquareDashedText,
     SquareDashedTopSolid: SquareDashedTopSolid,
     SquareDivide: SquareDivide,
     SquareDot: SquareDot,
@@ -15936,6 +17117,7 @@
     Stethoscope: Stethoscope,
     Sticker: Sticker,
     StickyNote: StickyNote,
+    Stone: Stone,
     StopCircle: CircleStop,
     Store: Store,
     StretchHorizontal: StretchHorizontal,
@@ -15987,13 +17169,19 @@
     TestTube2: TestTubeDiagonal,
     TestTubeDiagonal: TestTubeDiagonal,
     TestTubes: TestTubes,
-    Text: Text,
+    Text: TextAlignStart,
+    TextAlignCenter: TextAlignCenter,
+    TextAlignEnd: TextAlignEnd,
+    TextAlignJustify: TextAlignJustify,
+    TextAlignStart: TextAlignStart,
     TextCursor: TextCursor,
     TextCursorInput: TextCursorInput,
+    TextInitial: TextInitial,
     TextQuote: TextQuote,
     TextSearch: TextSearch,
-    TextSelect: TextSelect,
-    TextSelection: TextSelect,
+    TextSelect: SquareDashedText,
+    TextSelection: SquareDashedText,
+    TextWrap: TextWrap,
     Theater: Theater,
     Thermometer: Thermometer,
     ThermometerSnowflake: ThermometerSnowflake,
@@ -16009,6 +17197,7 @@
     TicketX: TicketX,
     Tickets: Tickets,
     TicketsPlane: TicketsPlane,
+    Timeline: Timeline,
     Timer: Timer,
     TimerOff: TimerOff,
     TimerReset: TimerReset,
@@ -16016,10 +17205,12 @@
     ToggleRight: ToggleRight,
     Toilet: Toilet,
     ToolCase: ToolCase,
+    Toolbox: Toolbox,
     Tornado: Tornado,
     Torus: Torus,
     Touchpad: Touchpad,
     TouchpadOff: TouchpadOff,
+    TowelRack: TowelRack,
     TowerControl: TowerControl,
     ToyBrick: ToyBrick,
     Tractor: Tractor,
@@ -16036,7 +17227,6 @@
     TreePalm: TreePalm,
     TreePine: TreePine,
     Trees: Trees,
-    Trello: Trello,
     TrendingDown: TrendingDown,
     TrendingUp: TrendingUp,
     TrendingUpDown: TrendingUpDown,
@@ -16054,8 +17244,6 @@
     Tv2: TvMinimal,
     TvMinimal: TvMinimal,
     TvMinimalPlay: TvMinimalPlay,
-    Twitch: Twitch,
-    Twitter: Twitter,
     Type: Type,
     TypeOutline: TypeOutline,
     Umbrella: Umbrella,
@@ -16084,6 +17272,7 @@
     UserCircle2: CircleUserRound,
     UserCog: UserCog,
     UserCog2: UserRoundCog,
+    UserKey: UserKey,
     UserLock: UserLock,
     UserMinus: UserMinus,
     UserMinus2: UserRoundMinus,
@@ -16093,6 +17282,7 @@
     UserRound: UserRound,
     UserRoundCheck: UserRoundCheck,
     UserRoundCog: UserRoundCog,
+    UserRoundKey: UserRoundKey,
     UserRoundMinus: UserRoundMinus,
     UserRoundPen: UserRoundPen,
     UserRoundPlus: UserRoundPlus,
@@ -16110,6 +17300,7 @@
     Utensils: Utensils,
     UtensilsCrossed: UtensilsCrossed,
     UtilityPole: UtilityPole,
+    Van: Van,
     Variable: Variable,
     Vault: Vault,
     VectorSquare: VectorSquare,
@@ -16143,13 +17334,18 @@
     Warehouse: Warehouse,
     WashingMachine: WashingMachine,
     Watch: Watch,
-    Waves: Waves,
+    Waves: WavesHorizontal,
+    WavesArrowDown: WavesArrowDown,
+    WavesArrowUp: WavesArrowUp,
+    WavesHorizontal: WavesHorizontal,
     WavesLadder: WavesLadder,
+    WavesVertical: WavesVertical,
     Waypoints: Waypoints,
     Webcam: Webcam,
     Webhook: Webhook,
     WebhookOff: WebhookOff,
     Weight: Weight,
+    WeightTilde: WeightTilde,
     Wheat: Wheat,
     WheatOff: WheatOff,
     WholeWord: WholeWord,
@@ -16167,15 +17363,28 @@
     WineOff: WineOff,
     Workflow: Workflow,
     Worm: Worm,
-    WrapText: WrapText,
+    WrapText: TextWrap,
     Wrench: Wrench,
     X: X,
     XCircle: CircleX,
+    XLineTop: XLineTop,
     XOctagon: OctagonX,
     XSquare: SquareX,
-    Youtube: Youtube,
     Zap: Zap,
     ZapOff: ZapOff,
+    ZodiacAquarius: ZodiacAquarius,
+    ZodiacAries: ZodiacAries,
+    ZodiacCancer: ZodiacCancer,
+    ZodiacCapricorn: ZodiacCapricorn,
+    ZodiacGemini: ZodiacGemini,
+    ZodiacLeo: ZodiacLeo,
+    ZodiacLibra: ZodiacLibra,
+    ZodiacOphiuchus: ZodiacOphiuchus,
+    ZodiacPisces: ZodiacPisces,
+    ZodiacSagittarius: ZodiacSagittarius,
+    ZodiacScorpio: ZodiacScorpio,
+    ZodiacTaurus: ZodiacTaurus,
+    ZodiacVirgo: ZodiacVirgo,
     ZoomIn: ZoomIn,
     ZoomOut: ZoomOut
   });
@@ -16184,7 +17393,8 @@
     icons = iconAndAliases,
     nameAttr = "data-lucide",
     attrs = {},
-    root = document
+    root = document,
+    inTemplates
   } = {}) => {
     if (!Object.values(icons).length) {
       throw new Error(
@@ -16194,10 +17404,20 @@
     if (typeof root === "undefined") {
       throw new Error("`createIcons()` only works in a browser environment.");
     }
-    const elementsToReplace = root.querySelectorAll(`[${nameAttr}]`);
-    Array.from(elementsToReplace).forEach(
-      (element) => replaceElement(element, { nameAttr, icons, attrs })
-    );
+    const elementsToReplace = Array.from(root.querySelectorAll(`[${nameAttr}]`));
+    elementsToReplace.forEach((element) => replaceElement(element, { nameAttr, icons, attrs }));
+    if (inTemplates) {
+      const templates = Array.from(root.querySelectorAll("template"));
+      templates.forEach(
+        (template) => createIcons({
+          icons,
+          nameAttr,
+          attrs,
+          root: template.content,
+          inTemplates
+        })
+      );
+    }
     if (nameAttr === "data-lucide") {
       const deprecatedElements = root.querySelectorAll("[icon-name]");
       if (deprecatedElements.length > 0) {
@@ -16232,7 +17452,7 @@
   exports.AlertCircle = CircleAlert;
   exports.AlertOctagon = OctagonAlert;
   exports.AlertTriangle = TriangleAlert;
-  exports.AlignCenter = AlignCenter;
+  exports.AlignCenter = TextAlignCenter;
   exports.AlignCenterHorizontal = AlignCenterHorizontal;
   exports.AlignCenterVertical = AlignCenterVertical;
   exports.AlignEndHorizontal = AlignEndHorizontal;
@@ -16245,9 +17465,9 @@
   exports.AlignHorizontalJustifyStart = AlignHorizontalJustifyStart;
   exports.AlignHorizontalSpaceAround = AlignHorizontalSpaceAround;
   exports.AlignHorizontalSpaceBetween = AlignHorizontalSpaceBetween;
-  exports.AlignJustify = AlignJustify;
-  exports.AlignLeft = AlignLeft;
-  exports.AlignRight = AlignRight;
+  exports.AlignJustify = TextAlignJustify;
+  exports.AlignLeft = TextAlignStart;
+  exports.AlignRight = TextAlignEnd;
   exports.AlignStartHorizontal = AlignStartHorizontal;
   exports.AlignStartVertical = AlignStartVertical;
   exports.AlignVerticalDistributeCenter = AlignVerticalDistributeCenter;
@@ -16345,6 +17565,7 @@
   exports.ArrowsUpFromLine = ArrowsUpFromLine;
   exports.Asterisk = Asterisk;
   exports.AsteriskSquare = SquareAsterisk;
+  exports.Astroid = Astroid;
   exports.AtSign = AtSign;
   exports.Atom = Atom;
   exports.AudioLines = AudioLines;
@@ -16375,6 +17596,7 @@
   exports.BadgeTurkishLira = BadgeTurkishLira;
   exports.BadgeX = BadgeX;
   exports.BaggageClaim = BaggageClaim;
+  exports.Balloon = Balloon;
   exports.Ban = Ban;
   exports.Banana = Banana;
   exports.Bandage = Bandage;
@@ -16407,9 +17629,11 @@
   exports.BedDouble = BedDouble;
   exports.BedSingle = BedSingle;
   exports.Beef = Beef;
+  exports.BeefOff = BeefOff;
   exports.Beer = Beer;
   exports.BeerOff = BeerOff;
   exports.Bell = Bell;
+  exports.BellCheck = BellCheck;
   exports.BellDot = BellDot;
   exports.BellElectric = BellElectric;
   exports.BellMinus = BellMinus;
@@ -16428,6 +17652,7 @@
   exports.Binoculars = Binoculars;
   exports.Biohazard = Biohazard;
   exports.Bird = Bird;
+  exports.Birdhouse = Birdhouse;
   exports.Bitcoin = Bitcoin;
   exports.Blend = Blend;
   exports.Blinds = Blinds;
@@ -16459,6 +17684,7 @@
   exports.BookOpenCheck = BookOpenCheck;
   exports.BookOpenText = BookOpenText;
   exports.BookPlus = BookPlus;
+  exports.BookSearch = BookSearch;
   exports.BookTemplate = BookDashed;
   exports.BookText = BookText;
   exports.BookType = BookType;
@@ -16469,6 +17695,7 @@
   exports.Bookmark = Bookmark;
   exports.BookmarkCheck = BookmarkCheck;
   exports.BookmarkMinus = BookmarkMinus;
+  exports.BookmarkOff = BookmarkOff;
   exports.BookmarkPlus = BookmarkPlus;
   exports.BookmarkX = BookmarkX;
   exports.BoomBox = BoomBox;
@@ -16529,6 +17756,7 @@
   exports.CalendarSync = CalendarSync;
   exports.CalendarX = CalendarX;
   exports.CalendarX2 = CalendarX2;
+  exports.Calendars = Calendars;
   exports.Camera = Camera;
   exports.CameraOff = CameraOff;
   exports.CandlestickChart = ChartCandlestick;
@@ -16536,6 +17764,7 @@
   exports.CandyCane = CandyCane;
   exports.CandyOff = CandyOff;
   exports.Cannabis = Cannabis;
+  exports.CannabisOff = CannabisOff;
   exports.Captions = Captions;
   exports.CaptionsOff = CaptionsOff;
   exports.Car = Car;
@@ -16552,6 +17781,7 @@
   exports.Castle = Castle;
   exports.Cat = Cat;
   exports.Cctv = Cctv;
+  exports.CctvOff = CctvOff;
   exports.ChartArea = ChartArea;
   exports.ChartBar = ChartBar;
   exports.ChartBarBig = ChartBarBig;
@@ -16584,6 +17814,12 @@
   exports.CheckSquare2 = SquareCheck;
   exports.ChefHat = ChefHat;
   exports.Cherry = Cherry;
+  exports.ChessBishop = ChessBishop;
+  exports.ChessKing = ChessKing;
+  exports.ChessKnight = ChessKnight;
+  exports.ChessPawn = ChessPawn;
+  exports.ChessQueen = ChessQueen;
+  exports.ChessRook = ChessRook;
   exports.ChevronDown = ChevronDown;
   exports.ChevronDownCircle = CircleChevronDown;
   exports.ChevronDownSquare = SquareChevronDown;
@@ -16607,8 +17843,6 @@
   exports.ChevronsRightLeft = ChevronsRightLeft;
   exports.ChevronsUp = ChevronsUp;
   exports.ChevronsUpDown = ChevronsUpDown;
-  exports.Chrome = Chromium;
-  exports.Chromium = Chromium;
   exports.Church = Church;
   exports.Cigarette = Cigarette;
   exports.CigaretteOff = CigaretteOff;
@@ -16645,6 +17879,7 @@
   exports.CircleParkingOff = CircleParkingOff;
   exports.CirclePause = CirclePause;
   exports.CirclePercent = CirclePercent;
+  exports.CirclePile = CirclePile;
   exports.CirclePlay = CirclePlay;
   exports.CirclePlus = CirclePlus;
   exports.CirclePoundSterling = CirclePoundSterling;
@@ -16692,11 +17927,13 @@
   exports.ClockAlert = ClockAlert;
   exports.ClockArrowDown = ClockArrowDown;
   exports.ClockArrowUp = ClockArrowUp;
+  exports.ClockCheck = ClockCheck;
   exports.ClockFading = ClockFading;
   exports.ClockPlus = ClockPlus;
   exports.ClosedCaption = ClosedCaption;
   exports.Cloud = Cloud;
   exports.CloudAlert = CloudAlert;
+  exports.CloudBackup = CloudBackup;
   exports.CloudCheck = CloudCheck;
   exports.CloudCog = CloudCog;
   exports.CloudDownload = CloudDownload;
@@ -16712,6 +17949,7 @@
   exports.CloudSnow = CloudSnow;
   exports.CloudSun = CloudSun;
   exports.CloudSunRain = CloudSunRain;
+  exports.CloudSync = CloudSync;
   exports.CloudUpload = CloudUpload;
   exports.Cloudy = Cloudy;
   exports.Clover = Clover;
@@ -16720,8 +17958,6 @@
   exports.Code2 = CodeXml;
   exports.CodeSquare = SquareCode;
   exports.CodeXml = CodeXml;
-  exports.Codepen = Codepen;
-  exports.Codesandbox = Codesandbox;
   exports.Coffee = Coffee;
   exports.Cog = Cog;
   exports.Coins = Coins;
@@ -16778,6 +18014,7 @@
   exports.Dam = Dam;
   exports.Database = Database;
   exports.DatabaseBackup = DatabaseBackup;
+  exports.DatabaseSearch = DatabaseSearch;
   exports.DatabaseZap = DatabaseZap;
   exports.DecimalsArrowLeft = DecimalsArrowLeft;
   exports.DecimalsArrowRight = DecimalsArrowRight;
@@ -16818,7 +18055,6 @@
   exports.DownloadCloud = CloudDownload;
   exports.DraftingCompass = DraftingCompass;
   exports.Drama = Drama;
-  exports.Dribbble = Dribbble;
   exports.Drill = Drill;
   exports.Drone = Drone;
   exports.Droplet = Droplet;
@@ -16838,6 +18074,7 @@
   exports.Egg = Egg;
   exports.EggFried = EggFried;
   exports.EggOff = EggOff;
+  exports.Ellipse = Ellipse;
   exports.Ellipsis = Ellipsis;
   exports.EllipsisVertical = EllipsisVertical;
   exports.Equal = Equal;
@@ -16847,57 +18084,63 @@
   exports.Eraser = Eraser;
   exports.EthernetPort = EthernetPort;
   exports.Euro = Euro;
+  exports.EvCharger = EvCharger;
   exports.Expand = Expand;
   exports.ExternalLink = ExternalLink;
   exports.Eye = Eye;
   exports.EyeClosed = EyeClosed;
   exports.EyeOff = EyeOff;
-  exports.Facebook = Facebook;
   exports.Factory = Factory;
   exports.Fan = Fan;
   exports.FastForward = FastForward;
   exports.Feather = Feather;
   exports.Fence = Fence;
   exports.FerrisWheel = FerrisWheel;
-  exports.Figma = Figma;
   exports.File = File;
   exports.FileArchive = FileArchive;
-  exports.FileAudio = FileAudio;
-  exports.FileAudio2 = FileAudio2;
+  exports.FileAudio = FileHeadphone;
+  exports.FileAudio2 = FileHeadphone;
   exports.FileAxis3D = FileAxis3d;
   exports.FileAxis3d = FileAxis3d;
   exports.FileBadge = FileBadge;
-  exports.FileBadge2 = FileBadge2;
+  exports.FileBadge2 = FileBadge;
   exports.FileBarChart = FileChartColumnIncreasing;
   exports.FileBarChart2 = FileChartColumn;
   exports.FileBox = FileBox;
+  exports.FileBraces = FileBraces;
+  exports.FileBracesCorner = FileBracesCorner;
   exports.FileChartColumn = FileChartColumn;
   exports.FileChartColumnIncreasing = FileChartColumnIncreasing;
   exports.FileChartLine = FileChartLine;
   exports.FileChartPie = FileChartPie;
   exports.FileCheck = FileCheck;
-  exports.FileCheck2 = FileCheck2;
+  exports.FileCheck2 = FileCheckCorner;
+  exports.FileCheckCorner = FileCheckCorner;
   exports.FileClock = FileClock;
   exports.FileCode = FileCode;
-  exports.FileCode2 = FileCode2;
+  exports.FileCode2 = FileCodeCorner;
+  exports.FileCodeCorner = FileCodeCorner;
   exports.FileCog = FileCog;
   exports.FileCog2 = FileCog;
   exports.FileDiff = FileDiff;
   exports.FileDigit = FileDigit;
   exports.FileDown = FileDown;
   exports.FileEdit = FilePen;
+  exports.FileExclamationPoint = FileExclamationPoint;
+  exports.FileHeadphone = FileHeadphone;
   exports.FileHeart = FileHeart;
   exports.FileImage = FileImage;
   exports.FileInput = FileInput;
-  exports.FileJson = FileJson;
-  exports.FileJson2 = FileJson2;
+  exports.FileJson = FileBraces;
+  exports.FileJson2 = FileBracesCorner;
   exports.FileKey = FileKey;
-  exports.FileKey2 = FileKey2;
+  exports.FileKey2 = FileKey;
   exports.FileLineChart = FileChartLine;
   exports.FileLock = FileLock;
-  exports.FileLock2 = FileLock2;
+  exports.FileLock2 = FileLock;
   exports.FileMinus = FileMinus;
-  exports.FileMinus2 = FileMinus2;
+  exports.FileMinus2 = FileMinusCorner;
+  exports.FileMinusCorner = FileMinusCorner;
   exports.FileMusic = FileMusic;
   exports.FileOutput = FileOutput;
   exports.FilePen = FilePen;
@@ -16905,12 +18148,15 @@
   exports.FilePieChart = FileChartPie;
   exports.FilePlay = FilePlay;
   exports.FilePlus = FilePlus;
-  exports.FilePlus2 = FilePlus2;
+  exports.FilePlus2 = FilePlusCorner;
+  exports.FilePlusCorner = FilePlusCorner;
   exports.FileQuestion = FileQuestionMark;
   exports.FileQuestionMark = FileQuestionMark;
   exports.FileScan = FileScan;
   exports.FileSearch = FileSearch;
-  exports.FileSearch2 = FileSearch2;
+  exports.FileSearch2 = FileSearchCorner;
+  exports.FileSearchCorner = FileSearchCorner;
+  exports.FileSignal = FileSignal;
   exports.FileSignature = FilePenLine;
   exports.FileSliders = FileSliders;
   exports.FileSpreadsheet = FileSpreadsheet;
@@ -16919,26 +18165,31 @@
   exports.FileTerminal = FileTerminal;
   exports.FileText = FileText;
   exports.FileType = FileType;
-  exports.FileType2 = FileType2;
+  exports.FileType2 = FileTypeCorner;
+  exports.FileTypeCorner = FileTypeCorner;
   exports.FileUp = FileUp;
   exports.FileUser = FileUser;
   exports.FileVideo = FilePlay;
   exports.FileVideo2 = FileVideoCamera;
   exports.FileVideoCamera = FileVideoCamera;
   exports.FileVolume = FileVolume;
-  exports.FileVolume2 = FileVolume2;
-  exports.FileWarning = FileWarning;
+  exports.FileVolume2 = FileSignal;
+  exports.FileWarning = FileExclamationPoint;
   exports.FileX = FileX;
-  exports.FileX2 = FileX2;
+  exports.FileX2 = FileXCorner;
+  exports.FileXCorner = FileXCorner;
   exports.Files = Files;
   exports.Film = Film;
   exports.Filter = Funnel;
   exports.FilterX = FunnelX;
-  exports.Fingerprint = Fingerprint;
+  exports.Fingerprint = FingerprintPattern;
+  exports.FingerprintPattern = FingerprintPattern;
   exports.FireExtinguisher = FireExtinguisher;
   exports.Fish = Fish;
   exports.FishOff = FishOff;
   exports.FishSymbol = FishSymbol;
+  exports.FishingHook = FishingHook;
+  exports.FishingRod = FishingRod;
   exports.Flag = Flag;
   exports.FlagOff = FlagOff;
   exports.FlagTriangleLeft = FlagTriangleLeft;
@@ -16950,9 +18201,9 @@
   exports.FlaskConical = FlaskConical;
   exports.FlaskConicalOff = FlaskConicalOff;
   exports.FlaskRound = FlaskRound;
-  exports.FlipHorizontal = FlipHorizontal;
+  exports.FlipHorizontal = SquareCenterlineDashedHorizontal;
   exports.FlipHorizontal2 = FlipHorizontal2;
-  exports.FlipVertical = FlipVertical;
+  exports.FlipVertical = SquareCenterlineDashedVertical;
   exports.FlipVertical2 = FlipVertical2;
   exports.Flower = Flower;
   exports.Flower2 = Flower2;
@@ -16961,6 +18212,7 @@
   exports.FoldVertical = FoldVertical;
   exports.Folder = Folder;
   exports.FolderArchive = FolderArchive;
+  exports.FolderBookmark = FolderBookmark;
   exports.FolderCheck = FolderCheck;
   exports.FolderClock = FolderClock;
   exports.FolderClosed = FolderClosed;
@@ -16996,10 +18248,10 @@
   exports.ForkKnife = Utensils;
   exports.ForkKnifeCrossed = UtensilsCrossed;
   exports.Forklift = Forklift;
+  exports.Form = Form;
   exports.FormInput = RectangleEllipsis;
   exports.Forward = Forward;
   exports.Frame = Frame;
-  exports.Framer = Framer;
   exports.Frown = Frown;
   exports.Fuel = Fuel;
   exports.Fullscreen = Fullscreen;
@@ -17014,6 +18266,7 @@
   exports.GalleryVerticalEnd = GalleryVerticalEnd;
   exports.Gamepad = Gamepad;
   exports.Gamepad2 = Gamepad2;
+  exports.GamepadDirectional = GamepadDirectional;
   exports.GanttChart = ChartNoAxesGantt;
   exports.GanttChartSquare = SquareChartGantt;
   exports.Gauge = Gauge;
@@ -17024,6 +18277,7 @@
   exports.Ghost = Ghost;
   exports.Gift = Gift;
   exports.GitBranch = GitBranch;
+  exports.GitBranchMinus = GitBranchMinus;
   exports.GitBranchPlus = GitBranchPlus;
   exports.GitCommit = GitCommitHorizontal;
   exports.GitCommitHorizontal = GitCommitHorizontal;
@@ -17033,19 +18287,20 @@
   exports.GitFork = GitFork;
   exports.GitGraph = GitGraph;
   exports.GitMerge = GitMerge;
+  exports.GitMergeConflict = GitMergeConflict;
   exports.GitPullRequest = GitPullRequest;
   exports.GitPullRequestArrow = GitPullRequestArrow;
   exports.GitPullRequestClosed = GitPullRequestClosed;
   exports.GitPullRequestCreate = GitPullRequestCreate;
   exports.GitPullRequestCreateArrow = GitPullRequestCreateArrow;
   exports.GitPullRequestDraft = GitPullRequestDraft;
-  exports.Github = Github;
-  exports.Gitlab = Gitlab;
   exports.GlassWater = GlassWater;
   exports.Glasses = Glasses;
   exports.Globe = Globe;
   exports.Globe2 = Earth;
   exports.GlobeLock = GlobeLock;
+  exports.GlobeOff = GlobeOff;
+  exports.GlobeX = GlobeX;
   exports.Goal = Goal;
   exports.Gpu = Gpu;
   exports.Grab = HandGrab;
@@ -17088,6 +18343,7 @@
   exports.Hash = Hash;
   exports.HatGlasses = HatGlasses;
   exports.Haze = Haze;
+  exports.Hd = Hd;
   exports.HdmiPort = HdmiPort;
   exports.Heading = Heading;
   exports.Heading1 = Heading1;
@@ -17106,7 +18362,9 @@
   exports.HeartOff = HeartOff;
   exports.HeartPlus = HeartPlus;
   exports.HeartPulse = HeartPulse;
+  exports.HeartX = HeartX;
   exports.Heater = Heater;
+  exports.Helicopter = Helicopter;
   exports.HelpCircle = CircleQuestionMark;
   exports.HelpingHand = HandHelping;
   exports.Hexagon = Hexagon;
@@ -17119,6 +18377,7 @@
   exports.Hotel = Hotel;
   exports.Hourglass = Hourglass;
   exports.House = House;
+  exports.HouseHeart = HouseHeart;
   exports.HousePlug = HousePlug;
   exports.HousePlus = HousePlus;
   exports.HouseWifi = HouseWifi;
@@ -17139,15 +18398,14 @@
   exports.Images = Images;
   exports.Import = Import;
   exports.Inbox = Inbox;
-  exports.Indent = IndentIncrease;
-  exports.IndentDecrease = IndentDecrease;
-  exports.IndentIncrease = IndentIncrease;
+  exports.Indent = ListIndentIncrease;
+  exports.IndentDecrease = ListIndentDecrease;
+  exports.IndentIncrease = ListIndentIncrease;
   exports.IndianRupee = IndianRupee;
   exports.Infinity = Infinity;
   exports.Info = Info;
   exports.Inspect = SquareMousePointer;
   exports.InspectionPanel = InspectionPanel;
-  exports.Instagram = Instagram;
   exports.Italic = Italic;
   exports.IterationCcw = IterationCcw;
   exports.IterationCw = IterationCw;
@@ -17182,6 +18440,8 @@
   exports.Layers = Layers;
   exports.Layers2 = Layers2;
   exports.Layers3 = Layers;
+  exports.LayersMinus = LayersMinus;
+  exports.LayersPlus = LayersPlus;
   exports.Layout = PanelsTopLeft;
   exports.LayoutDashboard = LayoutDashboard;
   exports.LayoutGrid = LayoutGrid;
@@ -17192,7 +18452,9 @@
   exports.Leaf = Leaf;
   exports.LeafyGreen = LeafyGreen;
   exports.Lectern = Lectern;
-  exports.LetterText = LetterText;
+  exports.LensConcave = LensConcave;
+  exports.LensConvex = LensConvex;
+  exports.LetterText = TextInitial;
   exports.Library = Library;
   exports.LibraryBig = LibraryBig;
   exports.LibrarySquare = SquareLibrary;
@@ -17201,19 +18463,23 @@
   exports.Lightbulb = Lightbulb;
   exports.LightbulbOff = LightbulbOff;
   exports.LineChart = ChartLine;
+  exports.LineDotRightHorizontal = LineDotRightHorizontal;
   exports.LineSquiggle = LineSquiggle;
+  exports.LineStyle = LineStyle;
   exports.Link = Link;
   exports.Link2 = Link2;
   exports.Link2Off = Link2Off;
-  exports.Linkedin = Linkedin;
   exports.List = List;
   exports.ListCheck = ListCheck;
   exports.ListChecks = ListChecks;
   exports.ListChevronsDownUp = ListChevronsDownUp;
+  exports.ListChevronsUpDown = ListChevronsUpDown;
   exports.ListCollapse = ListCollapse;
   exports.ListEnd = ListEnd;
   exports.ListFilter = ListFilter;
   exports.ListFilterPlus = ListFilterPlus;
+  exports.ListIndentDecrease = ListIndentDecrease;
+  exports.ListIndentIncrease = ListIndentIncrease;
   exports.ListMinus = ListMinus;
   exports.ListMusic = ListMusic;
   exports.ListOrdered = ListOrdered;
@@ -17267,6 +18533,7 @@
   exports.MapPinPen = MapPinPen;
   exports.MapPinPlus = MapPinPlus;
   exports.MapPinPlusInside = MapPinPlusInside;
+  exports.MapPinSearch = MapPinSearch;
   exports.MapPinX = MapPinX;
   exports.MapPinXInside = MapPinXInside;
   exports.MapPinned = MapPinned;
@@ -17285,6 +18552,7 @@
   exports.MenuSquare = SquareMenu;
   exports.Merge = Merge;
   exports.MessageCircle = MessageCircle;
+  exports.MessageCircleCheck = MessageCircleCheck;
   exports.MessageCircleCode = MessageCircleCode;
   exports.MessageCircleDashed = MessageCircleDashed;
   exports.MessageCircleHeart = MessageCircleHeart;
@@ -17297,6 +18565,7 @@
   exports.MessageCircleWarning = MessageCircleWarning;
   exports.MessageCircleX = MessageCircleX;
   exports.MessageSquare = MessageSquare;
+  exports.MessageSquareCheck = MessageSquareCheck;
   exports.MessageSquareCode = MessageSquareCode;
   exports.MessageSquareDashed = MessageSquareDashed;
   exports.MessageSquareDiff = MessageSquareDiff;
@@ -17313,6 +18582,7 @@
   exports.MessageSquareWarning = MessageSquareWarning;
   exports.MessageSquareX = MessageSquareX;
   exports.MessagesSquare = MessagesSquare;
+  exports.Metronome = Metronome;
   exports.Mic = Mic;
   exports.Mic2 = MicVocal;
   exports.MicOff = MicOff;
@@ -17328,8 +18598,11 @@
   exports.Minus = Minus;
   exports.MinusCircle = CircleMinus;
   exports.MinusSquare = SquareMinus;
+  exports.MirrorRectangular = MirrorRectangular;
+  exports.MirrorRound = MirrorRound;
   exports.Monitor = Monitor;
   exports.MonitorCheck = MonitorCheck;
+  exports.MonitorCloud = MonitorCloud;
   exports.MonitorCog = MonitorCog;
   exports.MonitorDot = MonitorDot;
   exports.MonitorDown = MonitorDown;
@@ -17345,15 +18618,19 @@
   exports.MoonStar = MoonStar;
   exports.MoreHorizontal = Ellipsis;
   exports.MoreVertical = EllipsisVertical;
+  exports.Motorbike = Motorbike;
   exports.Mountain = Mountain;
   exports.MountainSnow = MountainSnow;
   exports.Mouse = Mouse;
+  exports.MouseLeft = MouseLeft;
   exports.MouseOff = MouseOff;
   exports.MousePointer = MousePointer;
   exports.MousePointer2 = MousePointer2;
+  exports.MousePointer2Off = MousePointer2Off;
   exports.MousePointerBan = MousePointerBan;
   exports.MousePointerClick = MousePointerClick;
   exports.MousePointerSquareDashed = SquareDashedMousePointer;
+  exports.MouseRight = MouseRight;
   exports.Move = Move;
   exports.Move3D = Move3d;
   exports.Move3d = Move3d;
@@ -17398,7 +18675,7 @@
   exports.Option = Option;
   exports.Orbit = Orbit;
   exports.Origami = Origami;
-  exports.Outdent = IndentDecrease;
+  exports.Outdent = ListIndentDecrease;
   exports.Package = Package;
   exports.Package2 = Package2;
   exports.PackageCheck = PackageCheck;
@@ -17510,7 +18787,6 @@
   exports.Plus = Plus;
   exports.PlusCircle = CirclePlus;
   exports.PlusSquare = SquarePlus;
-  exports.Pocket = Pocket;
   exports.PocketKnife = PocketKnife;
   exports.Podcast = Podcast;
   exports.Pointer = Pointer;
@@ -17525,6 +18801,7 @@
   exports.Presentation = Presentation;
   exports.Printer = Printer;
   exports.PrinterCheck = PrinterCheck;
+  exports.PrinterX = PrinterX;
   exports.Projector = Projector;
   exports.Proportions = Proportions;
   exports.Puzzle = Puzzle;
@@ -17536,10 +18813,10 @@
   exports.Radiation = Radiation;
   exports.Radical = Radical;
   exports.Radio = Radio;
+  exports.RadioOff = RadioOff;
   exports.RadioReceiver = RadioReceiver;
   exports.RadioTower = RadioTower;
   exports.Radius = Radius;
-  exports.RailSymbol = RailSymbol;
   exports.Rainbow = Rainbow;
   exports.Rat = Rat;
   exports.Ratio = Ratio;
@@ -17572,12 +18849,14 @@
   exports.Repeat = Repeat;
   exports.Repeat1 = Repeat1;
   exports.Repeat2 = Repeat2;
+  exports.RepeatOff = RepeatOff;
   exports.Replace = Replace;
   exports.ReplaceAll = ReplaceAll;
   exports.Reply = Reply;
   exports.ReplyAll = ReplyAll;
   exports.Rewind = Rewind;
   exports.Ribbon = Ribbon;
+  exports.Road = Road;
   exports.Rocket = Rocket;
   exports.RockingChair = RockingChair;
   exports.RollerCoaster = RollerCoaster;
@@ -17629,11 +18908,13 @@
   exports.ScissorsLineDashed = ScissorsLineDashed;
   exports.ScissorsSquare = SquareScissors;
   exports.ScissorsSquareDashedBottom = SquareBottomDashedScissors;
+  exports.Scooter = Scooter;
   exports.ScreenShare = ScreenShare;
   exports.ScreenShareOff = ScreenShareOff;
   exports.Scroll = Scroll;
   exports.ScrollText = ScrollText;
   exports.Search = Search;
+  exports.SearchAlert = SearchAlert;
   exports.SearchCheck = SearchCheck;
   exports.SearchCode = SearchCode;
   exports.SearchSlash = SearchSlash;
@@ -17656,11 +18937,14 @@
   exports.Share2 = Share2;
   exports.Sheet = Sheet;
   exports.Shell = Shell;
+  exports.ShelvingUnit = ShelvingUnit;
   exports.Shield = Shield;
   exports.ShieldAlert = ShieldAlert;
   exports.ShieldBan = ShieldBan;
   exports.ShieldCheck = ShieldCheck;
   exports.ShieldClose = ShieldX;
+  exports.ShieldCog = ShieldCog;
+  exports.ShieldCogCorner = ShieldCogCorner;
   exports.ShieldEllipsis = ShieldEllipsis;
   exports.ShieldHalf = ShieldHalf;
   exports.ShieldMinus = ShieldMinus;
@@ -17700,7 +18984,6 @@
   exports.SkipBack = SkipBack;
   exports.SkipForward = SkipForward;
   exports.Skull = Skull;
-  exports.Slack = Slack;
   exports.Slash = Slash;
   exports.SlashSquare = SquareSlash;
   exports.Slice = Slice;
@@ -17716,6 +18999,7 @@
   exports.Snowflake = Snowflake;
   exports.SoapDispenserDroplet = SoapDispenserDroplet;
   exports.Sofa = Sofa;
+  exports.SolarPanel = SolarPanel;
   exports.SortAsc = ArrowUpNarrowWide;
   exports.SortDesc = ArrowDownWideNarrow;
   exports.Soup = Soup;
@@ -17733,6 +19017,7 @@
   exports.SplitSquareHorizontal = SquareSplitHorizontal;
   exports.SplitSquareVertical = SquareSplitVertical;
   exports.Spool = Spool;
+  exports.SportShoe = SportShoe;
   exports.Spotlight = Spotlight;
   exports.SprayCan = SprayCan;
   exports.Sprout = Sprout;
@@ -17747,11 +19032,15 @@
   exports.SquareArrowOutUpLeft = SquareArrowOutUpLeft;
   exports.SquareArrowOutUpRight = SquareArrowOutUpRight;
   exports.SquareArrowRight = SquareArrowRight;
+  exports.SquareArrowRightEnter = SquareArrowRightEnter;
+  exports.SquareArrowRightExit = SquareArrowRightExit;
   exports.SquareArrowUp = SquareArrowUp;
   exports.SquareArrowUpLeft = SquareArrowUpLeft;
   exports.SquareArrowUpRight = SquareArrowUpRight;
   exports.SquareAsterisk = SquareAsterisk;
   exports.SquareBottomDashedScissors = SquareBottomDashedScissors;
+  exports.SquareCenterlineDashedHorizontal = SquareCenterlineDashedHorizontal;
+  exports.SquareCenterlineDashedVertical = SquareCenterlineDashedVertical;
   exports.SquareChartGantt = SquareChartGantt;
   exports.SquareCheck = SquareCheck;
   exports.SquareCheckBig = SquareCheckBig;
@@ -17765,6 +19054,7 @@
   exports.SquareDashedBottomCode = SquareDashedBottomCode;
   exports.SquareDashedKanban = SquareDashedKanban;
   exports.SquareDashedMousePointer = SquareDashedMousePointer;
+  exports.SquareDashedText = SquareDashedText;
   exports.SquareDashedTopSolid = SquareDashedTopSolid;
   exports.SquareDivide = SquareDivide;
   exports.SquareDot = SquareDot;
@@ -17819,6 +19109,7 @@
   exports.Stethoscope = Stethoscope;
   exports.Sticker = Sticker;
   exports.StickyNote = StickyNote;
+  exports.Stone = Stone;
   exports.StopCircle = CircleStop;
   exports.Store = Store;
   exports.StretchHorizontal = StretchHorizontal;
@@ -17870,13 +19161,19 @@
   exports.TestTube2 = TestTubeDiagonal;
   exports.TestTubeDiagonal = TestTubeDiagonal;
   exports.TestTubes = TestTubes;
-  exports.Text = Text;
+  exports.Text = TextAlignStart;
+  exports.TextAlignCenter = TextAlignCenter;
+  exports.TextAlignEnd = TextAlignEnd;
+  exports.TextAlignJustify = TextAlignJustify;
+  exports.TextAlignStart = TextAlignStart;
   exports.TextCursor = TextCursor;
   exports.TextCursorInput = TextCursorInput;
+  exports.TextInitial = TextInitial;
   exports.TextQuote = TextQuote;
   exports.TextSearch = TextSearch;
-  exports.TextSelect = TextSelect;
-  exports.TextSelection = TextSelect;
+  exports.TextSelect = SquareDashedText;
+  exports.TextSelection = SquareDashedText;
+  exports.TextWrap = TextWrap;
   exports.Theater = Theater;
   exports.Thermometer = Thermometer;
   exports.ThermometerSnowflake = ThermometerSnowflake;
@@ -17892,6 +19189,7 @@
   exports.TicketX = TicketX;
   exports.Tickets = Tickets;
   exports.TicketsPlane = TicketsPlane;
+  exports.Timeline = Timeline;
   exports.Timer = Timer;
   exports.TimerOff = TimerOff;
   exports.TimerReset = TimerReset;
@@ -17899,10 +19197,12 @@
   exports.ToggleRight = ToggleRight;
   exports.Toilet = Toilet;
   exports.ToolCase = ToolCase;
+  exports.Toolbox = Toolbox;
   exports.Tornado = Tornado;
   exports.Torus = Torus;
   exports.Touchpad = Touchpad;
   exports.TouchpadOff = TouchpadOff;
+  exports.TowelRack = TowelRack;
   exports.TowerControl = TowerControl;
   exports.ToyBrick = ToyBrick;
   exports.Tractor = Tractor;
@@ -17919,7 +19219,6 @@
   exports.TreePalm = TreePalm;
   exports.TreePine = TreePine;
   exports.Trees = Trees;
-  exports.Trello = Trello;
   exports.TrendingDown = TrendingDown;
   exports.TrendingUp = TrendingUp;
   exports.TrendingUpDown = TrendingUpDown;
@@ -17937,8 +19236,6 @@
   exports.Tv2 = TvMinimal;
   exports.TvMinimal = TvMinimal;
   exports.TvMinimalPlay = TvMinimalPlay;
-  exports.Twitch = Twitch;
-  exports.Twitter = Twitter;
   exports.Type = Type;
   exports.TypeOutline = TypeOutline;
   exports.Umbrella = Umbrella;
@@ -17967,6 +19264,7 @@
   exports.UserCircle2 = CircleUserRound;
   exports.UserCog = UserCog;
   exports.UserCog2 = UserRoundCog;
+  exports.UserKey = UserKey;
   exports.UserLock = UserLock;
   exports.UserMinus = UserMinus;
   exports.UserMinus2 = UserRoundMinus;
@@ -17976,6 +19274,7 @@
   exports.UserRound = UserRound;
   exports.UserRoundCheck = UserRoundCheck;
   exports.UserRoundCog = UserRoundCog;
+  exports.UserRoundKey = UserRoundKey;
   exports.UserRoundMinus = UserRoundMinus;
   exports.UserRoundPen = UserRoundPen;
   exports.UserRoundPlus = UserRoundPlus;
@@ -17993,6 +19292,7 @@
   exports.Utensils = Utensils;
   exports.UtensilsCrossed = UtensilsCrossed;
   exports.UtilityPole = UtilityPole;
+  exports.Van = Van;
   exports.Variable = Variable;
   exports.Vault = Vault;
   exports.VectorSquare = VectorSquare;
@@ -18026,13 +19326,18 @@
   exports.Warehouse = Warehouse;
   exports.WashingMachine = WashingMachine;
   exports.Watch = Watch;
-  exports.Waves = Waves;
+  exports.Waves = WavesHorizontal;
+  exports.WavesArrowDown = WavesArrowDown;
+  exports.WavesArrowUp = WavesArrowUp;
+  exports.WavesHorizontal = WavesHorizontal;
   exports.WavesLadder = WavesLadder;
+  exports.WavesVertical = WavesVertical;
   exports.Waypoints = Waypoints;
   exports.Webcam = Webcam;
   exports.Webhook = Webhook;
   exports.WebhookOff = WebhookOff;
   exports.Weight = Weight;
+  exports.WeightTilde = WeightTilde;
   exports.Wheat = Wheat;
   exports.WheatOff = WheatOff;
   exports.WholeWord = WholeWord;
@@ -18050,15 +19355,28 @@
   exports.WineOff = WineOff;
   exports.Workflow = Workflow;
   exports.Worm = Worm;
-  exports.WrapText = WrapText;
+  exports.WrapText = TextWrap;
   exports.Wrench = Wrench;
   exports.X = X;
   exports.XCircle = CircleX;
+  exports.XLineTop = XLineTop;
   exports.XOctagon = OctagonX;
   exports.XSquare = SquareX;
-  exports.Youtube = Youtube;
   exports.Zap = Zap;
   exports.ZapOff = ZapOff;
+  exports.ZodiacAquarius = ZodiacAquarius;
+  exports.ZodiacAries = ZodiacAries;
+  exports.ZodiacCancer = ZodiacCancer;
+  exports.ZodiacCapricorn = ZodiacCapricorn;
+  exports.ZodiacGemini = ZodiacGemini;
+  exports.ZodiacLeo = ZodiacLeo;
+  exports.ZodiacLibra = ZodiacLibra;
+  exports.ZodiacOphiuchus = ZodiacOphiuchus;
+  exports.ZodiacPisces = ZodiacPisces;
+  exports.ZodiacSagittarius = ZodiacSagittarius;
+  exports.ZodiacScorpio = ZodiacScorpio;
+  exports.ZodiacTaurus = ZodiacTaurus;
+  exports.ZodiacVirgo = ZodiacVirgo;
   exports.ZoomIn = ZoomIn;
   exports.ZoomOut = ZoomOut;
   exports.createElement = createElement;
