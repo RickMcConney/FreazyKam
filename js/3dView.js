@@ -17,6 +17,8 @@ let resizeTimeoutId = null;  // Timeout ID for detecting end of resize
 let animationFrameId = null;  // Track animation loop to prevent duplicates
 let animationLoopActive = false;  // Flag to control whether animation loop should run
 let deferredSTLVisibilitySyncId = null;  // Timeout for reapplying STL checkbox after meshes load
+let renderRequested = false;  // Track pending on-demand renders
+let resizeObserver3D = null;  // Track active ResizeObserver instance
 
 // Simple profiling: wall-clock timing with frame counter
 let profileFrameCount = 0;
@@ -32,6 +34,8 @@ const CONFIG = {
   SCENE_BACKGROUND_COLOR: 0xadd8e6,
   RENDERER_CLEAR_COLOR: 0xadd8e6,
   ANTIALIAS: true,
+  MAX_PIXEL_RATIO: 1.25,
+  ENABLE_SHADOWS: false,
 
   // Camera
   CAMERA_FOV: 75,
@@ -94,9 +98,9 @@ const CONFIG = {
   RESIZE_RAF_DEBOUNCE_MS: 50,  // Debounce for RAF after resize
 
   // Voxel system
-  DEFAULT_VOXEL_SIZE: 0.1,  // Default voxel size in mm
-  MAX_VOXELS: 750000*4,  // Maximum voxels before scaling up voxel size
-  VOXEL_SIZE_INCREMENT: 0.1,  // How much to increase voxel size when exceeding max
+  DEFAULT_VOXEL_SIZE: 0.5,  // Default voxel size in mm
+  MAX_VOXELS: 300000,  // Maximum voxels before scaling up voxel size
+  VOXEL_SIZE_INCREMENT: 0.25,  // How much to increase voxel size when exceeding max
 
   // Toolpath visualization
   TOOLPATH_BOUNDS_PADDING: 4,  // mm padding around toolpath bounds
@@ -109,7 +113,7 @@ const CONFIG = {
   TOOL_LENGTH: 40,  // Tool visualization length
 
   // Performance
-  VOXEL_REMOVAL_RATE: 2,  // Only remove voxels every N frames
+  VOXEL_REMOVAL_RATE: 3,  // Only remove voxels every N frames
   PROFILE_FRAME_INTERVAL: 300  // Log profiling every N frames
 };
 
@@ -200,7 +204,37 @@ function sync3DVisibilityControls(options = {}) {
       window.setSTLVisibility3D(stlCheckbox.checked);
     }
   }
+
+  requestThreeRender();
 }
+
+function renderThreeScene() {
+  if (!renderer || !scene || !camera || isResizing) return;
+  renderer.render(scene, camera);
+}
+
+function requestThreeRender() {
+  if (!animationLoopActive || !renderer) return;
+
+  if (toolpathAnimation && toolpathAnimation.isPlaying) {
+    if (animationFrameId === null) {
+      renderRequested = false;
+      animationFrameId = requestAnimationFrame(animate);
+    }
+    return;
+  }
+
+  if (renderRequested) return;
+
+  renderRequested = true;
+  animationFrameId = requestAnimationFrame(() => {
+    animationFrameId = null;
+    renderRequested = false;
+    renderThreeScene();
+  });
+}
+
+window.requestThreeRender = requestThreeRender;
 
 // Wait for DOM and listen for tab show event
 document.addEventListener('DOMContentLoaded', setupTabListener);
@@ -212,16 +246,18 @@ function setupTabListener() {
       // Enable animation loop and reinitialize when tab is shown
       animationLoopActive = true;
       initThree();
-      // Schedule animation if not already running
-      if (animationFrameId === null) {
-        animationFrameId = requestAnimationFrame(animate);
-      }
       sync3DVisibilityControls({ deferSTL: true });
+      requestThreeRender();
     });
 
     tab3dElement.addEventListener('hidden.bs.tab', () => {
       // Disable animation loop when switching to 2D view
       animationLoopActive = false;
+      renderRequested = false;
+      if (animationFrameId !== null) {
+        cancelAnimationFrame(animationFrameId);
+        animationFrameId = null;
+      }
       redrawImmediate();
     });
   }
@@ -279,6 +315,12 @@ function initThree() {
     cancelAnimationFrame(animationFrameId);
     animationFrameId = null;
   }
+  renderRequested = false;
+
+  if (resizeObserver3D) {
+    resizeObserver3D.disconnect();
+    resizeObserver3D = null;
+  }
 
   // Remove old controls UI panel
   const oldControlsPanel = document.getElementById('3d-controls-panel');
@@ -318,21 +360,25 @@ function initThree() {
   // Setup renderer
   renderer = new THREE.WebGLRenderer({ antialias: CONFIG.ANTIALIAS, alpha: false });
   renderer.setSize(width, height, false);
-  renderer.setPixelRatio(window.devicePixelRatio);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, CONFIG.MAX_PIXEL_RATIO));
   renderer.setClearColor(CONFIG.RENDERER_CLEAR_COLOR, 1.0);
-  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.enabled = CONFIG.ENABLE_SHADOWS;
   renderer.domElement.style.width = '100%';
   renderer.domElement.style.height = '100%';
   container.appendChild(renderer.domElement);
 
   // Setup ResizeObserver to update WebGL buffer when container size changes
   // Debounce to avoid flicker from rapid resize events
-  let resizeTimeoutId = null;
-  const resizeObserver = new ResizeObserver(() => {
+  resizeObserver3D = new ResizeObserver(() => {
     if (resizeTimeoutId) clearTimeout(resizeTimeoutId);
-    resizeTimeoutId = setTimeout(doResize, 100);
+    isResizing = true;
+    resizeTimeoutId = setTimeout(() => {
+      doResize();
+      isResizing = false;
+      requestThreeRender();
+    }, 100);
   });
-  resizeObserver.observe(container);
+  resizeObserver3D.observe(container);
 
   // Setup lighting
   setupLighting();
@@ -393,8 +439,7 @@ function initThree() {
     }
   }
 
-  // Start animation loop
-  animate();
+  requestThreeRender();
 
   // Handle window resize (only add listener once to prevent duplicates)
  //if (!resizeListenerAttached) {
@@ -462,12 +507,12 @@ function createToolVisualization(toolDiameter) {
   });
 
   const tipMesh = new THREE.Mesh(new THREE.BufferGeometry(), tipMaterial);
-  tipMesh.castShadow = true;
-  tipMesh.receiveShadow = true;
+  tipMesh.castShadow = CONFIG.ENABLE_SHADOWS;
+  tipMesh.receiveShadow = CONFIG.ENABLE_SHADOWS;
 
   const shankMesh = new THREE.Mesh(new THREE.BufferGeometry(), shankMaterial);
-  shankMesh.castShadow = true;
-  shankMesh.receiveShadow = true;
+  shankMesh.castShadow = CONFIG.ENABLE_SHADOWS;
+  shankMesh.receiveShadow = CONFIG.ENABLE_SHADOWS;
 
   toolGroup.add(tipMesh);
   toolGroup.add(shankMesh);
@@ -661,14 +706,16 @@ function setupLighting() {
   // Directional light from above and front (positive Z, negative Y)
   const dirLight = new THREE.DirectionalLight(CONFIG.DIRECTIONAL_LIGHT_COLOR, CONFIG.DIRECTIONAL_LIGHT_INTENSITY);
   dirLight.position.set(0, -maxDim * 0.5, maxDim);
-  dirLight.castShadow = true;
-  const shadowScale = CONFIG.DIRECTIONAL_LIGHT_SHADOW_SCALE;
-  dirLight.shadow.camera.left = -maxDim * shadowScale;
-  dirLight.shadow.camera.right = maxDim * shadowScale;
-  dirLight.shadow.camera.top = maxDim * shadowScale;
-  dirLight.shadow.camera.bottom = -maxDim * shadowScale;
-  dirLight.shadow.camera.near = 0.1;
-  dirLight.shadow.camera.far = workpieceThickness + maxDim;
+  dirLight.castShadow = CONFIG.ENABLE_SHADOWS;
+  if (CONFIG.ENABLE_SHADOWS) {
+    const shadowScale = CONFIG.DIRECTIONAL_LIGHT_SHADOW_SCALE;
+    dirLight.shadow.camera.left = -maxDim * shadowScale;
+    dirLight.shadow.camera.right = maxDim * shadowScale;
+    dirLight.shadow.camera.top = maxDim * shadowScale;
+    dirLight.shadow.camera.bottom = -maxDim * shadowScale;
+    dirLight.shadow.camera.near = 0.1;
+    dirLight.shadow.camera.far = workpieceThickness + maxDim;
+  }
   scene.add(dirLight);
 
   // Ambient light for overall illumination
@@ -755,6 +802,7 @@ function updateWorkpiece3D(width, length, thickness, originPosition, woodSpecies
   }
 
   sync3DVisibilityControls();
+  requestThreeRender();
 }
 
 window.updateWorkpiece3D = updateWorkpiece3D;
@@ -764,6 +812,7 @@ window.setAxesVisibility3D = function(visible) {
   if (axisLines.x) axisLines.x.visible = visible;
   if (axisLines.y) axisLines.y.visible = visible;
   if (axisLines.z) axisLines.z.visible = visible;
+  requestThreeRender();
 };
 
 window.setToolpathVisibility3D = function(visible) {
@@ -771,6 +820,7 @@ window.setToolpathVisibility3D = function(visible) {
   for (const line of toolpathAnimation.toolpathLines) {
     line.visible = visible;
   }
+  requestThreeRender();
 };
 
 window.setWorkpieceVisibility3D = function(visible) {
@@ -796,6 +846,8 @@ window.setWorkpieceVisibility3D = function(visible) {
   if (toolpathAnimation && toolpathAnimation.voxelGrid && toolpathAnimation.voxelGrid.mesh) {
     toolpathAnimation.voxelGrid.mesh.position.copy(visible ? originalPosition : offscreenPosition);
   }
+
+  requestThreeRender();
 };
 
 window.startSimulation3D = function() {
@@ -821,6 +873,9 @@ window.startSimulation3D = function() {
     }
 
     updateSimulation3DUI();
+    if (animationFrameId === null) {
+      animationFrameId = requestAnimationFrame(animate);
+    }
   }
 };
 
@@ -828,6 +883,7 @@ window.pauseSimulation3D = function() {
   if (toolpathAnimation && toolpathAnimation.isPlaying) {
     toolpathAnimation.pause();
     updateSimulation3DUI();
+    requestThreeRender();
   }
 };
 
@@ -836,12 +892,14 @@ window.stopSimulation3D = function() {
     toolpathAnimation.pause();
     toolpathAnimation.wasStopped = true;  // Mark that we were stopped (not paused)
     updateSimulation3DUI();
+    requestThreeRender();
   }
 };
 
 window.updateSimulation3DSpeed = function(speed) {
   if (toolpathAnimation) {
     toolpathAnimation.setSpeed(speed);
+    requestThreeRender();
   }
 };
 
@@ -857,6 +915,7 @@ window.setSimulation3DProgress = function(lineNumber) {
     updateSimulation3DDisplays();
     // Update button states after seeking (wasStopped flag was reset)
     updateSimulation3DUI();
+    requestThreeRender();
   }
 };
 
@@ -950,11 +1009,16 @@ function animate() {
   // If animation loop is disabled (switched to 2D view), stop here
   if (!animationLoopActive) {
     animationFrameId = null;
+    renderRequested = false;
     return;
   }
 
-  // CRITICAL FIX 1.1: Always schedule next frame if tab is active (needed for orbit controls)
-  animationFrameId = requestAnimationFrame(animate);
+  const isPlaying = !!(toolpathAnimation && toolpathAnimation.isPlaying);
+  if (isPlaying) {
+    animationFrameId = requestAnimationFrame(animate);
+  } else {
+    animationFrameId = null;
+  }
 
   // Increment frame counter for profiling
   profileFrameCount++;
@@ -963,7 +1027,7 @@ function animate() {
   const updateStart = performance.now();
 
   // Only update animation if it's actually playing (saves CPU when paused)
-  if (toolpathAnimation && toolpathAnimation.isPlaying) {
+  if (isPlaying) {
     toolpathAnimation.update();
 
     // Update 3D progress slider in overlay (now line-based, not percentage)
@@ -987,7 +1051,7 @@ function animate() {
   // Skip rendering while window is being resized to avoid WebGL context issues
   if (!isResizing) {
     const renderStart = performance.now();
-    renderer.render(scene, camera);
+    renderThreeScene();
     const renderTime = performance.now() - renderStart;
 
     // Track timing stats
@@ -1030,6 +1094,7 @@ function animate() {
           camera.aspect = newWidth / newHeight;
           camera.updateProjectionMatrix();
           renderer.setSize(newWidth, newHeight, false);
+          renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, CONFIG.MAX_PIXEL_RATIO));
       }
   }
 
@@ -1051,11 +1116,17 @@ function cleanup3DView() {
     cancelAnimationFrame(animationFrameId);
     animationFrameId = null;
   }
+  renderRequested = false;
 
   // Clear resize timeout if pending
   if (resizeTimeoutId) {
     clearTimeout(resizeTimeoutId);
     resizeTimeoutId = null;
+  }
+
+  if (resizeObserver3D) {
+    resizeObserver3D.disconnect();
+    resizeObserver3D = null;
   }
 
   // Stop simulation and dispose voxel grid (stored in toolpathAnimation)
@@ -1311,8 +1382,11 @@ function withAnimationPaused(callback) {
       toolpathAnimation.play();
       // Restart animation loop if it's not running
       if (!animationFrameId && animationLoopActive) {
+        renderRequested = false;
         animationFrameId = requestAnimationFrame(animate);
       }
+    } else {
+      requestThreeRender();
     }
   }
 }
@@ -1499,9 +1573,9 @@ class ToolpathAnimation {
     // Voxel-based material removal
     this.voxelGrid = null;
     this.voxelMaterialRemover = new VoxelMaterialRemover();
-    this.voxelSize = 0.1;  // 0.1mm voxel size in X/Y (Z is step-down from tool, sparse grid reduces performance impact)
+    this.voxelSize = CONFIG.DEFAULT_VOXEL_SIZE;  // Default voxel size in X/Y tuned for interactive performance
     this.enableVoxelRemoval = true;  // Toggle for voxel removal feature
-    this.voxelRemovalRate = 2;  // Only remove voxels every N frames to reduce per-frame cost
+    this.voxelRemovalRate = CONFIG.VOXEL_REMOVAL_RATE;  // Only remove voxels every N frames to reduce per-frame cost
     this.frameCount = 0;  // Frame counter for throttling voxel removal
 
     // PHASE 2.1: Track last voxel config to avoid unnecessary recreation
@@ -1651,14 +1725,13 @@ class ToolpathAnimation {
 
         let clippedWidth = clippedMaxX - clippedMinX;
         let clippedLength = clippedMaxY - clippedMinY;
-        let numberOfVoxels = clippedWidth*clippedLength/(this.voxelSize*this.voxelSize);
+        this.voxelSize = CONFIG.DEFAULT_VOXEL_SIZE;
+        let numberOfVoxels = clippedWidth * clippedLength / (this.voxelSize * this.voxelSize);
 
     
-        while (numberOfVoxels > CONFIG.MAX_VOXELS)
-        {
+        while (numberOfVoxels > CONFIG.MAX_VOXELS) {
             this.voxelSize += CONFIG.VOXEL_SIZE_INCREMENT;
-            numberOfVoxels = clippedWidth*clippedLength/(this.voxelSize*this.voxelSize);
-
+            numberOfVoxels = clippedWidth * clippedLength / (this.voxelSize * this.voxelSize);
         }
 
         // Round clipped bounds UP to clean voxel boundaries to ensure all in-bounds toolpath is captured
@@ -1838,8 +1911,8 @@ class ToolpathAnimation {
 
     // Create InstancedMesh for filler voxels
     this.workpieceOutlineBox = new THREE.InstancedMesh(geometry, material, fillerBoxes.length);
-    this.workpieceOutlineBox.castShadow = true;
-    this.workpieceOutlineBox.receiveShadow = true;
+    this.workpieceOutlineBox.castShadow = CONFIG.ENABLE_SHADOWS;
+    this.workpieceOutlineBox.receiveShadow = CONFIG.ENABLE_SHADOWS;
 
     // Create dummy object for transforms
     const dummy = new THREE.Object3D();
@@ -2474,12 +2547,14 @@ class ToolpathAnimation {
       this.voxelGrid.updateVoxelColors();
       this.voxelGrid.updateInstanceMatrices();
     }
+
+    requestThreeRender();
   }
 
   _replayFromMovementIndexToIndex(startIndex, endIndex) {
     // Replay material removal from one movement index to another
     // Uses distance-based step size (half voxel size) so no voxels are missed
-    const stepDist = this.voxelGrid ? this.voxelGrid.voxelSize * 0.5 : 0.5;
+    const stepDist = this.voxelGrid ? Math.max(this.voxelGrid.voxelSize, this.toolRadius * 0.25 || 0) : 0.5;
 
     for (let i = startIndex; i <= endIndex && i < this.movementTiming.length; i++) {
       const move = this.movementTiming[i];
@@ -2524,6 +2599,7 @@ class ToolpathAnimation {
     // Increment elapsed time - this is cumulative time into the animation from current position
     const deltaTime = (1 / 60) * this.speed;  // Assume 60fps, multiply by speed factor
     this.elapsedTime += deltaTime;
+    this.frameCount++;
 
     // Calculate the target cumulative time we should be at
     const prevMovementAtStart = this.currentMovementIndex > 0 ? this.movementTiming[this.currentMovementIndex - 1] : null;
@@ -2531,7 +2607,7 @@ class ToolpathAnimation {
     const targetCumulativeTime = baseTime + this.elapsedTime;
 
     // Advance through all movements that should have completed by now
-    const stepDist = this.voxelGrid ? this.voxelGrid.voxelSize * 0.5 : 0.5;
+    const stepDist = this.voxelGrid ? Math.max(this.voxelGrid.voxelSize, this.toolRadius * 0.25 || 0) : 0.5;
 
     while (this.currentMovementIndex < this.movementTiming.length) {
       const move = this.movementTiming[this.currentMovementIndex];
@@ -2633,7 +2709,8 @@ class ToolpathAnimation {
       currentTool?.type || 'End Mill', currentTool?.angle || 0);
 
     // Remove material from voxel grid if enabled (only on cutting moves)
-    if (this.enableVoxelRemoval && this.voxelGrid && this.voxelMaterialRemover && isG1 && this.isPlaying) {
+    const shouldUpdateVoxelsThisFrame = (this.frameCount % this.voxelRemovalRate) === 0;
+    if (this.enableVoxelRemoval && this.voxelGrid && this.voxelMaterialRemover && isG1 && this.isPlaying && shouldUpdateVoxelsThisFrame) {
       try {
         const currentToolData = this.getToolForLine(gcodeLineNumber) || this.toolInfo;
         this.voxelMaterialRemover.removeAtToolPosition(
@@ -2645,6 +2722,8 @@ class ToolpathAnimation {
         console.error('Voxel removal error:', e);
       }
     }
+
+    requestThreeRender();
   }
 
 
@@ -2748,6 +2827,7 @@ class OrbitControls {
   setTarget(x, y, z) {
     this.target.set(x, y, z);
     this.updateCamera();
+    requestThreeRender();
   }
 
   onMouseDown(event) {
@@ -2788,11 +2868,13 @@ class OrbitControls {
 
     this.previousMousePosition = { x: event.clientX, y: event.clientY };
     this.updateCamera();
+    requestThreeRender();
   }
 
   onMouseUp() {
     this.isDragging = false;
     this.dragMode = null;
+    requestThreeRender();
   }
 
   onMouseWheel(event) {
@@ -2800,6 +2882,7 @@ class OrbitControls {
     this.distance += event.deltaY * this.zoomSpeed;
     this.distance = Math.max(this.minDistance, Math.min(this.maxDistance, this.distance));
     this.updateCamera();
+    requestThreeRender();
   }
 
   updateCamera() {

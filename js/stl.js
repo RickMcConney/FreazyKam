@@ -332,8 +332,8 @@ function addSTLMesh3D(model) {
     mesh.scale.set(1, -1, 1);
     mesh.position.set(-originX, originY, 0);
 
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
+    mesh.castShadow = false;
+    mesh.receiveShadow = false;
     mesh.userData.stlModelId = model.id;
 
     model.mesh = mesh;

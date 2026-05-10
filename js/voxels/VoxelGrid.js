@@ -129,8 +129,8 @@ class VoxelGrid {
 
     // Create single InstancedMesh with capacity for all voxels
     this.mesh = new THREE.InstancedMesh(geometry, material, this.maxVoxels);
-    this.mesh.castShadow = true;
-    this.mesh.receiveShadow = true;
+    this.mesh.castShadow = false;
+    this.mesh.receiveShadow = false;
 
     const materialColor = new THREE.Color(this.workpieceColor);
 
