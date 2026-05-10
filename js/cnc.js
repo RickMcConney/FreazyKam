@@ -508,11 +508,10 @@ function newProject() {
 	if (typeof window.clearSTLModels === 'function') window.clearSTLModels();
 	selectMgr.unselectAll();
 
-	// Center the workpiece in the canvas viewport
-	centerWorkpiece();
-	cncController.setMode("Select");
 	loadOptions();
 	loadTools();
+	fitWorkpieceInView();
+	cncController.setMode("Select");
 	const width = getOption("workpieceWidth") * viewScale;
 	const length = getOption("workpieceLength") * viewScale;
 	const originPosition = getOption("originPosition") || 'middle-center';
@@ -2210,4 +2209,3 @@ async function doGcode() {
 	saveString(_gcodeNameComment(projectName) + text, filename);
 	notify('G-code download started');
 }
-

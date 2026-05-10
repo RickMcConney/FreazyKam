@@ -199,6 +199,11 @@ function centerWorkpiece() {
 
 }
 
+function fitWorkpieceInView() {
+	zoomLevel = getMinZoomLevel();
+	centerWorkpiece();
+}
+
 function handleCenterView() {
 	centerWorkpiece();
 	redraw();

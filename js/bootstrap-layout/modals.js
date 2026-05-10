@@ -941,10 +941,10 @@ function performOptionsReset() {
         origin.y = originCoords.y;
     }
 
-    // Re-center the workpiece in the viewport
-    if (typeof centerWorkpiece === 'function') {
-        centerWorkpiece();
-    }
+	// Re-center the workpiece in the viewport
+	if (typeof fitWorkpieceInView === 'function') {
+		fitWorkpieceInView();
+	}
 
     // Re-render the options table to show default values
     renderOptionsTable();

@@ -162,10 +162,10 @@ class Workpiece extends Operation {
             origin.y = newOrigin.y;
         }
 
-        // If dimensions changed, re-center the workpiece view
-        if (dimensionChanged) {
-            centerWorkpiece();
-        }
+		// If dimensions changed, re-center the workpiece view
+		if (dimensionChanged) {
+			fitWorkpieceInView();
+		}
 
         // Regenerate surfacing toolpaths when anything that affects their geometry changes.
         // This runs after all setOption calls so getOption returns the new values.

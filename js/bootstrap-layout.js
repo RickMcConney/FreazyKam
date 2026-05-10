@@ -1342,10 +1342,10 @@ function setupCanvasTabHandlers() {
             const overlay3D = document.getElementById('simulation-overlay-3d');
             if (overlay3D) overlay3D.classList.add('d-none');
 
-            requestAnimationFrame(() => {
-                centerWorkpiece();
-                redraw();
-            });
+			requestAnimationFrame(() => {
+				fitWorkpieceInView();
+				redraw();
+			});
         });
     }
 
