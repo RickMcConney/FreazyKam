@@ -140,6 +140,15 @@ class Shape extends Operation {
             options: AVAILABLE_SHAPES.map(s => ({ value: s.value, label: s.label }))
         };
 
+        this.nameField = {
+            key: 'shapeName',
+            label: 'Name',
+            type: 'text',
+            default: '',
+            persist: false,
+            help: 'Leave empty to use the default shape + id name.'
+        };
+
         // Last-used values (persisted across tool activations within the session)
         this.properties = {};
         // Currently-editing path (null when creating new)
@@ -148,16 +157,51 @@ class Shape extends Operation {
 
     get fields() {
         if (this.fixedShape) {
-            const fields = {};
+            const fields = { [this.nameField.key]: this.nameField };
             for (const f of (this.fieldSpecs[this.fixedShape] || [])) fields[f.key] = f;
             return fields;
         }
 
-        const all = { shape: this.shapeField };
+        const all = { shape: this.shapeField, [this.nameField.key]: this.nameField };
         for (const specs of Object.values(this.fieldSpecs)) {
             for (const f of specs) all[f.key] = f;
         }
         return all;
+    }
+
+    getShapeFields(shape) {
+        return [this.nameField, ...(this.fieldSpecs[shape] || [])];
+    }
+
+    getDefaultPathName(shape, svgPathId) {
+        return shape + ' ' + svgPathId;
+    }
+
+    normalizeShapeName(name) {
+        return typeof name === 'string' ? name.trim() : '';
+    }
+
+    resolvePathName(shape, svgPathId, customName, currentPathId = null) {
+        const normalizedName = this.normalizeShapeName(customName);
+        if (!normalizedName) {
+            return this.getDefaultPathName(shape, svgPathId);
+        }
+
+        const duplicateExists = svgpaths.some(path => path.id !== currentPathId && path.name === normalizedName);
+        return duplicateExists ? normalizedName + ' ' + svgPathId : normalizedName;
+    }
+
+    buildStoredProperties(values) {
+        const stored = { ...values };
+        const normalizedName = this.normalizeShapeName(stored.shapeName);
+
+        if (normalizedName) {
+            stored.shapeName = normalizedName;
+        } else {
+            delete stored.shapeName;
+        }
+
+        return stored;
     }
 
     // ── Shape construction ─────────────────────────────────────────────────
@@ -177,11 +221,12 @@ class Shape extends Operation {
     makeShape(shape, x, y, svgPath, data) {
         // Collect current field values from DOM and sync into this.properties so that
         // creationProperties is always fully populated (even when no input was ever changed).
-        const fields = this.fieldSpecs[shape] || [];
-        const values = PropertiesManager.collectValues(fields);
-        this.properties = { ...this.properties, ...values, shape };
+        const fields = this.getShapeFields(shape);
+        const values = { ...PropertiesManager.collectValues(fields), ...(data || {}), shape };
+        const storedProperties = this.buildStoredProperties(values);
+        this.properties = { ...this.properties, ...storedProperties, shape };
 
-        const arg = fields.map(field => values[field.key] !== undefined ? values[field.key] : field.default);
+        const arg = (this.fieldSpecs[shape] || []).map(field => values[field.key] !== undefined ? values[field.key] : field.default);
 
         switch (shape) {
             case 'Star':
@@ -241,12 +286,13 @@ class Shape extends Operation {
         }
         if (svgPath == null) {
             addUndo(false, true, false);
+            const resolvedName = this.resolvePathName(shape, svgpathId, values.shapeName);
             svgPath = {
                 closed: true,
                 svgpathId: svgpathId,
                 id: shape + '_' + svgpathId,
                 type: 'path',
-                name: shape + ' ' + svgpathId,
+                name: resolvedName,
                 selected: false,
                 visible: true,
                 path: path,
@@ -254,7 +300,7 @@ class Shape extends Operation {
                 creationTool: this.name,
                 creationProperties: {
                     shape: shape,
-                    properties: { ...this.properties },
+                    properties: { ...storedProperties },
                     center: { x: x, y: y }
                 }
             };
@@ -266,12 +312,13 @@ class Shape extends Operation {
             svgpathId++;
         }
         else {
+            const resolvedName = this.resolvePathName(shape, oldsvgpathId, values.shapeName, oldId);
             svgPath.path = path;
             svgPath.id = shape + '_' + oldsvgpathId;
-            svgPath.name = shape + ' ' + oldsvgpathId;
+            svgPath.name = resolvedName;
             svgPath.bbox = boundingBox(path);
             svgPath.creationProperties.shape = shape;
-            svgPath.creationProperties.properties = { ...this.properties };
+            svgPath.creationProperties.properties = { ...storedProperties };
             if (svgPath.transformHistory) {
                 applyTransformHistory(svgPath);
             }
@@ -335,7 +382,9 @@ class Shape extends Operation {
     update(path) {
         let shape = path.creationProperties.shape;
         this.showProperties(shape);
-        this.properties = { ...this.properties, ...path.creationProperties.properties };
+        const storedProperties = { ...(path.creationProperties.properties || {}) };
+        delete storedProperties.shapeName;
+        this.properties = { ...this.properties, ...storedProperties };
     }
 
     updateInPlace(svgPath, data) {
@@ -390,6 +439,7 @@ class Shape extends Operation {
                     <strong>${shapeLabel} Tool</strong><br>
                     ${this.tooltip}
                 </div>`;
+            html += PropertiesManager.fieldHTML(this.nameField, PropertiesManager.resolveValue(this.nameField, pathProperties, null));
             html += PropertiesManager.formHTML(fields, pathProperties, this.properties);
             return html;
         }
@@ -400,6 +450,7 @@ class Shape extends Operation {
                 Create basic shapes (circle, rectangle, polygon, star, etc.)
             </div>`;
         html += PropertiesManager.fieldHTML(this.shapeField, currentShape);
+        html += PropertiesManager.fieldHTML(this.nameField, PropertiesManager.resolveValue(this.nameField, pathProperties, null));
 
         // Per-shape property sections (show/hide via CSS)
         for (const s of AVAILABLE_SHAPES) {
@@ -430,14 +481,15 @@ class Shape extends Operation {
         }
 
         const shape = newShape || this.getCurrentShape();
-        const fields = this.fieldSpecs[shape] || [];
+        const fields = this.getShapeFields(shape);
 
         // Collect parsed values from the DOM for the current shape's fields
         const values = PropertiesManager.collectValues(fields);
-        this.properties = { ...this.properties, ...values, shape };
+        const storedProperties = this.buildStoredProperties({ ...values, shape });
+        this.properties = { ...this.properties, ...storedProperties, shape };
 
         if (this.currentPath) {
-            this.updateInPlace(this.currentPath, { ...this.properties, shape });
+            this.updateInPlace(this.currentPath, { ...values, shape });
         }
     }
 }

@@ -191,7 +191,6 @@ html, body {
     display: inline-flex;
     align-items: center;
     min-height: 18px;
-    padding: 0 6px;
     border-radius: 999px;
     background-color: rgba(15, 23, 42, 0.06);
 }
@@ -247,7 +246,6 @@ html, body {
 }
 
 .sidebar-object-children {
-    padding: 6px 0 8px;
     background-color: rgba(248, 249, 250, 0.55);
 }
 
@@ -650,6 +648,10 @@ html, body {
     font-size: 11px;
 }
 
+.canvas-object-tree .sidebar-item .lucide {
+    margin-right: 6px;
+}
+
 .canvas-object-tree .sidebar-item-title,
 .canvas-object-tree .sidebar-item-meta {
     overflow: hidden;
@@ -666,6 +668,61 @@ html, body {
     background-color: rgba(59, 130, 246, 0.16);
     border-left-color: rgba(37, 99, 235, 0.76);
     color: rgba(15, 23, 42, 0.96);
+}
+
+.canvas-object-tree .sidebar-item-title-row {
+    gap: 0;
+}
+
+.canvas-object-tree .sidebar-item-body {
+    min-width: 0;
+}
+
+.canvas-object-tree .sidebar-object-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    margin-left: 8px;
+    flex-shrink: 0;
+}
+
+.canvas-object-tree .sidebar-visibility-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: rgba(15, 23, 42, 0.34);
+    opacity: 0.58;
+    transition: opacity 120ms ease, color 120ms ease, background-color 120ms ease;
+    flex-shrink: 0;
+}
+
+.canvas-object-tree .sidebar-visibility-toggle .lucide {
+    width: 12px;
+    height: 12px;
+    margin-right: 0;
+    stroke-width: 2.1;
+    color: currentColor;
+}
+
+.canvas-object-tree .sidebar-item:hover .sidebar-visibility-toggle,
+.canvas-object-tree .sidebar-item.selected .sidebar-visibility-toggle,
+.canvas-object-tree .sidebar-item.is-hidden .sidebar-visibility-toggle {
+    opacity: 0.86;
+}
+
+.canvas-object-tree .sidebar-visibility-toggle:hover {
+    color: rgba(15, 23, 42, 0.62);
+    background-color: rgba(255, 255, 255, 0.42);
+}
+
+.canvas-object-tree .sidebar-item.is-hidden .sidebar-visibility-toggle {
+    color: rgba(15, 23, 42, 0.46);
 }
 
 .canvas-object-tree .sidebar-item-meta {
@@ -707,6 +764,11 @@ html, body {
 .canvas-object-tree .sidebar-toolpath-item .lucide,
 .canvas-object-tree .sidebar-object-header .lucide {
     color: rgba(37, 99, 235, 0.72);
+}
+
+.canvas-object-tree .sidebar-visibility-toggle .lucide,
+.canvas-object-tree .sidebar-item.is-hidden .sidebar-visibility-toggle .lucide {
+    color: currentColor;
 }
 
 @media (max-width: 900px) {

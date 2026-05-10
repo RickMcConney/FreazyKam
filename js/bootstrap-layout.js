@@ -610,13 +610,20 @@ function setGroupVisibility(collection, filterKey, filterValue, visible, itemLab
     let changedCount = 0;
     collection.forEach(function (item) {
         if (getNestedValue(item, filterKey) === filterValue) {
-            item.visible = visible;
             changedCount++;
-            if (item.id) updatePathVisibilityIcon(item.id, visible);
+            if (item.id && collection === svgpaths && typeof setVisibility === 'function') {
+                setVisibility(item.id, visible, { suppressRefresh: true, suppressRedraw: true });
+            } else {
+                item.visible = visible;
+                if (item.id) updatePathVisibilityIcon(item.id, visible);
+            }
         }
     });
 
     if (changedCount > 0) {
+        if (collection === svgpaths && typeof updatePathVisibilityIcon === 'function') {
+            updatePathVisibilityIcon(filterValue, visible);
+        }
         notify(`${visible ? 'Shown' : 'Hidden'} ${changedCount} ${itemLabel}`, 'success');
         redraw();
     }
@@ -1159,13 +1166,18 @@ function renderSidebarLeafItem(config) {
     });
 
     item.innerHTML = `
-        <i data-lucide="${visible === false ? 'eye-off' : icon}"></i>
+        <i data-lucide="${icon}"></i>
         <div class="sidebar-item-body">
             <div class="sidebar-item-title-row">
                 <span class="sidebar-item-title">${title}</span>
             </div>
             ${metaParts.length > 0 ? `<div class="sidebar-item-meta">${metaParts.join('')}</div>` : ''}
         </div>
+        ${id ? `
+        <button type="button" class="sidebar-visibility-toggle" data-visibility-toggle="path" data-path-id="${id}" aria-label="${visible === false ? 'Show' : 'Hide'} ${title}">
+            <i data-lucide="${visible === false ? 'eye-off' : 'eye'}"></i>
+        </button>
+        ` : ''}
     `;
 
     return item;
@@ -1202,7 +1214,7 @@ function renderObjectSidebarGroup(config) {
     const headerBadgesMarkup = headerBadges.filter(Boolean).map(badge => `<span class="sidebar-item-meta-chip">${badge}</span>`).join('');
     header.innerHTML = `
         <div class="sidebar-object-header-main d-flex align-items-start">
-            <i data-lucide="${path.visible === false ? 'eye-off' : headerIcon}"></i>
+            <i data-lucide="${headerIcon}"></i>
             <div class="sidebar-item-body">
                 <div class="sidebar-item-title-row">
                     <span class="sidebar-item-title">${title}</span>
@@ -1213,9 +1225,14 @@ function renderObjectSidebarGroup(config) {
                 </div>
             </div>
         </div>
-        <span class="sidebar-object-chevron" data-bs-toggle="collapse" data-bs-target="#${groupId}" aria-expanded="true">
-            <i data-lucide="chevron-down" class="collapse-chevron"></i>
-        </span>
+        <div class="sidebar-object-actions">
+            <button type="button" class="sidebar-visibility-toggle" data-visibility-toggle="group" aria-label="${path.visible === false ? 'Show' : 'Hide'} ${title}">
+                <i data-lucide="${path.visible === false ? 'eye-off' : 'eye'}"></i>
+            </button>
+            <span class="sidebar-object-chevron" data-bs-toggle="collapse" data-bs-target="#${groupId}" aria-expanded="true">
+                <i data-lucide="chevron-down" class="collapse-chevron"></i>
+            </span>
+        </div>
     `;
 
     const collapseContainer = document.createElement('div');
@@ -1389,9 +1406,17 @@ function setupSidebarEventHandlers(sidebar) {
         const item = e.target.closest('.sidebar-item');
         const closeButton = e.target.closest('#panel-close-button');
         const objectChevron = e.target.closest('.sidebar-object-chevron');
+        const visibilityToggle = e.target.closest('.sidebar-visibility-toggle');
 
         if (closeButton) {
             showToolsList();
+            return;
+        }
+
+        if (visibilityToggle) {
+            e.preventDefault();
+            e.stopPropagation();
+            toggleSidebarItemVisibility(visibilityToggle);
             return;
         }
 
@@ -1756,11 +1781,32 @@ function isSameToolpathSource(toolpath, selectedSvgIds) {
 
 function findExistingToolpathsForSelection(operationName, selectedSvgIds) {
     const normalizedOperation = operationName === 'Drill' ? 'HelicalDrill' : operationName;
+	const selectedPaths = Array.isArray(selectedSvgIds)
+		? selectedSvgIds.map(id => svgpaths.find(path => path.id === id)).filter(Boolean)
+		: [];
+	const selectionGroups = buildMachiningSelectionIdGroups(selectedPaths);
 
-    return toolpaths.filter(toolpath => {
-        if (toolpath.operation !== normalizedOperation) return false;
-        return isSameToolpathSource(toolpath, selectedSvgIds);
-    });
+	if (selectionGroups.length === 0) {
+		return [];
+	}
+
+	const groupKeys = selectionGroups.map(ids => ids.slice().sort().join(','));
+	const matchedToolpaths = toolpaths.filter(toolpath => {
+		if (toolpath.operation !== normalizedOperation) return false;
+		const sourceIds = getToolpathSourceIds(toolpath);
+		if (sourceIds.length === 0) return false;
+		const toolpathKey = sourceIds.slice().sort().join(',');
+		return groupKeys.includes(toolpathKey);
+	});
+	const matchedKeys = new Set(matchedToolpaths.map(toolpath => getToolpathSourceIds(toolpath).slice().sort().join(',')));
+
+	for (let i = 0; i < groupKeys.length; i++) {
+		if (!matchedKeys.has(groupKeys[i])) {
+			return [];
+		}
+	}
+
+	return matchedToolpaths;
 }
 
 function generateToolpathForSelection() {
@@ -3253,20 +3299,12 @@ function startRenameToolpath(pathId) {
 // Context menu for individual paths
 function showContextMenu(event, pathId) {
     const isToolpath = toolpaths.some(tp => tp.id === pathId);
-    const path = svgpaths.find(p => p.id === pathId) || toolpaths.find(tp => tp.id === pathId);
-    const isVisible = path ? path.visible !== false : true;
     const items = [];
     if (isToolpath) {
         items.push({ label: 'Move Up', icon: 'arrow-up', action: 'move-up' });
         items.push({ label: 'Move Down', icon: 'arrow-down', action: 'move-down' });
         items.push({ divider: true });
     }
-    items.push({
-        label: isVisible ? 'Hide' : 'Show',
-        icon: isVisible ? 'eye-off' : 'eye',
-        action: 'toggle-visibility'
-    });
-    items.push({ divider: true });
     items.push({ label: 'Delete', icon: 'trash-2', action: 'delete', danger: true });
     createContextMenu(event, {
         items,
@@ -3281,9 +3319,6 @@ function showContextMenu(event, pathId) {
                     break;
                 case 'move-down':
                     moveToolpathDown(pathId);
-                    break;
-                case 'toggle-visibility':
-                    setVisibility(pathId, !isVisible);
                     break;
                 case 'delete':
                     doRemoveToolPath(pathId);
@@ -3385,28 +3420,7 @@ function showTextGroupContextMenu(event, groupId) {
 
 
 function addOrReplaceSvgPath(oldId, id, name) {
-    const section = document.getElementById('svg-paths-section');
-
-    // Check for existing item with this ID
-    const existingItem = section.querySelector(`[data-path-id="${oldId}"]`);
-    if (existingItem) {
-        // Replace existing item
-        existingItem.dataset.pathId = id;
-        existingItem.innerHTML = `
-            <i data-lucide="${getPathIcon(name)}"></i>${name}
-        `;
-    } else {
-        // Create new item
-        const item = document.createElement('div');
-        item.className = 'sidebar-item';
-        item.dataset.pathId = id;
-        item.innerHTML = `
-            <i data-lucide="${getPathIcon(name)}"></i>${name}
-        `;
-        section.appendChild(item);
-    }
-
-    lucide.createIcons();
+    refreshToolPathsDisplay();
 }
 function showSTLContextMenu(event, stlId) {
     const model = window.stlModels ? window.stlModels.find(m => m.id === stlId) : null;
@@ -3753,6 +3767,59 @@ function getPathIcon(name) {
 
 function updatePathVisibilityIcon(id, visible) {
     refreshToolPathsDisplay();
+}
+
+function toggleSidebarItemVisibility(toggleButton) {
+    if (!toggleButton) return;
+
+    const toggleType = toggleButton.dataset.visibilityToggle;
+    if (toggleType === 'path') {
+        const pathId = toggleButton.dataset.pathId;
+        if (!pathId) return;
+
+        const path = svgpaths.find(item => item.id === pathId) || toolpaths.find(item => item.id === pathId);
+        if (!path) return;
+
+        setVisibility(pathId, path.visible === false);
+        return;
+    }
+
+    if (toggleType !== 'group') return;
+
+    const groupHeader = toggleButton.closest('.sidebar-object-header');
+    if (!groupHeader) return;
+
+    if (groupHeader.dataset.textGroupHeader) {
+        const groupPaths = svgpaths.filter(path => path.textGroupId === groupHeader.dataset.textGroupHeader);
+        if (groupPaths.length === 0) return;
+        const nextVisible = groupPaths.some(path => path.visible === false);
+        setGroupVisibility(svgpaths, 'textGroupId', groupHeader.dataset.textGroupHeader, nextVisible, 'path(s)');
+        return;
+    }
+
+    if (groupHeader.dataset.patternGroupHeader) {
+        const groupPaths = svgpaths.filter(path => path.patternGroupId === groupHeader.dataset.patternGroupHeader);
+        if (groupPaths.length === 0) return;
+        const nextVisible = groupPaths.some(path => path.visible === false);
+        setGroupVisibility(svgpaths, 'patternGroupId', groupHeader.dataset.patternGroupHeader, nextVisible, 'path(s)');
+        return;
+    }
+
+    if (groupHeader.dataset.svgGroupHeader) {
+        const groupPaths = svgpaths.filter(path => path.svgGroupId === groupHeader.dataset.svgGroupHeader);
+        if (groupPaths.length === 0) return;
+        const nextVisible = groupPaths.some(path => path.visible === false);
+        setGroupVisibility(svgpaths, 'svgGroupId', groupHeader.dataset.svgGroupHeader, nextVisible, 'path(s)');
+        return;
+    }
+
+    const pathId = groupHeader.dataset.pathId;
+    if (!pathId) return;
+
+    const path = svgpaths.find(item => item.id === pathId);
+    if (!path) return;
+
+    setVisibility(pathId, path.visible === false);
 }
 
 function getOperationIcon(operation) {

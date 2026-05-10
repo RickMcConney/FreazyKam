@@ -145,9 +145,61 @@ function toolChanged(tool) {
 	redraw();
 }
 
-function setVisibility(id, visible) {
+function getToolpathSourceIdsForVisibility(toolpath) {
+	if (toolpath.svgIds && Array.isArray(toolpath.svgIds) && toolpath.svgIds.length > 0) {
+		return toolpath.svgIds.slice();
+	}
+
+	return toolpath.svgId ? [toolpath.svgId] : [];
+}
+
+function syncLinkedToolpathVisibility(pathId, visible) {
+	for (var i = 0; i < toolpaths.length; i++) {
+		var toolpath = toolpaths[i];
+		var sourceIds = getToolpathSourceIdsForVisibility(toolpath);
+		if (!sourceIds.includes(pathId)) continue;
+
+		if (!toolpath._hiddenBySourceIds || !Array.isArray(toolpath._hiddenBySourceIds)) {
+			toolpath._hiddenBySourceIds = [];
+		}
+
+		var hiddenBySourceIds = toolpath._hiddenBySourceIds;
+		var hiddenSourceIndex = hiddenBySourceIds.indexOf(pathId);
+
+		if (!visible) {
+			if (hiddenBySourceIds.length === 0) {
+				toolpath._visibleBeforeSourceHide = toolpath.visible !== false;
+			}
+			if (hiddenSourceIndex === -1) {
+				hiddenBySourceIds.push(pathId);
+			}
+			toolpath.visible = false;
+			continue;
+		}
+
+		if (hiddenSourceIndex !== -1) {
+			hiddenBySourceIds.splice(hiddenSourceIndex, 1);
+		}
+
+		if (hiddenBySourceIds.length > 0) {
+			toolpath.visible = false;
+			continue;
+		}
+
+		toolpath.visible = toolpath._visibleBeforeSourceHide !== false;
+		delete toolpath._visibleBeforeSourceHide;
+		delete toolpath._hiddenBySourceIds;
+	}
+}
+
+function setVisibility(id, visible, options) {
+	options = options || {};
+	var isSvgPath = false;
+	var targetToolpath = null;
+
 	for (var i = 0; i < svgpaths.length; i++) {
 		if (svgpaths[i].id == id) {
+			isSvgPath = true;
 			svgpaths[i].visible = visible;
 			// Sync STL model visibility
 			if (svgpaths[i].creationProperties && svgpaths[i].creationProperties.stlModelId) {
@@ -162,13 +214,30 @@ function setVisibility(id, visible) {
 	}
 	for (var i = 0; i < toolpaths.length; i++) {
 		if (toolpaths[i].id == id) {
-			toolpaths[i].visible = visible;
+			targetToolpath = toolpaths[i];
+			if (toolpaths[i]._hiddenBySourceIds && toolpaths[i]._hiddenBySourceIds.length > 0) {
+				toolpaths[i]._visibleBeforeSourceHide = visible;
+				toolpaths[i].visible = false;
+			} else {
+				toolpaths[i].visible = visible;
+			}
 		}
 	}
-	if (typeof updatePathVisibilityIcon === 'function') {
+
+	if (isSvgPath) {
+		syncLinkedToolpathVisibility(id, visible);
+	}
+
+	if (targetToolpath && (!targetToolpath._hiddenBySourceIds || targetToolpath._hiddenBySourceIds.length === 0) && targetToolpath._visibleBeforeSourceHide !== undefined) {
+		delete targetToolpath._visibleBeforeSourceHide;
+	}
+
+	if (!options.suppressRefresh && typeof updatePathVisibilityIcon === 'function') {
 		updatePathVisibilityIcon(id, visible);
 	}
-	redraw();
+	if (!options.suppressRedraw) {
+		redraw();
+	}
 }
 
 function doRemoveToolPath(id) {
@@ -1960,68 +2029,80 @@ function doInlay() {
 	const angle = props?.angle || 0;
 	const direction = pocketingTool.direction || 'climb';
 
-	// Get selected paths
-	var inputPaths = [];
 	var selected = selectMgr.selectedPaths();
-	for (let svgpath of selected)
-		inputPaths.push(svgpath.path);
+	const selectionGroups = buildMachiningSelectionGroups(selected);
+	let generatedAny = false;
 
-	// Mirror paths horizontally for male plug if mirror option is enabled
-	if (inlayType === 'male' && props?.mirror) {
-		var allBbox = boundingBox(inputPaths.flat());
-		var centerX = (allBbox.minx + allBbox.maxx) / 2;
-		inputPaths = inputPaths.map(function(path) {
-			return path.map(function(pt) {
-				return { x: 2 * centerX - pt.x, y: pt.y };
-			});
+	for (let g = 0; g < selectionGroups.length; g++) {
+		const group = selectionGroups[g];
+		let inputPaths = group.map(function(svgpath) {
+			return svgpath.path;
 		});
-	}
+		const selectedSvgIds = group.map(function(path) {
+			return path.id;
+		});
 
-	inputPaths = normalizeWindingOrder(inputPaths);
-	const selectedSvgIds = selected.map(p => p.id);
-
-	let depths = computeNestingDepths(inputPaths);
-	let allOuters = [];
-	let allIslands = [];
-	for (let i = 0; i < inputPaths.length; i++) {
-		if (depths[i] % 2 === 0) allOuters.push(inputPaths[i]);
-		else allIslands.push(inputPaths[i]);
-	}
-
-	if (allOuters.length === 0) {
-		notify('Unable to determine outer boundary for inlay');
-		return;
-	}
-
-	// V-bit finishing tool: use V-carve algorithm for sharp feature preservation
-	if (finishingTool.bit === 'VBit') {
-		doVbitInlay(inputPaths, depths, allOuters, allIslands, props, pocketingTool, finishingTool, selectedSvgIds);
-		return;
-	}
-
-	let pocketGroups = [];
-	let profileGroups = [];
-	let cutOutGroups = [];
-	const typeName = inlayType === 'female' ? 'Socket' : 'Plug';
-
-	if (inlayType === 'female') {
-		for (let oi = 0; oi < allOuters.length; oi++) {
-			let outerPath = allOuters[oi];
-			let outerIdx = inputPaths.indexOf(outerPath);
-			let outerDepth = depths[outerIdx];
-			let islandPaths = [];
-			for (let j = 0; j < inputPaths.length; j++) {
-				if (depths[j] === outerDepth + 1 && pathIn(outerPath, inputPaths[j])) {
-					islandPaths.push(inputPaths[j]);
-				}
-			}
-			generateInlayFemalePaths(outerPath, islandPaths, pocketRadius, finishRadius, stepover, angle, direction, pocketGroups, profileGroups);
+		// Mirror paths horizontally for male plug if mirror option is enabled
+		if (inlayType === 'male' && props?.mirror) {
+			var allBbox = boundingBox(inputPaths.flat());
+			var centerX = (allBbox.minx + allBbox.maxx) / 2;
+			inputPaths = inputPaths.map(function(path) {
+				return path.map(function(pt) {
+					return { x: 2 * centerX - pt.x, y: pt.y };
+				});
+			});
 		}
-	} else {
-		generateInlayMalePaths(inputPaths, depths, clearance, pocketingTool, pocketRadius, finishRadius, stepover, angle, direction, cutOut, pocketGroups, profileGroups, cutOutGroups);
+
+		inputPaths = normalizeWindingOrder(inputPaths);
+
+		let depths = computeNestingDepths(inputPaths);
+		let allOuters = [];
+		let allIslands = [];
+		for (let i = 0; i < inputPaths.length; i++) {
+			if (depths[i] % 2 === 0) allOuters.push(inputPaths[i]);
+			else allIslands.push(inputPaths[i]);
+		}
+
+		if (allOuters.length === 0) {
+			continue;
+		}
+
+		generatedAny = true;
+
+		// V-bit finishing tool: use V-carve algorithm for sharp feature preservation
+		if (finishingTool.bit === 'VBit') {
+			doVbitInlay(inputPaths, depths, allOuters, allIslands, props, pocketingTool, finishingTool, selectedSvgIds);
+			continue;
+		}
+
+		let pocketGroups = [];
+		let profileGroups = [];
+		let cutOutGroups = [];
+		const typeName = inlayType === 'female' ? 'Socket' : 'Plug';
+
+		if (inlayType === 'female') {
+			for (let oi = 0; oi < allOuters.length; oi++) {
+				let outerPath = allOuters[oi];
+				let outerIdx = inputPaths.indexOf(outerPath);
+				let outerDepth = depths[outerIdx];
+				let islandPaths = [];
+				for (let j = 0; j < inputPaths.length; j++) {
+					if (depths[j] === outerDepth + 1 && pathIn(outerPath, inputPaths[j])) {
+						islandPaths.push(inputPaths[j]);
+					}
+				}
+				generateInlayFemalePaths(outerPath, islandPaths, pocketRadius, finishRadius, stepover, angle, direction, pocketGroups, profileGroups);
+			}
+		} else {
+			generateInlayMalePaths(inputPaths, depths, clearance, pocketingTool, pocketRadius, finishRadius, stepover, angle, direction, cutOut, pocketGroups, profileGroups, cutOutGroups);
+		}
+
+		pushInlayToolpaths(pocketGroups, profileGroups, cutOutGroups, pocketingTool, finishingTool, typeName, selectedSvgIds);
 	}
 
-	pushInlayToolpaths(pocketGroups, profileGroups, cutOutGroups, pocketingTool, finishingTool, typeName, selectedSvgIds);
+	if (!generatedAny) {
+		notify('Unable to determine outer boundary for inlay');
+	}
 }
 
 function doPocket() {
@@ -2036,44 +2117,53 @@ function doPocket() {
 	var name = 'Pocket';
 	var angle = window.currentToolpathProperties?.angle || 0;
 	var strategy = window.currentToolpathProperties?.strategy || 'adaptive';
-	var inputPaths = [];
-
 	var selected = selectMgr.selectedPaths();
-	for (let svgpath of selected)
-		inputPaths.push(svgpath.path);
-
-	inputPaths = normalizeWindingOrder(inputPaths);
 	var direction = currentTool.direction || 'climb';
-	const selectedSvgIds = selectMgr.selectedPaths().map(p => p.id);
+	const selectionGroups = buildMachiningSelectionGroups(selected);
+	let createdCount = 0;
 
-	let depths = computeNestingDepths(inputPaths);
+	for (let g = 0; g < selectionGroups.length; g++) {
+		const group = selectionGroups[g];
+		let inputPaths = group.map(function(svgpath) {
+			return svgpath.path;
+		});
+		inputPaths = normalizeWindingOrder(inputPaths);
+		const selectedSvgIds = group.map(function(path) {
+			return path.id;
+		});
 
-	// Even-depth paths are pocket boundaries, odd-depth paths are islands.
-	// Each pocket boundary's islands are the odd-depth paths directly inside it
-	// (one nesting level deeper).
-	let pocketGroups = [];
-	for (let i = 0; i < inputPaths.length; i++) {
-		if (depths[i] % 2 !== 0) continue; // skip islands
-		let outerPath = inputPaths[i];
-		let directIslands = [];
-		for (let j = 0; j < inputPaths.length; j++) {
-			if (i === j) continue;
-			if (depths[j] === depths[i] + 1 && pathIn(outerPath, inputPaths[j])) {
-				directIslands.push(inputPaths[j]);
+		let depths = computeNestingDepths(inputPaths);
+
+		// Even-depth paths are pocket boundaries, odd-depth paths are islands.
+		// Each pocket boundary's islands are the odd-depth paths directly inside it
+		// (one nesting level deeper).
+		let pocketGroups = [];
+		for (let i = 0; i < inputPaths.length; i++) {
+			if (depths[i] % 2 !== 0) continue;
+			let outerPath = inputPaths[i];
+			let directIslands = [];
+			for (let j = 0; j < inputPaths.length; j++) {
+				if (i === j) continue;
+				if (depths[j] === depths[i] + 1 && pathIn(outerPath, inputPaths[j])) {
+					directIslands.push(inputPaths[j]);
+				}
 			}
+			let paths = generatePocketPaths(outerPath, directIslands, radius, stepover, angle, direction, 0, strategy);
+			if (paths.length > 0) pocketGroups.push(paths);
 		}
-		let paths = generatePocketPaths(outerPath, directIslands, radius, stepover, angle, direction, 0, strategy);
-		if (paths.length > 0) pocketGroups.push(paths);
+
+		if (pocketGroups.length === 0) continue;
+
+		// Order shape groups geographically, keeping each shape's paths together
+		let allPaths = optimizeGroupOrder(pocketGroups);
+		pushToolPath(allPaths, name, 'Pocket', null, selectedSvgIds);
+		createdCount++;
 	}
 
-	if (pocketGroups.length === 0) {
+	if (createdCount === 0) {
 		notify('Unable to generate pocket paths');
 		return;
 	}
-
-	// Order shape groups geographically, keeping each shape's paths together
-	let allPaths = optimizeGroupOrder(pocketGroups);
-	pushToolPath(allPaths, name, 'Pocket', null, selectedSvgIds);
 }
 
 function doVcarve() {

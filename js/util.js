@@ -582,6 +582,89 @@ function normalizeWindingOrder(inputPaths) {
 
 	return normalized;
 }
+
+function getMachiningSelectionGroupKey(path) {
+	if (!path) return null;
+	if (path.textGroupId) return 'text:' + path.textGroupId;
+	if (path.patternGroupId) return 'pattern:' + path.patternGroupId;
+	if (path.svgGroupId) return 'svg:' + path.svgGroupId;
+	return null;
+}
+
+function buildMachiningSelectionGroups(selectedPaths) {
+	if (!Array.isArray(selectedPaths) || selectedPaths.length === 0) return [];
+
+	const indexedPaths = selectedPaths.map(function(path, index) {
+		return { path: path, index: index };
+	});
+	const explicitGroups = new Map();
+	const remaining = [];
+
+	for (let i = 0; i < indexedPaths.length; i++) {
+		const entry = indexedPaths[i];
+		const groupKey = getMachiningSelectionGroupKey(entry.path);
+		if (groupKey) {
+			if (!explicitGroups.has(groupKey)) explicitGroups.set(groupKey, []);
+			explicitGroups.get(groupKey).push(entry);
+		} else {
+			remaining.push(entry);
+		}
+	}
+
+	const groups = [];
+	explicitGroups.forEach(function(entries) {
+		groups.push(entries);
+	});
+
+	const visited = new Set();
+	for (let i = 0; i < remaining.length; i++) {
+		if (visited.has(i)) continue;
+		const component = [];
+		const queue = [i];
+		visited.add(i);
+
+		while (queue.length > 0) {
+			const currentIndex = queue.shift();
+			const current = remaining[currentIndex];
+			component.push(current);
+
+			for (let j = 0; j < remaining.length; j++) {
+				if (visited.has(j)) continue;
+				const candidate = remaining[j];
+				if (pathIn(current.path.path, candidate.path.path) || pathIn(candidate.path.path, current.path.path)) {
+					visited.add(j);
+					queue.push(j);
+				}
+			}
+		}
+
+		groups.push(component);
+	}
+
+	return groups
+		.map(function(entries) {
+			return entries.sort(function(a, b) {
+				return a.index - b.index;
+			});
+		})
+		.sort(function(a, b) {
+			return a[0].index - b[0].index;
+		})
+		.map(function(entries) {
+			return entries.map(function(entry) {
+				return entry.path;
+			});
+		});
+}
+
+function buildMachiningSelectionIdGroups(selectedPaths) {
+	return buildMachiningSelectionGroups(selectedPaths).map(function(group) {
+		return group.map(function(path) {
+			return path.id;
+		});
+	});
+}
+
 /**
  * Rotate a point around a center by a given angle in radians
  * @param {Object} point - Point with x, y coordinates
