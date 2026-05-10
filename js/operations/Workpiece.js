@@ -96,36 +96,36 @@ class Workpiece extends Operation {
         // Update global options when properties change
         // Parse inputs using parseDimension to handle both mm and inch inputs
         if ('workpieceWidth' in data) {
-            let newValue = parseDimension(data.workpieceWidth, useInches) || 300;
+            let valueMM = data.workpieceWidth || 300;
             const tableWidth = getOption("tableWidth");
-            const value = useInches ? newValue / 25.4 : newValue;
-            if (tableWidth && value > tableWidth) {
+            let value = useInches ? valueMM / 25.4 : valueMM;
+            if (tableWidth && valueMM > tableWidth) {
                 notify(`Workpiece width clamped to machine table limit (${tableWidth}mm)`, 'warning');
-                newValue = tableWidth;
+                valueMM  = tableWidth;
                 const el = document.getElementById('pm-workpieceWidth');
-                if (el) el.value = useInches ? (newValue / 25.4).toFixed(2) : newValue;
+                if (el) el.value = formatDimension(value, true);
             }
-            setOption("workpieceWidth", newValue);
+            setOption("workpieceWidth", valueMM);
             dimensionChanged = true;
         }
 
         if ('workpieceLength' in data) {
-            let newValue = parseDimension(data.workpieceLength, useInches) || 200;
+            let valueMM = data.workpieceLength || 200;
             const tableDepth = getOption("tableDepth");
-            const value = useInches ? newValue / 25.4 : newValue;
-            if (tableDepth && value > tableDepth) {
+            let value = useInches ? valueMM / 25.4 : valueMM;
+            if (tableDepth && valueMM > tableDepth) {
                 notify(`Workpiece length clamped to machine table limit (${tableDepth}mm)`, 'warning');
-                newValue = tableDepth;
+                valueMM = tableDepth;
                 const el = document.getElementById('pm-workpieceLength');
-                if (el) el.value = useInches ? (newValue / 25.4).toFixed(2) : newValue;
+                if (el) el.value = formatDimension(valueMM, true);
             }
-            setOption("workpieceLength", newValue);
+            setOption("workpieceLength", valueMM);
             dimensionChanged = true;
         }
 
         if ('workpieceThickness' in data) {
-            const newValue = parseDimension(data.workpieceThickness, useInches) || 19;
-            setOption("workpieceThickness", newValue);
+            const valueMM = data.workpieceThickness || 19;
+            setOption("workpieceThickness", valueMM);
 
             // Recalculate tool depths and steps that are percentage-based
             recalculateToolPercentages();
@@ -133,8 +133,8 @@ class Workpiece extends Operation {
         }
 
         if ('gridSize' in data) {
-            const newValue = parseDimension(data.gridSize, useInches) || 10;
-            setOption("gridSize", newValue);
+            const valueMM = data.gridSize || 10;
+            setOption("gridSize", valueMM);
         }
 
         if ('woodSpecies' in data) {

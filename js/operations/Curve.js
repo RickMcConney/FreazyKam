@@ -407,7 +407,7 @@ class Curve extends Operation {
     drawLengthLabel(ctx, p1, p2) {
         if (p1 && p2) {
             ctx.save();
-            const length = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+            const length = Math.hypot(p2.x - p1.x, p2.y - p1.y)/viewScale;
             const midPoint = { x: (p2.x + p1.x) / 2, y: (p2.y + p1.y) / 2 };
             ctx.font = "14px Arial";
             ctx.fillStyle = '#000000';

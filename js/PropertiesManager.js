@@ -231,8 +231,11 @@ class PropertiesManager {
     }
 
     static _dimensionHTML(field, value) {
+        const mmValue = (typeof value === 'number')
+            ? value
+            : parseDimension(value);
         const display = (typeof formatDimension === 'function')
-            ? formatDimension(parseDimension(value), true)
+            ? formatDimension(mmValue, true)
             : String(value);
         return `<div class="mb-3 pm-field">
             <label for="pm-${field.key}" class="form-label small"><strong>${field.label}:</strong></label>

@@ -91,7 +91,7 @@ function newZoom(delta, centerX, centerY) {
 	var world = screenToWorld(centerX, centerY);
 	// Update zoom level multiplicatively
 	var zoomFactor = (delta > 0) ? ZOOM_STEP_FACTOR : 1 / ZOOM_STEP_FACTOR;
-	var newZoom = Math.max(0.05, Math.min(50, zoomLevel * zoomFactor));
+	var newZoom = Math.max(0.01, Math.min(10, zoomLevel * zoomFactor));
 	// Adjust pan so the world coordinate stays under the mouse
 	panX = centerX - world.x * newZoom;
 	panY = centerY - world.y * newZoom;
@@ -260,46 +260,100 @@ function drawPathTabs(svgpath) {
 
 
 // Shared setup for grid and origin drawing
+function _getProgressiveGridMultiplier(baseStepPixels, minStepPixels) {
+	if (!baseStepPixels || baseStepPixels <= 0) {
+		return 1;
+	}
+
+	const ratio = Math.max(1, minStepPixels / baseStepPixels);
+	const magnitude = Math.pow(10, Math.floor(Math.log10(ratio)));
+	const normalized = ratio / magnitude;
+
+	if (normalized <= 1) return magnitude/2;
+	if (normalized <= 2) return 2 * magnitude;
+	if (normalized <= 5) return 5 * magnitude;
+	return 10 * magnitude;
+}
+
+function _drawGridLines(stepPixels, topLeft, bottomRight, originScreen) {
+	if (!stepPixels || stepPixels <= 0) {
+		return;
+	}
+
+	for (var y = originScreen.y; y <= bottomRight.y; y += stepPixels) {
+		ctx.moveTo(topLeft.x, y);
+		ctx.lineTo(bottomRight.x, y);
+	}
+	for (var y = originScreen.y - stepPixels; y >= topLeft.y; y -= stepPixels) {
+		ctx.moveTo(topLeft.x, y);
+		ctx.lineTo(bottomRight.x, y);
+	}
+
+	for (var x = originScreen.x; x <= bottomRight.x; x += stepPixels) {
+		ctx.moveTo(x, topLeft.y);
+		ctx.lineTo(x, bottomRight.y);
+	}
+	for (var x = originScreen.x - stepPixels; x >= topLeft.x; x -= stepPixels) {
+		ctx.moveTo(x, topLeft.y);
+		ctx.lineTo(x, bottomRight.y);
+	}
+}
+
+function _formatAxisLabel(value, useInches) {
+	if (useInches) {
+		return formatDimension(value, true);
+	}
+
+	if (Math.abs(value - Math.round(value)) < 0.0001) {
+		return String(Math.round(value));
+	}
+
+	return parseFloat(value.toFixed(1)).toString();
+}
+
 function _getGridSetup() {
 	const width = getOption("workpieceWidth") * viewScale;
 	const length = getOption("workpieceLength") * viewScale;
 	const topLeft = worldToScreen(0, 0);
 	const bottomRight = worldToScreen(width, length);
 	const o = worldToScreen(origin.x, origin.y);
-	const gridSize = (typeof getOption !== 'undefined' && getOption("gridSize")) ? getOption("gridSize") : 10;
+	const useInches = typeof getOption !== 'undefined' ? getOption('Inches') : false;
+	let gridSize = (typeof getOption !== 'undefined' && getOption("gridSize")) ? getOption("gridSize") : 10;
 	const grid = gridSize * viewScale * zoomLevel;
-	return { topLeft, bottomRight, o, grid, gridSize };
+
+	const majorMultiplier = _getProgressiveGridMultiplier(grid, 100);
+	const labelMultiplier = _getProgressiveGridMultiplier(grid, 100);
+	
+	const minorMultiplier = useInches ? majorMultiplier/4 : majorMultiplier/5;
+
+	return {
+		topLeft,
+		bottomRight,
+		o,
+		minorGrid: grid * minorMultiplier,
+		majorGrid: grid * majorMultiplier,
+		labelGrid: grid * labelMultiplier,
+		labelInterval: gridSize * labelMultiplier
+	};
 }
 
 // New drawGrid using virtual coordinates
 function drawGrid() {
+	const { topLeft, bottomRight, o, minorGrid, majorGrid } = _getGridSetup();
+
 	ctx.beginPath();
-	const { topLeft, bottomRight, o, grid } = _getGridSetup();
-
-
-
-	// Draw horizontal grid lines (covering negative and positive Y)
-	for (var y = o.y; y <= bottomRight.y; y += grid) {
-		ctx.moveTo(topLeft.x, y);
-		ctx.lineTo(bottomRight.x, y);
-	}
-	for (var y = o.y; y >= topLeft.y; y -= grid) {
-		ctx.moveTo(topLeft.x, y);
-		ctx.lineTo(bottomRight.x, y);
-	}
-	// Draw vertical grid lines (covering negative and positive X)
-	for (var x = o.x; x <= bottomRight.x; x += grid) {
-		ctx.moveTo(x, topLeft.y);
-		ctx.lineTo(x, bottomRight.y);
-	}
-	for (var x = o.x; x >= topLeft.x; x -= grid) {
-		ctx.moveTo(x, topLeft.y);
-		ctx.lineTo(x, bottomRight.y);
-	}
+	_drawGridLines(minorGrid, topLeft, bottomRight, o);
 	ctx.lineWidth = 0.25;
-	ctx.strokeStyle = gridColor;
+	ctx.strokeStyle = 'rgba(136, 136, 136, 0.35)';
 	ctx.stroke();
 
+	if (majorGrid !== minorGrid) {
+		ctx.beginPath();
+		_drawGridLines(majorGrid, topLeft, bottomRight, o);
+		ctx.lineWidth = 0.5;
+		ctx.strokeStyle = 'rgba(136, 136, 136, 0.6)';
+		ctx.stroke();
+	}
 }
 
 
@@ -307,7 +361,7 @@ function drawGrid() {
 
 function drawOrigin() {
 	ctx.beginPath();
-	const { topLeft, bottomRight, o, gridSize } = _getGridSetup();
+	const { topLeft, bottomRight, o, labelGrid, labelInterval } = _getGridSetup();
 
 	let offsetx = 0;
 	let offsety = 0;
@@ -329,30 +383,14 @@ function drawOrigin() {
 	ctx.font = "12px Arial";
 
 	var useInches = typeof getOption !== 'undefined' ? getOption('Inches') : false;
-	var numberInterval, numberGrid;
-
-	if (useInches) {
-		// Use 1 inch intervals, or fractions for small grids
-		var inchSize = MM_PER_INCH * viewScale * zoomLevel;
-		if (inchSize >= 30) {
-			numberInterval = MM_PER_INCH; // 1 inch
-		} else if (inchSize >= 15) {
-			numberInterval = MM_PER_INCH / 2; // 1/2 inch
-		} else {
-			numberInterval = MM_PER_INCH / 4; // 1/4 inch
-		}
-		numberGrid = numberInterval * viewScale * zoomLevel;
-	} else {
-		// Metric - use 10mm intervals if grid size is less than 10mm, otherwise use grid size
-		numberInterval = gridSize < 10 ? 10 : gridSize;
-		numberGrid = numberInterval * viewScale * zoomLevel;
-	}
+	var numberInterval = labelInterval;
+	var numberGrid = labelGrid;
 
 	// Draw Y axis labels (vertical positions)
 	var label = 0;
 	for (var y = o.y; y <= bottomRight.y; y += numberGrid) {
 		if (label !== 0) { // Skip drawing 0 at origin to avoid overlap
-			var labelText = useInches ? formatDimension(-label, true) : -label;
+			var labelText = _formatAxisLabel(-label, useInches);
 			ctx.fillText(labelText, o.x + 2, y - 2);
 		}
 		label += numberInterval;
@@ -360,7 +398,7 @@ function drawOrigin() {
 	label = 0;
 	for (var y = o.y; y >= topLeft.y; y -= numberGrid) {
 		if (label !== 0) { // Skip drawing 0 at origin to avoid overlap
-			var labelText = useInches ? formatDimension(-label, true) : -label;
+			var labelText = _formatAxisLabel(-label, useInches);
 			ctx.fillText(labelText, o.x + 2, y - 2);
 		}
 		label -= numberInterval;
@@ -370,7 +408,7 @@ function drawOrigin() {
 	label = 0;
 	for (var x = o.x; x <= bottomRight.x; x += numberGrid) {
 		if (label !== 0) { // Skip drawing 0 at origin to avoid overlap
-			var labelText = useInches ? formatDimension(label, true) : label;
+			var labelText = _formatAxisLabel(label, useInches);
 			ctx.fillText(labelText, x + 2, o.y - 2);
 		}
 		label += numberInterval;
@@ -378,7 +416,7 @@ function drawOrigin() {
 	label = 0;
 	for (var x = o.x; x >= topLeft.x; x -= numberGrid) {
 		if (label !== 0) { // Skip drawing 0 at origin to avoid overlap
-			var labelText = useInches ? formatDimension(label, true) : label;
+			var labelText = _formatAxisLabel(label, useInches);
 			ctx.fillText(labelText, x + 2, o.y - 2);
 		}
 		label -= numberInterval;
@@ -388,7 +426,6 @@ function drawOrigin() {
 	ctx.fillStyle = originMarkerColor;
 	ctx.fillText("0", o.x + 2, o.y - 2);
 }
-
 // Core rendering function (does actual drawing)
 function redrawCore() {
 	if (!canvas.width || !canvas.height) return;
