@@ -1,16 +1,18 @@
 var makerjs = require('makerjs');
 
 var AVAILABLE_SHAPES = [
-    { value: 'Belt', label: "Belt" },
-    { value: 'Circle', label: "Circle" },
-    { value: 'Ellipse', label: "Ellipse" },
-    { value: 'Heart', label: "Heart" },
-    { value: 'Polygon', label: "Polygon" },
-    { value: 'Rectangle', label: "Rectangle" },
-    { value: 'RoundRectangle', label: "Round Rectangle" },
-    { value: 'Sign', label: "Sign" },
-    { value: 'Star', label: "Star" }
-]
+    { value: 'Belt', label: 'Belt', icon: 'orbit', tooltip: 'Create belt shapes between two pulleys' },
+    { value: 'Circle', label: 'Circle', icon: 'circle', tooltip: 'Create circles from a center point' },
+    { value: 'Ellipse', label: 'Ellipse', icon: 'egg', tooltip: 'Create ellipses from a center point' },
+    { value: 'Heart', label: 'Heart', icon: 'heart', tooltip: 'Create heart shapes from a center point' },
+    { value: 'Polygon', label: 'Polygon', icon: 'pentagon', tooltip: 'Create regular polygons from a center point' },
+    { value: 'Rectangle', label: 'Rectangle', icon: 'rectangle-horizontal', tooltip: 'Create rectangles from a center point' },
+    { value: 'RoundRectangle', label: 'Round Rectangle', icon: 'square', tooltip: 'Create rounded rectangles from a center point' },
+    { value: 'Sign', label: 'Sign', icon: 'signpost', tooltip: 'Create sign blanks with rounded corners' },
+    { value: 'Star', label: 'Star', icon: 'star', tooltip: 'Create star shapes from a center point' }
+];
+
+const SHAPE_TOOL_NAMES = AVAILABLE_SHAPES.map(shape => shape.value);
 
 function invertArc(arc) {
     var chord = new makerjs.paths.Chord(arc);
@@ -56,8 +58,11 @@ function isDimensionTitle(title) {
 }
 
 class Shape extends Operation {
-    constructor() {
-        super('Shape', 'pentagon', 'Create basic shapes (circle, rectangle, polygon, star, etc.)');
+    constructor(fixedShape = null, icon = 'pentagon', tooltip = 'Create basic shapes (circle, rectangle, polygon, star, etc.)') {
+        const displayName = AVAILABLE_SHAPES.find(shape => shape.value === fixedShape)?.label || 'Shape';
+        super(fixedShape || 'Shape', icon, tooltip, displayName);
+
+        this.fixedShape = fixedShape;
 
         // Raw metaParameter defaults per shape (used for initial defaults)
         this._metaDefaults = {};
@@ -142,6 +147,12 @@ class Shape extends Operation {
     }
 
     get fields() {
+        if (this.fixedShape) {
+            const fields = {};
+            for (const f of (this.fieldSpecs[this.fixedShape] || [])) fields[f.key] = f;
+            return fields;
+        }
+
         const all = { shape: this.shapeField };
         for (const specs of Object.values(this.fieldSpecs)) {
             for (const f of specs) all[f.key] = f;
@@ -240,7 +251,7 @@ class Shape extends Operation {
                 visible: true,
                 path: path,
                 bbox: boundingBox(path),
-                creationTool: 'Shape',
+                creationTool: this.name,
                 creationProperties: {
                     shape: shape,
                     properties: { ...this.properties },
@@ -271,7 +282,8 @@ class Shape extends Operation {
         selectMgr.selectPath(svgPath);
 
         const title = document.getElementById('tool-properties-title');
-        title.textContent = `Edit ${shape} - ${svgPath.name}`;
+        const shapeLabel = AVAILABLE_SHAPES.find(item => item.value === shape)?.label || shape;
+        title.textContent = `Edit ${shapeLabel} - ${svgPath.name}`;
 
         if (oldId != null && typeof regenerateToolpathsForPaths === 'function') {
             if (oldId !== svgPath.id) {
@@ -328,12 +340,15 @@ class Shape extends Operation {
 
     updateInPlace(svgPath, data) {
         var props = svgPath.creationProperties;
-        this.makeShape(data.shape, props.center.x, props.center.y, svgPath, data);
+        this.makeShape(data.shape || this.getCurrentShape(), props.center.x, props.center.y, svgPath, data);
     }
 
     // ── Properties panel ──────────────────────────────────────────────────
 
     getCurrentShape() {
+        if (this.fixedShape) {
+            return this.fixedShape;
+        }
         if (this.currentPath) {
             return this.currentPath.creationProperties.shape;
         }
@@ -344,10 +359,16 @@ class Shape extends Operation {
     }
 
     getShape() {
+        if (this.fixedShape) {
+            return this.fixedShape;
+        }
         return document.getElementById('pm-shape').value;
     }
 
     showProperties(shape) {
+        if (this.fixedShape) {
+            return;
+        }
         for (let s of AVAILABLE_SHAPES) {
             const el = document.getElementById(`${s.value}-properties`);
             if (el) el.style.display = (s.value === shape) ? 'block' : 'none';
@@ -359,6 +380,19 @@ class Shape extends Operation {
     getPropertiesHTML(path) {
         const currentShape = this.getCurrentShape();
         const pathProperties = this.currentPath?.creationProperties?.properties ?? null;
+
+        if (this.fixedShape) {
+            const fields = this.fieldSpecs[this.fixedShape] || [];
+            const shapeLabel = AVAILABLE_SHAPES.find(shape => shape.value === this.fixedShape)?.label || this.fixedShape;
+
+            let html = `
+                <div class="alert alert-info mb-3">
+                    <strong>${shapeLabel} Tool</strong><br>
+                    ${this.tooltip}
+                </div>`;
+            html += PropertiesManager.formHTML(fields, pathProperties, this.properties);
+            return html;
+        }
 
         let html = `
             <div class="alert alert-info mb-3">
@@ -391,7 +425,7 @@ class Shape extends Operation {
 
     onPropertiesChanged(data) {
         const newShape = data.shape;
-        if (newShape) {
+        if (newShape && !this.fixedShape) {
             this.showProperties(newShape);
         }
 
@@ -406,4 +440,9 @@ class Shape extends Operation {
             this.updateInPlace(this.currentPath, { ...this.properties, shape });
         }
     }
+}
+
+if (typeof window !== 'undefined') {
+    window.AVAILABLE_SHAPES = AVAILABLE_SHAPES;
+    window.SHAPE_TOOL_NAMES = SHAPE_TOOL_NAMES;
 }

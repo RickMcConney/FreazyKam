@@ -13,8 +13,8 @@ class Select extends Operation {
     static DRAG_THRESHOLD = 8;              // pixels before drag is detected
     static MIN_DISTANCE_CHECK = 10;         // minimum pixels to register distance
 
-    constructor() {
-        super('Select', null);
+    constructor(name = 'Select', icon = null, tooltip = '', displayName = null) {
+        super(name, icon, tooltip, displayName);
         this.unselectOnMouseDown = true;
     }
 

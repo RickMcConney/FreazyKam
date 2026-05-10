@@ -241,6 +241,46 @@ class StepWiseHelpSystem {
                 'Click to place the center point of the shape',
                 'Shape created! Adjust properties or close panel'
             ],
+            'Belt': [
+                'Set the two pulley radii and their spacing in the properties panel',
+                'Click to place the center point of the belt shape',
+                'Belt created! Adjust properties or close panel'
+            ],
+            'Circle': [
+                'Set the circle radius in the properties panel',
+                'Click to place the center point of the circle',
+                'Circle created! Adjust properties or close panel'
+            ],
+            'Ellipse': [
+                'Set the ellipse radii in the properties panel',
+                'Click to place the center point of the ellipse',
+                'Ellipse created! Adjust properties or close panel'
+            ],
+            'Heart': [
+                'Set the heart radius and angle in the properties panel',
+                'Click to place the center point of the heart',
+                'Heart created! Adjust properties or close panel'
+            ],
+            'Rectangle': [
+                'Set the rectangle width and height in the properties panel',
+                'Click to place the center point of the rectangle',
+                'Rectangle created! Adjust properties or close panel'
+            ],
+            'RoundRectangle': [
+                'Set the width, height and corner radius in the properties panel',
+                'Click to place the center point of the rounded rectangle',
+                'Rounded rectangle created! Adjust properties or close panel'
+            ],
+            'Sign': [
+                'Set the sign width, height and corner radius in the properties panel',
+                'Click to place the center point of the sign blank',
+                'Sign created! Adjust properties or close panel'
+            ],
+            'Star': [
+                'Set the number of points and inner/outer radii in the properties panel',
+                'Click to place the center point of the star',
+                'Star created! Adjust properties or close panel'
+            ],
             'Text': [
                 'Enter your text in the properties panel',
                 'Choose font and size settings',

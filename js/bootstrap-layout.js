@@ -693,6 +693,112 @@ function initializeLayout() {
     updateSnapButton();
 }
 
+function renderShapeToolsGroup() {
+    const drawToolsList = document.getElementById('draw-tools-list');
+    const shapeTools = [
+        ...(window.AVAILABLE_SHAPES || []),
+        { value: 'Pen', label: 'Pen', icon: 'pen-tool', tooltip: 'Draw straight-line paths. Click to add corner points. Click near the first point to close, or press Escape to finish.' },
+        { value: 'Curve', label: 'Curve', icon: 'spline', tooltip: 'Draw smooth Bezier curves. Click to add points, Alt+click for corners. Click near start to close, Escape to finish.' }
+    ];
+    if (!drawToolsList || shapeTools.length === 0) return;
+
+    const existingGroup = drawToolsList.querySelector('[data-shape-tools-group]');
+    if (existingGroup) existingGroup.remove();
+
+    const groupContainer = document.createElement('div');
+    groupContainer.dataset.shapeToolsGroup = 'true';
+    groupContainer.className = 'shape-tools-group mb-1';
+
+    const groupHeader = document.createElement('div');
+    groupHeader.className = 'sidebar-item fw-bold d-flex align-items-center justify-content-between';
+    groupHeader.dataset.shapeToolsToggle = 'true';
+    groupHeader.dataset.bsToggle = 'collapse';
+    groupHeader.dataset.bsTarget = '#shape-tools-collapse';
+    groupHeader.setAttribute('aria-expanded', 'false');
+    groupHeader.setAttribute('role', 'button');
+    groupHeader.title = 'Create basic shapes';
+    groupHeader.innerHTML = `
+        <span class="d-flex align-items-center gap-2">
+            <i data-lucide="pentagon"></i>Shape
+        </span>
+        <i data-lucide="chevron-down" class="collapse-chevron"></i>`;
+
+    const collapseContainer = document.createElement('div');
+    collapseContainer.className = 'collapse';
+    collapseContainer.id = 'shape-tools-collapse';
+
+    shapeTools.forEach(shape => {
+        const item = document.createElement('div');
+        item.className = 'sidebar-item ms-4';
+        item.dataset.operation = shape.value;
+        item.dataset.shapeOperation = 'true';
+        item.title = shape.tooltip;
+        item.innerHTML = `<i data-lucide="${shape.icon}"></i>${shape.label}`;
+        collapseContainer.appendChild(item);
+    });
+
+    groupContainer.appendChild(groupHeader);
+    groupContainer.appendChild(collapseContainer);
+
+    const insertBeforeNode = drawToolsList.querySelector('[data-operation="Text"]') || null;
+    drawToolsList.insertBefore(groupContainer, insertBeforeNode);
+    lucide.createIcons();
+}
+
+function renderModifyToolsGroup() {
+    const drawToolsList = document.getElementById('draw-tools-list');
+    const modifyTools = [
+        { value: 'Move', icon: 'move', label: 'Move', tooltip: 'Move, scale, and rotate selected objects' },
+        { value: 'Edit', icon: 'edit', label: 'Edit', tooltip: 'Edit individual points of a path (move, add, delete)' },
+        { value: 'Boolean', icon: 'squares-unite', label: 'Boolean', tooltip: 'Perform boolean operations (union, intersect, subtract) on selected paths' },
+        { value: 'Pattern', icon: 'grid-3x3', label: 'Pattern', tooltip: 'Create linear or circular arrays of selected paths' },
+        { value: 'Offset', icon: 'fullscreen', label: 'Offset', tooltip: 'Create an offset copy of selected paths (inward or outward)' }
+    ];
+    if (!drawToolsList) return;
+
+    const existingGroup = drawToolsList.querySelector('[data-modify-tools-group]');
+    if (existingGroup) existingGroup.remove();
+
+    const groupContainer = document.createElement('div');
+    groupContainer.dataset.modifyToolsGroup = 'true';
+    groupContainer.className = 'modify-tools-group mb-1';
+
+    const groupHeader = document.createElement('div');
+    groupHeader.className = 'sidebar-item fw-bold d-flex align-items-center justify-content-between';
+    groupHeader.dataset.modifyToolsToggle = 'true';
+    groupHeader.dataset.bsToggle = 'collapse';
+    groupHeader.dataset.bsTarget = '#modify-tools-collapse';
+    groupHeader.setAttribute('aria-expanded', 'false');
+    groupHeader.setAttribute('role', 'button');
+    groupHeader.title = 'Modify existing paths';
+    groupHeader.innerHTML = `
+        <span class="d-flex align-items-center gap-2">
+            <i data-lucide="wand-sparkles"></i>Modify
+        </span>
+        <i data-lucide="chevron-down" class="collapse-chevron"></i>`;
+
+    const collapseContainer = document.createElement('div');
+    collapseContainer.className = 'collapse';
+    collapseContainer.id = 'modify-tools-collapse';
+
+    modifyTools.forEach(tool => {
+        const item = document.createElement('div');
+        item.className = 'sidebar-item ms-4';
+        item.dataset.operation = tool.value;
+        item.dataset.modifyOperation = 'true';
+        item.title = tool.tooltip;
+        item.innerHTML = `<i data-lucide="${tool.icon}"></i>${tool.label}`;
+        collapseContainer.appendChild(item);
+    });
+
+    groupContainer.appendChild(groupHeader);
+    groupContainer.appendChild(collapseContainer);
+
+    const insertBeforeNode = drawToolsList.querySelector('[data-operation="Text"]') || null;
+    drawToolsList.insertBefore(groupContainer, insertBeforeNode);
+    lucide.createIcons();
+}
+
 // Toolbar creation
 function createToolbar() {
     const toolbar = document.getElementById('toolbar');
@@ -1104,8 +1210,12 @@ function setupSidebarEventHandlers(sidebar) {
         const operation = item.dataset.operation;
         const pathId = item.dataset.pathId;
 
+        if (item.dataset.shapeToolsToggle || item.dataset.modifyToolsToggle) {
+            return;
+        }
+
         if (operation) {
-            const isDrawTool = ['Select', 'Move', 'Edit', 'Pen', 'Curve', 'Shape', 'Boolean', 'Gemini', 'Text', 'Tabs', 'Offset', 'Pattern'].includes(operation);
+            const isDrawTool = ['Select', 'Move', 'Edit', 'Pen', 'Curve', 'Shape', 'Boolean', 'Gemini', 'Text', 'Tabs', 'Offset', 'Pattern', ...(window.SHAPE_TOOL_NAMES || [])].includes(operation);
 
             if (isDrawTool) {
                 showToolPropertiesEditor(operation);
@@ -1312,12 +1422,19 @@ function showToolPropertiesEditor(operationName) {
     // Get the operation instance first (needed for icon and properties)
     const operation = window.cncController?.operationManager?.getOperation(operationName);
 
+    document.querySelectorAll('#draw-tools-list .sidebar-item.selected').forEach(el => el.classList.remove('selected'));
+    const selectedToolItem = document.querySelector(`#draw-tools-list [data-operation="${operationName}"]`);
+    if (selectedToolItem) selectedToolItem.classList.add('selected');
+    syncGroupedToolSelection();
+
     // Update title with icon if available
+    const operationLabel = operation?.displayName || operationName;
+
     if (operation && operation.icon) {
-        title.innerHTML = `<i data-lucide="${operation.icon}"></i> ${operationName} Tool`;
+        title.innerHTML = `<i data-lucide="${operation.icon}"></i> ${operationLabel} Tool`;
         lucide.createIcons(); // Re-render newly added Lucide icons
     } else {
-        title.textContent = `${operationName} Tool`;
+        title.textContent = `${operationLabel} Tool`;
     }
     if (operation && typeof operation.getPropertiesHTML === 'function') {
         // Restore persisted last-used values before rendering
@@ -2090,6 +2207,7 @@ function showToolsList() {
 
         toolsList.style.display = 'block';
         propertiesEditor.style.setProperty('display', 'none', 'important');
+        syncGroupedToolSelection();
     } else if (activeTab && activeTab.id === 'operations-tab') {
         const operationsList = document.getElementById('operations-list');
         const propertiesEditor = document.getElementById('operation-properties-editor');
@@ -2130,12 +2248,13 @@ function showPathPropertiesEditor(path) {
     if (closeBtn) closeBtn.style.display = 'block';
 
     // Update title
+    const operation = window.cncController?.operationManager?.getOperation(path.creationTool);
+    const operationLabel = operation?.displayName || path.creationTool;
     currentOperationName = path.creationTool;
-    title.textContent = `Edit ${path.creationTool} - ${path.name}`;
+    title.textContent = `Edit ${operationLabel} - ${path.name}`;
 
     // Get properties HTML from the operation
     let propertiesHTML = '';
-    const operation = window.cncController?.operationManager?.getOperation(path.creationTool);
 
 
 
@@ -2178,7 +2297,7 @@ function showPathPropertiesEditor(path) {
     // Update help content
     helpContent.innerHTML = `
         <div class="help-step">
-            <div class="help-text">Editing existing ${path.creationTool.toLowerCase()}. Changes will update the path in real-time.</div>
+            <div class="help-text">Editing existing ${operationLabel.toLowerCase()}. Changes will update the path in real-time.</div>
         </div>
     `;
 
@@ -2196,7 +2315,7 @@ function updateExistingPath(path, form) {
             operation.updateFromProperties(data);
         }
     }
-    else if (path.creationTool === 'Shape') {
+    else if (path.creationTool === 'Shape' || (window.SHAPE_TOOL_NAMES || []).includes(path.creationTool)) {
         // For shapes, update in place
         updateShapeInPlace(path, data);
     }
@@ -2615,6 +2734,11 @@ function refreshToolsGrid() {
 function handleOperationClick(operation) {
     // addUndo() will be called by individual operation functions as needed
 
+    if ((window.SHAPE_TOOL_NAMES || []).includes(operation)) {
+        doShape(operation);
+        return;
+    }
+
     // Check if this is a toolpath operation managed by the properties panel
     const isToolpathOperation = window.toolPathProperties?.hasOperation(operation);
 
@@ -2659,7 +2783,7 @@ function handleOperationClick(operation) {
             doCurve();
             break;
         case 'Shape':
-            doShape();
+            doShape('Shape');
             break;
         case 'Text':
             doText();
@@ -2766,7 +2890,7 @@ function handlePathClick(pathId) {
     const path = svgpaths.find(p => p.id === pathId);
     if (path && path.creationTool && path.creationProperties) {
         // Only show properties editor if this is a draw tool that supports editing
-        if (path.creationTool === 'Text' || path.creationTool === 'Shape' || path.creationTool === 'Offset' || path.creationTool === 'Pattern' || path.creationTool === 'Curve' || path.creationTool === 'Pen') {
+        if (path.creationTool === 'Text' || path.creationTool === 'Shape' || (window.SHAPE_TOOL_NAMES || []).includes(path.creationTool) || path.creationTool === 'Offset' || path.creationTool === 'Pattern' || path.creationTool === 'Curve' || path.creationTool === 'Pen') {
             // Always switch to Draw Tools tab when editing from paths list
             const drawToolsTab = document.getElementById('draw-tools-tab');
             const drawToolsPane = document.getElementById('draw-tools');
@@ -3410,6 +3534,7 @@ function selectSidebarNode(id) {
 
             document.querySelectorAll('.sidebar-item.selected').forEach(el => el.classList.remove('selected'));
             item.classList.add('selected');
+            syncGroupedToolSelection();
         }
     }, 100);
 }
@@ -3423,14 +3548,67 @@ function unselectSidebarNode(id) {
     }
 }
 
+function syncToolGroupSelection(groupSelector, itemSelector, headerSelector) {
+    const group = document.querySelector(groupSelector);
+    if (!group) return;
+
+    const children = group.querySelectorAll(itemSelector);
+    const hasSelectedChild = Array.from(children).some(item => item.classList.contains('selected'));
+    const groupHeader = group.querySelector(headerSelector);
+
+    if (groupHeader) {
+        groupHeader.classList.toggle('selected', hasSelectedChild);
+    }
+}
+
+function syncShapeGroupSelection() {
+    const shapeGroup = document.querySelector('[data-shape-tools-group]');
+    if (!shapeGroup) return;
+
+    const shapeChildren = shapeGroup.querySelectorAll('.sidebar-item[data-shape-operation]');
+    const hasSelectedChild = Array.from(shapeChildren).some(item => item.classList.contains('selected'));
+    const groupHeader = shapeGroup.querySelector('[data-shape-tools-toggle]');
+
+    if (groupHeader) {
+        groupHeader.classList.toggle('selected', hasSelectedChild);
+    }
+}
+
+function syncModifyGroupSelection() {
+    syncToolGroupSelection(
+        '[data-modify-tools-group]',
+        '.sidebar-item[data-modify-operation]',
+        '[data-modify-tools-toggle]'
+    );
+}
+
+function syncGroupedToolSelection() {
+    syncShapeGroupSelection();
+    syncModifyGroupSelection();
+}
+
 // Compatibility function for operation manager
-function addOperation(name, icon, tooltip) {
+function addOperation(name, icon, tooltip, displayName = name) {
+
+    if ((window.SHAPE_TOOL_NAMES || []).includes(name) || ['Pen', 'Curve'].includes(name)) {
+        renderShapeToolsGroup();
+        return;
+    }
+
+    if (['Move', 'Edit', 'Boolean', 'Pattern', 'Offset'].includes(name)) {
+        renderModifyToolsGroup();
+        return;
+    }
+
+    if (name === 'Shape') {
+        return;
+    }
 
     if (icon != null) {
         document.getElementById('draw-tools-list').innerHTML += `
         <div class="sidebar-item" data-operation=${name} data-bs-toggle="tooltip" data-bs-placement="right" title="${tooltip}">
-         <i data-lucide=${icon}></i>${name}
-        </div>`
+         <i data-lucide=${icon}></i>${displayName}
+         </div>`
     }
 
 }

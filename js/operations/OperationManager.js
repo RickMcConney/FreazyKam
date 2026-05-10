@@ -48,7 +48,7 @@ class OperationManager {
 
   addOperations(){
     for (let op of this.operations.values()) {
-        addOperation(op.name,op.icon,op.tooltip);
+        addOperation(op.name, op.icon, op.tooltip, op.displayName);
     }
   }
 

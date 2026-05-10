@@ -1,8 +1,9 @@
 class Operation {
-    constructor(name, icon=null, tooltip='') {
+    constructor(name, icon=null, tooltip='', displayName=null) {
         this.name = name;
         this.icon = icon;
         this.tooltip = tooltip;
+        this.displayName = displayName || name;
         this.properties = {};
         this.isInPropertiesMode = false;
     }

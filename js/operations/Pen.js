@@ -4,6 +4,7 @@ class Pen extends Curve {
         this.name = 'Pen';
         this.icon = 'pen-tool';
         this.tooltip = 'Draw straight-line paths. Click to add corner points. Click near the first point to close, or press Escape to finish.';
+        this.displayName = 'Pen';
         this.alwaysCorner = true;
     }
 

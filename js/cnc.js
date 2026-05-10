@@ -685,8 +685,8 @@ function doCurve() {
 	selectMgr.unselectAll();
 }
 
-function doShape() {
-	cncController.setMode("Shape");
+function doShape(shapeToolName) {
+	cncController.setMode(shapeToolName);
 	selectMgr.unselectAll();
 }
 
@@ -2210,5 +2210,4 @@ async function doGcode() {
 	saveString(_gcodeNameComment(projectName) + text, filename);
 	notify('G-code download started');
 }
-
 
