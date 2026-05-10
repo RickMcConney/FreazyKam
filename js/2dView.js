@@ -892,15 +892,22 @@ function drawReferenceImage(path, borderColor) {
 }
 
 function drawSvgPaths() {
+	const currentOperation = window.cncController && window.cncController.operationManager
+		? window.cncController.operationManager.getCurrentOperation()
+		: null;
+	const isSelectOperation = currentOperation && currentOperation.name === 'Select';
+	const showHoverHighlight = !!currentOperation;
+	const hoverStrokeColor = isSelectOperation ? selectColor : highlightColor;
+
 	for (var i = 0; i < svgpaths.length; i++) {
 		if (svgpaths[i].visible) {
 			let path = svgpaths[i];
 			if (!selectMgr.isSelected(path))
 			{
 				if (path.type === 'image') {
-					drawReferenceImage(path, path.highlight ? highlightColor : lineColor);
-				} else if (path.highlight) {
-					drawSvgPath(path, highlightColor, 3);
+					drawReferenceImage(path, path.highlight && showHoverHighlight ? hoverStrokeColor : lineColor);
+				} else if (path.highlight && showHoverHighlight) {
+					drawSvgPath(path, hoverStrokeColor, 3);
 				} else {
 					drawSvgPath(path, lineColor, 0.5);
 				}

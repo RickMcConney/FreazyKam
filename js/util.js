@@ -249,6 +249,8 @@ function closestPath(pt, clear) {
 	var found = findClosestPath(pt);
 	if (found) {
 		found.highlight = true;
+	}
+	if (clear || found) {
 		redraw();
 	}
 	return found;

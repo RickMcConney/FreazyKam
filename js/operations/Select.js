@@ -290,16 +290,10 @@ class Select extends Operation {
     }
 
     handleHover(mouse) {
-        const previouslyHighlighted = this.findHighlightedPath();
         const nearestPath = closestPath(mouse, true);
 
         if (nearestPath) {
             this.lastHoveredPath = nearestPath;
-        } else if (previouslyHighlighted && previouslyHighlighted.visible &&
-                   pointInBoundingBox(mouse, previouslyHighlighted.bbox)) {
-            previouslyHighlighted.highlight = true;
-            this.lastHoveredPath = previouslyHighlighted;
-            redraw();
         } else {
             this.lastHoveredPath = null;
         }

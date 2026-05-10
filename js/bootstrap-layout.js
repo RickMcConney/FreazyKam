@@ -1081,34 +1081,6 @@ function createSidebar() {
             </div>
         </div>
 
-        <aside id="right-hover-sidebar" class="right-hover-sidebar" aria-label="Paths sidebar">
-            <button type="button" id="right-hover-sidebar-toggle" class="right-hover-sidebar-toggle" aria-expanded="false" aria-controls="right-hover-sidebar-panel" title="Pin sidebar">
-                <i data-lucide="chevron-left"></i>
-            </button>
-            <div id="right-hover-sidebar-panel" class="right-hover-sidebar-panel">
-                <div class="right-hover-sidebar-content">
-                    <div class="sidebar-section">
-                        <div class="sidebar-section-header" data-bs-toggle="collapse" data-bs-target="#svg-paths-section" aria-expanded="true">
-                            <span>SVG Paths</span>
-                            <i data-lucide="chevron-down" class="collapse-chevron"></i>
-                        </div>
-                        <div class="collapse show" id="svg-paths-section">
-                            <!-- SVG paths will be added dynamically -->
-                        </div>
-                    </div>
-                    <div class="sidebar-section mt-4 mb-0">
-                        <div class="sidebar-section-header" data-bs-toggle="collapse" data-bs-target="#tool-paths-section" aria-expanded="true">
-                            <span>Tool Paths</span>
-                            <i data-lucide="chevron-down" class="collapse-chevron"></i>
-                        </div>
-                        <div class="collapse show" id="tool-paths-section">
-                            <!-- Tool paths will be added dynamically -->
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </aside>
-
         <!-- G-Code Viewer (shown during simulation) -->
         <div id="gcode-viewer" class="d-flex flex-column" style="display: none; visibility: hidden; height: 0; overflow: hidden; background-color: white;">
             <div class="p-2 border-bottom">
@@ -1121,72 +1093,302 @@ function createSidebar() {
     `;
 
     setupSidebarEventHandlers(sidebar);
-    setupRightHoverSidebar(sidebar);
     setupSidebarTabHandlers();
     setupCanvasTabHandlers();
 }
 
-function setupRightHoverSidebar(sidebar) {
-    const hoverSidebar = sidebar.querySelector('#right-hover-sidebar');
-    const toggleButton = sidebar.querySelector('#right-hover-sidebar-toggle');
-    if (!hoverSidebar || !toggleButton) return;
-
-    let isPinned = false;
-
-    function syncState(isOpen) {
-        hoverSidebar.classList.toggle('is-open', isOpen);
-        hoverSidebar.classList.toggle('is-pinned', isPinned);
-        toggleButton.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
-        toggleButton.title = isPinned ? 'Unpin sidebar' : 'Pin sidebar';
-
-        const icon = toggleButton.querySelector('[data-lucide]');
-        if (icon) {
-            let iconName = 'chevron-left';
-            if (isOpen) {
-                iconName = 'chevron-right';
-            }
-            if (isPinned) {
-                iconName = 'pin';
-            } else if (isOpen) {
-                iconName = 'pin-off';
-            }
-            icon.setAttribute('data-lucide', iconName);
-        }
-
-        lucide.createIcons({
-            attrs: {
-                'stroke-width': 1.75
-            }
-        });
+function getToolpathSourceIds(toolpath) {
+    if (Array.isArray(toolpath?.svgIds) && toolpath.svgIds.length > 0) {
+        return toolpath.svgIds.slice();
     }
 
-    syncState(false);
+    return toolpath?.svgId ? [toolpath.svgId] : [];
+}
 
-    hoverSidebar.addEventListener('mouseenter', function () {
-        syncState(true);
+function getToolpathDisplayName(toolpath) {
+    if (!toolpath) return '';
+    return toolpath.label || `${toolpath.name} ${toolpath.id.replace('T', '')}`;
+}
+
+function getToolpathDepthLabel(toolpath) {
+    const depth = toolpath?.tool?.depth;
+    if (typeof depth !== 'number' || !isFinite(depth)) return '';
+    if (depth <= 0) return '';
+    return formatDimension(depth, false);
+}
+
+function getObjectTypeLabel(path) {
+    if (!path) return 'Path';
+    if (path.creationTool === 'Text' || path.textGroupId) return 'Text';
+    if (path.creationTool === 'STL') return 'STL';
+    if (path.creationTool === 'Image') return 'Image';
+    if (path.creationTool === 'Pattern') return 'Pattern';
+    if (path.creationTool === 'Offset') return 'Offset';
+    if (path.creationTool === 'Curve') return 'Curve';
+    if (path.creationTool === 'Pen') return 'Pen';
+    if (path.svgGroupId) return 'Imported SVG';
+    return 'Shape';
+}
+
+function renderSidebarLeafItem(config) {
+    const {
+        id,
+        icon,
+        title,
+        meta,
+        visible,
+        itemClass = '',
+        dataset = {},
+        secondaryMeta = []
+    } = config;
+
+    const item = document.createElement('div');
+    item.className = `sidebar-item sidebar-tree-leaf ${itemClass}`.trim();
+    if (id) item.dataset.pathId = id;
+
+    Object.entries(dataset).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) item.dataset[key] = value;
     });
 
-    hoverSidebar.addEventListener('mouseleave', function () {
-        if (!isPinned) {
-            syncState(false);
+    if (visible === false) item.classList.add('is-hidden');
+
+    const metaParts = [];
+    if (meta) metaParts.push(`<span class="sidebar-item-meta-tag">${meta}</span>`);
+    secondaryMeta.filter(Boolean).forEach(part => {
+        metaParts.push(`<span class="sidebar-item-meta-chip">${part}</span>`);
+    });
+
+    item.innerHTML = `
+        <i data-lucide="${visible === false ? 'eye-off' : icon}"></i>
+        <div class="sidebar-item-body">
+            <div class="sidebar-item-title-row">
+                <span class="sidebar-item-title">${title}</span>
+            </div>
+            ${metaParts.length > 0 ? `<div class="sidebar-item-meta">${metaParts.join('')}</div>` : ''}
+        </div>
+    `;
+
+    return item;
+}
+
+function renderObjectSidebarGroup(config) {
+    const {
+        groupId,
+        path,
+        title,
+        headerIcon,
+        headerMeta,
+        headerBadges = [],
+        contextData = {},
+        toolpaths = []
+    } = config;
+
+    const groupContainer = document.createElement('div');
+    groupContainer.className = 'sidebar-object-group';
+    groupContainer.dataset.objectGroupId = groupId;
+    if (path?.textGroupId) groupContainer.dataset.textGroupId = path.textGroupId;
+    if (path?.svgGroupId) groupContainer.dataset.svgGroupId = path.svgGroupId;
+    if (path?.patternGroupId) groupContainer.dataset.patternGroupId = path.patternGroupId;
+
+    const header = document.createElement('div');
+    header.className = 'sidebar-item sidebar-object-header d-flex align-items-start justify-content-between';
+    header.dataset.objectGroupHeader = groupId;
+    header.dataset.pathId = path.id;
+    if (contextData.textGroupHeader) header.dataset.textGroupHeader = contextData.textGroupHeader;
+    if (contextData.svgGroupHeader) header.dataset.svgGroupHeader = contextData.svgGroupHeader;
+    if (contextData.patternGroupHeader) header.dataset.patternGroupHeader = contextData.patternGroupHeader;
+    if (path.visible === false) header.classList.add('is-hidden');
+
+    const headerBadgesMarkup = headerBadges.filter(Boolean).map(badge => `<span class="sidebar-item-meta-chip">${badge}</span>`).join('');
+    header.innerHTML = `
+        <div class="sidebar-object-header-main d-flex align-items-start">
+            <i data-lucide="${path.visible === false ? 'eye-off' : headerIcon}"></i>
+            <div class="sidebar-item-body">
+                <div class="sidebar-item-title-row">
+                    <span class="sidebar-item-title">${title}</span>
+                </div>
+                <div class="sidebar-item-meta">
+                    <span class="sidebar-item-meta-tag">${headerMeta}</span>
+                    ${headerBadgesMarkup}
+                </div>
+            </div>
+        </div>
+        <span class="sidebar-object-chevron" data-bs-toggle="collapse" data-bs-target="#${groupId}" aria-expanded="true">
+            <i data-lucide="chevron-down" class="collapse-chevron"></i>
+        </span>
+    `;
+
+    const collapseContainer = document.createElement('div');
+    collapseContainer.className = 'collapse show sidebar-object-children';
+    collapseContainer.id = groupId;
+
+    toolpaths.forEach(toolpath => {
+        const secondaryMeta = [getToolpathDepthLabel(toolpath)].filter(Boolean);
+        const toolpathItem = renderSidebarLeafItem({
+            id: toolpath.id,
+            icon: getOperationIcon(toolpath.name),
+            title: getToolpathDisplayName(toolpath),
+            meta: toolpath.operation === 'HelicalDrill' ? 'Drill' : toolpath.operation,
+            secondaryMeta,
+            visible: toolpath.visible,
+            itemClass: 'sidebar-toolpath-item ms-4',
+            dataset: {
+                linkedObjectId: path.id,
+                sourceCount: getToolpathSourceIds(toolpath).length
+            }
+        });
+        collapseContainer.appendChild(toolpathItem);
+    });
+
+    groupContainer.appendChild(header);
+    groupContainer.appendChild(collapseContainer);
+    return groupContainer;
+}
+
+function buildObjectSidebarGroups() {
+    if (typeof svgpaths === 'undefined' || !svgpaths) return [];
+
+    const grouped = [];
+    const seen = new Set();
+
+    svgpaths.forEach(path => {
+        if (path.textGroupId) {
+            if (seen.has(`text:${path.textGroupId}`)) return;
+            seen.add(`text:${path.textGroupId}`);
+            const paths = svgpaths.filter(p => p.textGroupId === path.textGroupId);
+            grouped.push({
+                id: `text:${path.textGroupId}`,
+                kind: 'text',
+                path: paths[0],
+                paths,
+                title: `"${(path.creationProperties && path.creationProperties.text) || path.name}"`,
+                headerIcon: 'type-outline',
+                headerMeta: 'Text',
+                contextData: { textGroupHeader: path.textGroupId }
+            });
+            return;
         }
+
+        if (path.patternGroupId) {
+            if (seen.has(`pattern:${path.patternGroupId}`)) return;
+            seen.add(`pattern:${path.patternGroupId}`);
+            const paths = svgpaths.filter(p => p.patternGroupId === path.patternGroupId);
+            grouped.push({
+                id: `pattern:${path.patternGroupId}`,
+                kind: 'pattern',
+                path: paths[0],
+                paths,
+                title: paths[0]?.name || 'Pattern',
+                headerIcon: 'grid-3x3',
+                headerMeta: 'Pattern',
+                contextData: { patternGroupHeader: path.patternGroupId }
+            });
+            return;
+        }
+
+        if (path.svgGroupId) {
+            if (seen.has(`svg:${path.svgGroupId}`)) return;
+            seen.add(`svg:${path.svgGroupId}`);
+            const paths = svgpaths.filter(p => p.svgGroupId === path.svgGroupId);
+            grouped.push({
+                id: `svg:${path.svgGroupId}`,
+                kind: 'svg',
+                path: paths[0],
+                paths,
+                title: paths[0]?.name || 'Imported SVG',
+                headerIcon: 'folder',
+                headerMeta: 'Imported SVG',
+                contextData: { svgGroupHeader: path.svgGroupId }
+            });
+            return;
+        }
+
+        grouped.push({
+            id: `path:${path.id}`,
+            kind: 'path',
+            path,
+            paths: [path],
+            title: path.name,
+            headerIcon: getIconForPath(path),
+            headerMeta: getObjectTypeLabel(path)
+        });
     });
 
-    toggleButton.addEventListener('click', function (event) {
-        event.preventDefault();
-        event.stopPropagation();
-        isPinned = !isPinned;
-        syncState(isPinned || !hoverSidebar.classList.contains('is-open'));
-        if (!isPinned && !hoverSidebar.matches(':hover')) {
-            syncState(false);
+    return grouped;
+}
+
+function buildOrphanToolpaths(toolpathIndex) {
+    if (typeof toolpaths === 'undefined' || !toolpaths) return [];
+    return toolpaths.filter(toolpath => !toolpathIndex.has(toolpath.id));
+}
+
+function activateSidebarObjectGroup(item) {
+    if (!item) return false;
+
+    if (item.dataset.textGroupHeader) {
+        const textPaths = svgpaths.filter(p => p.textGroupId === item.dataset.textGroupHeader);
+        if (textPaths.length === 0) return true;
+        selectMgr.unselectAll();
+        textPaths.forEach(path => selectMgr.selectPath(path));
+        document.querySelectorAll('.sidebar-item.selected').forEach(el => el.classList.remove('selected'));
+        item.classList.add('selected');
+        if (textPaths[0].creationTool && textPaths[0].creationProperties) {
+            showPathPropertiesEditor(textPaths[0]);
+            cncController.setMode('Text');
         }
-    });
+        redraw();
+        return true;
+    }
+
+    if (item.dataset.patternGroupHeader) {
+        const groupPaths = svgpaths.filter(p => p.patternGroupId === item.dataset.patternGroupHeader);
+        if (groupPaths.length === 0) return true;
+        document.querySelectorAll('.sidebar-item.selected').forEach(el => el.classList.remove('selected'));
+        item.classList.add('selected');
+        const firstPath = groupPaths[0];
+        if (firstPath.creationTool && firstPath.creationProperties) {
+            selectMgr.unselectAll();
+            groupPaths.forEach(path => selectMgr.selectPath(path));
+            if (firstPath.creationProperties.sourceIds) {
+                firstPath.creationProperties.sourceIds.forEach(srcId => {
+                    const srcPath = svgpaths.find(path => path.id === srcId);
+                    if (srcPath) selectMgr.selectPath(srcPath);
+                });
+            }
+            const drawToolsTab = document.getElementById('draw-tools-tab');
+            const drawToolsPane = document.getElementById('draw-tools');
+            document.querySelectorAll('#sidebar-tabs .nav-link').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('#sidebar-tabs ~ .sidebar-tab-content .tab-pane').forEach(pane => pane.classList.remove('show', 'active'));
+            drawToolsTab.classList.add('active');
+            drawToolsPane.classList.add('show', 'active');
+            showPathPropertiesEditor(firstPath);
+            cncController.setMode('Pattern');
+        }
+        redraw();
+        return true;
+    }
+
+    if (item.dataset.svgGroupHeader) {
+        const svgGroupPaths = svgpaths.filter(p => p.svgGroupId === item.dataset.svgGroupHeader);
+        if (svgGroupPaths.length === 0) return true;
+        selectMgr.unselectAll();
+        svgGroupPaths.forEach(path => selectMgr.selectPath(path));
+        document.querySelectorAll('.sidebar-item.selected').forEach(el => el.classList.remove('selected'));
+        item.classList.add('selected');
+        redraw();
+        return true;
+    }
+
+    return false;
 }
 
 function setupSidebarEventHandlers(sidebar) {
-    sidebar.addEventListener('click', function (e) {
+    const eventRoots = [sidebar, document.getElementById('canvas-object-tree')].filter(Boolean);
+
+    eventRoots.forEach(eventRoot => eventRoot.addEventListener('click', function (e) {
         const item = e.target.closest('.sidebar-item');
         const closeButton = e.target.closest('#panel-close-button');
+        const objectChevron = e.target.closest('.sidebar-object-chevron');
 
         if (closeButton) {
             showToolsList();
@@ -1194,6 +1396,10 @@ function setupSidebarEventHandlers(sidebar) {
         }
 
         if (!item) return;
+        if (objectChevron) {
+            e.stopPropagation();
+            return;
+        }
 
         // Touch devices: tap on ⋮ area (right 40px) triggers context menu
         if ('ontouchstart' in window) {
@@ -1214,6 +1420,10 @@ function setupSidebarEventHandlers(sidebar) {
             return;
         }
 
+        if (activateSidebarObjectGroup(item)) {
+            return;
+        }
+
         if (operation) {
             const isDrawTool = ['Select', 'Move', 'Edit', 'Pen', 'Curve', 'Shape', 'Boolean', 'Gemini', 'Text', 'Tabs', 'Offset', 'Pattern', ...(window.SHAPE_TOOL_NAMES || [])].includes(operation);
 
@@ -1231,18 +1441,11 @@ function setupSidebarEventHandlers(sidebar) {
         } else if (pathId) {
             handlePathClick(pathId);
         }
-    });
+    }));
 
-    sidebar.addEventListener('contextmenu', function (e) {
+    eventRoots.forEach(eventRoot => eventRoot.addEventListener('contextmenu', function (e) {
         const item = e.target.closest('.sidebar-item');
         if (!item) return;
-
-        const toolFolder = item.closest('[data-tool-name]');
-        if (toolFolder && e.target.closest('.sidebar-item.fw-bold')) {
-            e.preventDefault();
-            showToolFolderContextMenu(e, toolFolder.dataset.toolName);
-            return;
-        }
 
         const svgGroup = item.closest('[data-svg-group-id]');
         if (svgGroup && item.dataset.svgGroupHeader) {
@@ -1269,15 +1472,15 @@ function setupSidebarEventHandlers(sidebar) {
             e.preventDefault();
             showContextMenu(e, item.dataset.pathId);
         }
-    });
+    }));
 
-    sidebar.addEventListener('dblclick', function (e) {
-        const item = e.target.closest('#tool-paths-section .sidebar-item[data-path-id]');
+    eventRoots.forEach(eventRoot => eventRoot.addEventListener('dblclick', function (e) {
+        const item = e.target.closest('#svg-paths-section .sidebar-toolpath-item[data-path-id]');
         if (!item) return;
         const pathId = item.dataset.pathId;
         const toolpath = toolpaths.find(tp => tp.id === pathId);
         if (toolpath) showToolpathPropertiesEditor(toolpath);
-    });
+    }));
 }
 
 function setupSidebarTabHandlers() {
@@ -1411,7 +1614,7 @@ function showToolPropertiesEditor(operationName) {
 
     // Hide tools list and show properties editor
     toolsList.style.display = 'none';
-    propertiesEditor.style.display = 'block';
+        propertiesEditor.style.display = 'block';
 
     // Show close button in tab bar
     var closeBtn = document.getElementById('panel-close-button');
@@ -2886,6 +3089,12 @@ function handlePathClick(pathId) {
         }
     }
 
+    const sidebarNode = document.querySelector(`#svg-paths-section [data-path-id="${pathId}"]`);
+    const parentCollapse = sidebarNode ? sidebarNode.closest('.collapse') : null;
+    if (parentCollapse && !parentCollapse.classList.contains('show')) {
+        parentCollapse.classList.add('show');
+    }
+
     // Check if this path has creation properties for editing
     const path = svgpaths.find(p => p.id === pathId);
     if (path && path.creationTool && path.creationProperties) {
@@ -2908,11 +3117,6 @@ function handlePathClick(pathId) {
             if (path.creationTool === 'Curve' || path.creationTool === 'Pen') {
                 const op = cncController.operationManager.getOperation(path.creationTool);
                 if (op) op.enterEditMode(path);
-            }
-
-            const hoverSidebar = document.getElementById('right-hover-sidebar');
-            if (hoverSidebar) {
-                hoverSidebar.classList.add('is-open');
             }
 
             showPathPropertiesEditor(path);
@@ -3003,7 +3207,7 @@ function getToolGroupOrder() {
 
 // Inline rename for a toolpath sidebar item
 function startRenameToolpath(pathId) {
-    const item = document.querySelector(`#tool-paths-section [data-path-id="${pathId}"]`);
+    const item = document.querySelector(`#svg-paths-section .sidebar-toolpath-item[data-path-id="${pathId}"]`);
     if (!item) return;
 
     const toolpath = toolpaths.find(tp => tp.id === pathId);
@@ -3264,172 +3468,20 @@ function deleteSTLModel(stlId) {
 
 // Sidebar management functions (maintaining compatibility with existing code)
 function addSvgPath(id, name) {
-    const section = document.getElementById('svg-paths-section');
-    const item = document.createElement('div');
-    item.className = 'sidebar-item';
-    item.dataset.pathId = id;
-    const sp = svgpaths.find(p => p.id === id);
-    const icon = sp ? getIconForPath(sp) : getPathIcon(name);
-    item.innerHTML = `
-        <i data-lucide="${icon}"></i>${name}
-    `;
-    section.appendChild(item);
-    lucide.createIcons();
-}
-
-// Add text group to sidebar (groups all character paths together)
-// Shared skeleton for all collapsible sidebar groups.
-// config: { groupId, containerDataKey, headerDataKey, containerClass,
-//           labelHTML, onHeaderClick(groupHeader), getItemIcon(path), paths }
-function addCollapsibleGroup(config) {
-    const { groupId, containerDataKey, headerDataKey, containerClass,
-            labelHTML, onHeaderClick, getItemIcon, paths } = config;
-
-    const section = document.getElementById('svg-paths-section');
-
-    // Remove any existing group with this ID
-    // Convert camelCase dataset key to hyphenated attribute name
-    const attrName = 'data-' + containerDataKey.replace(/([A-Z])/g, '-$1').toLowerCase();
-    const existingGroup = section.querySelector(`[${attrName}="${groupId}"]`);
-    if (existingGroup) existingGroup.remove();
-
-    // Group container
-    const groupContainer = document.createElement('div');
-    groupContainer.dataset[containerDataKey] = groupId;
-    groupContainer.className = containerClass;
-
-    // Header
-    const groupHeader = document.createElement('div');
-    groupHeader.className = 'sidebar-item fw-bold d-flex align-items-center justify-content-between';
-    groupHeader.dataset[headerDataKey] = groupId;
-
-    // Folder label
-    const folderContent = document.createElement('span');
-    folderContent.innerHTML = labelHTML;
-    folderContent.style.flex = '1';
-    folderContent.style.cursor = 'pointer';
-
-    // Chevron toggle
-    const chevronContainer = document.createElement('span');
-    chevronContainer.dataset.bsToggle = 'collapse';
-    chevronContainer.dataset.bsTarget = `#${groupId}`;
-    chevronContainer.setAttribute('aria-expanded', 'false');
-    chevronContainer.style.cursor = 'pointer';
-    const chevron = document.createElement('i');
-    chevron.className = 'collapse-chevron';
-    chevron.dataset.lucide = 'chevron-down';
-    chevron.style.minWidth = '16px';
-    chevronContainer.appendChild(chevron);
-
-    groupHeader.appendChild(folderContent);
-    groupHeader.appendChild(chevronContainer);
-
-    chevronContainer.addEventListener('click', (e) => { e.stopPropagation(); });
-    folderContent.addEventListener('click', () => onHeaderClick(groupHeader));
-
-    groupContainer.appendChild(groupHeader);
-
-    // Collapse container with path items
-    const collapseContainer = document.createElement('div');
-    collapseContainer.className = 'collapse';
-    collapseContainer.id = groupId;
-
-    paths.forEach(path => {
-        const item = document.createElement('div');
-        item.className = 'sidebar-item ms-4';
-        item.dataset.pathId = path.id;
-        item.innerHTML = `<i data-lucide="${getItemIcon(path)}"></i>${path.name}`;
-        collapseContainer.appendChild(item);
-    });
-
-    groupContainer.appendChild(collapseContainer);
-    section.appendChild(groupContainer);
-    lucide.createIcons();
+    refreshToolPathsDisplay();
 }
 
 function addTextGroup(groupId, text, paths) {
-    addCollapsibleGroup({
-        groupId,
-        containerDataKey: 'textGroupId',
-        headerDataKey:    'textGroupHeader',
-        containerClass:   'text-group',
-        labelHTML:        `<i data-lucide="folder"></i>"${text}"`,
-        getItemIcon:      () => 'type-outline',
-        paths,
-        onHeaderClick(groupHeader) {
-            const textPaths = svgpaths.filter(p => p.textGroupId === groupId);
-            if (textPaths.length === 0) return;
-            selectMgr.unselectAll();
-            textPaths.forEach(p => selectMgr.selectPath(p));
-            document.querySelectorAll('.sidebar-item.selected').forEach(el => el.classList.remove('selected'));
-            groupHeader.classList.add('selected');
-            if (textPaths[0].creationTool && textPaths[0].creationProperties) {
-                showPathPropertiesEditor(textPaths[0]);
-                cncController.setMode("Text");
-            }
-            redraw();
-        }
-    });
+    refreshToolPathsDisplay();
 }
 
 function addSvgGroup(groupId, groupName, paths) {
-    addCollapsibleGroup({
-        groupId,
-        containerDataKey: 'svgGroupId',
-        headerDataKey:    'svgGroupHeader',
-        containerClass:   'svg-group',
-        labelHTML:        `<i data-lucide="folder"></i>${groupName}`,
-        getItemIcon:      path => getPathIcon(path.name),
-        paths,
-        onHeaderClick(groupHeader) {
-            const svgPaths = svgpaths.filter(p => p.svgGroupId === groupId);
-            if (svgPaths.length === 0) return;
-            selectMgr.unselectAll();
-            svgPaths.forEach(p => selectMgr.selectPath(p));
-            document.querySelectorAll('.sidebar-item.selected').forEach(el => el.classList.remove('selected'));
-            groupHeader.classList.add('selected');
-            redraw();
-        }
-    });
+    refreshToolPathsDisplay();
 }
 
 // Add pattern group to sidebar (groups all pattern paths together)
 function addPatternGroup(groupId, groupName, icon, paths, creationTool) {
-    addCollapsibleGroup({
-        groupId,
-        containerDataKey: 'patternGroupId',
-        headerDataKey:    'patternGroupHeader',
-        containerClass:   'pattern-group',
-        labelHTML:        `<i data-lucide="${icon}"></i>${groupName}`,
-        getItemIcon:      () => icon,
-        paths,
-        onHeaderClick(groupHeader) {
-            const groupPaths = svgpaths.filter(p => p.patternGroupId === groupId);
-            if (groupPaths.length === 0) return;
-            document.querySelectorAll('.sidebar-item.selected').forEach(el => el.classList.remove('selected'));
-            groupHeader.classList.add('selected');
-            const firstPath = groupPaths[0];
-            if (firstPath.creationTool && firstPath.creationProperties) {
-                selectMgr.unselectAll();
-                groupPaths.forEach(p => selectMgr.selectPath(p));
-                if (firstPath.creationProperties.sourceIds) {
-                    firstPath.creationProperties.sourceIds.forEach(srcId => {
-                        const srcPath = svgpaths.find(p => p.id === srcId);
-                        if (srcPath) selectMgr.selectPath(srcPath);
-                    });
-                }
-                const drawToolsTab = document.getElementById('draw-tools-tab');
-                const drawToolsPane = document.getElementById('draw-tools');
-                document.querySelectorAll('#sidebar-tabs .nav-link').forEach(tab => tab.classList.remove('active'));
-                document.querySelectorAll('#sidebar-tabs ~ .sidebar-tab-content .tab-pane').forEach(pane => pane.classList.remove('show', 'active'));
-                drawToolsTab.classList.add('active');
-                drawToolsPane.classList.add('show', 'active');
-                showPathPropertiesEditor(firstPath);
-                cncController.setMode(creationTool);
-            }
-            redraw();
-        }
-    });
+    refreshToolPathsDisplay();
 }
 function addToolPath(id, name, operation, toolName) {
     // Instead of adding directly, we'll refresh the entire display in sorted order
@@ -3438,81 +3490,111 @@ function addToolPath(id, name, operation, toolName) {
 
 // Refresh the toolpaths display in array order (no auto-sorting)
 function refreshToolPathsDisplay() {
-    const section = document.getElementById('tool-paths-section');
+    const section = document.getElementById('svg-paths-section');
     if (!section) return;
 
-    // Clear existing display
     section.innerHTML = '';
 
-    // Check if toolpaths exist in global scope
-    if (typeof toolpaths === 'undefined' || !toolpaths || toolpaths.length === 0) {
+    if (typeof svgpaths === 'undefined' || !svgpaths || svgpaths.length === 0) {
+        const orphanToolpaths = buildOrphanToolpaths(new Set());
+        if (orphanToolpaths.length > 0) {
+            const orphanGroup = renderSidebarLeafItem({
+                icon: 'wrench',
+                title: 'Unlinked Toolpaths',
+                meta: `${orphanToolpaths.length} item${orphanToolpaths.length > 1 ? 's' : ''}`,
+                itemClass: 'sidebar-orphan-header'
+            });
+            section.appendChild(orphanGroup);
+            orphanToolpaths.forEach(toolpath => {
+                const item = renderSidebarLeafItem({
+                    id: toolpath.id,
+                    icon: getOperationIcon(toolpath.name),
+                    title: getToolpathDisplayName(toolpath),
+                    meta: toolpath.operation === 'HelicalDrill' ? 'Drill' : toolpath.operation,
+                    secondaryMeta: [getToolpathDepthLabel(toolpath)].filter(Boolean),
+                    visible: toolpath.visible,
+                    itemClass: 'sidebar-toolpath-item ms-4'
+                });
+                section.appendChild(item);
+            });
+            lucide.createIcons();
+        }
         return;
     }
 
-    // Group by tool name, preserving the order toolpaths appear in the array
-    var toolGroups = {};
-    var toolGroupOrder = [];
-    toolpaths.forEach(function (toolpath) {
-        var toolName = toolpath.tool.name;
-        if (!toolGroups[toolName]) {
-            toolGroups[toolName] = [];
-            toolGroupOrder.push(toolName);
-        }
-        toolGroups[toolName].push(toolpath);
+    const allGroups = buildObjectSidebarGroups();
+    const assignedToolpathIds = new Set();
+
+    allGroups.forEach(group => {
+        const linkedToolpaths = (toolpaths || []).filter(toolpath => {
+            const sourceIds = getToolpathSourceIds(toolpath);
+            return sourceIds.some(id => group.paths.some(path => path.id === id));
+        });
+
+        linkedToolpaths.forEach(toolpath => assignedToolpathIds.add(toolpath.id));
+
+        const badges = [];
+        if (group.paths.length > 1) badges.push(`${group.paths.length} paths`);
+        badges.push(`${linkedToolpaths.length} toolpath${linkedToolpaths.length !== 1 ? 's' : ''}`);
+        if (group.path.visible === false) badges.push('Hidden');
+
+        section.appendChild(renderObjectSidebarGroup({
+            groupId: `object-sidebar-${group.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`,
+            path: group.path,
+            title: group.title,
+            headerIcon: group.headerIcon,
+            headerMeta: group.headerMeta,
+            headerBadges: badges,
+            contextData: group.contextData,
+            toolpaths: linkedToolpaths
+        }));
     });
 
-    // Render each tool group in array order
-    toolGroupOrder.forEach(function (toolName) {
-        var toolGroup = document.createElement('div');
-        toolGroup.className = 'ms-3';
-        toolGroup.dataset.toolName = toolName;
-        toolGroup.innerHTML = `
-            <div class="sidebar-item fw-bold">
-                <i data-lucide="folder"></i>${toolName}
+    const orphanToolpaths = buildOrphanToolpaths(assignedToolpathIds);
+    if (orphanToolpaths.length > 0) {
+        const orphanContainer = document.createElement('div');
+        orphanContainer.className = 'sidebar-object-group sidebar-object-group-orphan';
+        orphanContainer.innerHTML = `
+            <div class="sidebar-item sidebar-object-header sidebar-orphan-header">
+                <div class="sidebar-object-header-main d-flex align-items-start">
+                    <i data-lucide="wrench"></i>
+                    <div class="sidebar-item-body">
+                        <div class="sidebar-item-title-row">
+                            <span class="sidebar-item-title">Unlinked Toolpaths</span>
+                        </div>
+                        <div class="sidebar-item-meta">
+                            <span class="sidebar-item-meta-tag">Toolpaths</span>
+                            <span class="sidebar-item-meta-chip">${orphanToolpaths.length} item${orphanToolpaths.length !== 1 ? 's' : ''}</span>
+                        </div>
+                    </div>
+                </div>
             </div>
         `;
 
-        // Add toolpaths for this tool
-        toolGroups[toolName].forEach(function (toolpath) {
-            var item = document.createElement('div');
-            item.className = 'sidebar-item ms-4';
-            item.dataset.pathId = toolpath.id;
-            const displayName = toolpath.label || (toolpath.name + ' ' + toolpath.id.replace('T', ''));
-            const icon = toolpath.visible === false ? 'eye-off' : getOperationIcon(toolpath.name);
-            item.innerHTML = `
-                <i data-lucide="${icon}"></i>${displayName}
-            `;
-            toolGroup.appendChild(item);
+        orphanToolpaths.forEach(toolpath => {
+            orphanContainer.appendChild(renderSidebarLeafItem({
+                id: toolpath.id,
+                icon: getOperationIcon(toolpath.name),
+                title: getToolpathDisplayName(toolpath),
+                meta: toolpath.operation === 'HelicalDrill' ? 'Drill' : toolpath.operation,
+                secondaryMeta: [getToolpathDepthLabel(toolpath)].filter(Boolean),
+                visible: toolpath.visible,
+                itemClass: 'sidebar-toolpath-item ms-4'
+            }));
         });
 
-        section.appendChild(toolGroup);
-    });
+        section.appendChild(orphanContainer);
+    }
 
     lucide.createIcons();
 }
 
 function removeSvgPath(id) {
-    const item = document.querySelector(`#svg-paths-section [data-path-id="${id}"]`);
-    if (item) {
-        item.remove();
-
-        // Check if this was part of a text group
-        const path = svgpaths.find(p => p.id === id);
-        if (path && path.textGroupId) {
-            // Check if there are any remaining paths in this group
-            const remainingPaths = svgpaths.filter(p => p.textGroupId === path.textGroupId && p.id !== id);
-            if (remainingPaths.length === 0) {
-                // Remove the entire group if no paths remain
-                const groupContainer = document.querySelector(`[data-text-group-id="${path.textGroupId}"]`);
-                if (groupContainer) groupContainer.remove();
-            }
-        }
-    }
+    refreshToolPathsDisplay();
 }
 
 function removeToolPath(id) {
-    const item = document.querySelector(`#tool-paths-section [data-path-id="${id}"]`);
-    if (item) item.remove();
+    refreshToolPathsDisplay();
 }
 
 function clearSvgPaths() {
@@ -3520,20 +3602,24 @@ function clearSvgPaths() {
 }
 
 function clearToolPaths() {
-    document.getElementById('tool-paths-section').innerHTML = '';
+    const section = document.getElementById('svg-paths-section');
+    if (section) section.innerHTML = '';
 }
 
 function selectSidebarNode(id) {
     setTimeout(() => {
         const item = document.querySelector(`[data-path-id="${id}"]`);
         if (item) {
-            const hoverSidebar = document.getElementById('right-hover-sidebar');
-            if (hoverSidebar) {
-                hoverSidebar.classList.add('is-open');
-            }
-
             document.querySelectorAll('.sidebar-item.selected').forEach(el => el.classList.remove('selected'));
             item.classList.add('selected');
+            const group = item.closest('.sidebar-object-group');
+            if (group) {
+                const header = group.querySelector('.sidebar-object-header');
+                if (header && header !== item) header.classList.add('selected');
+            }
+
+            const collapse = item.closest('.collapse');
+            if (collapse) collapse.classList.add('show');
             syncGroupedToolSelection();
         }
     }, 100);
@@ -3542,7 +3628,17 @@ function selectSidebarNode(id) {
 function unselectSidebarNode(id) {
     if (id) {
         const item = document.querySelector(`[data-path-id="${id}"]`);
-        if (item) item.classList.remove('selected');
+        if (item) {
+            item.classList.remove('selected');
+            const group = item.closest('.sidebar-object-group');
+            if (group) {
+                const selectedChildren = group.querySelectorAll('.sidebar-tree-leaf.selected');
+                if (selectedChildren.length === 0) {
+                    const header = group.querySelector('.sidebar-object-header');
+                    if (header) header.classList.remove('selected');
+                }
+            }
+        }
     } else {
         document.querySelectorAll('.sidebar-item.selected').forEach(el => el.classList.remove('selected'));
     }
@@ -3656,23 +3752,7 @@ function getPathIcon(name) {
 }
 
 function updatePathVisibilityIcon(id, visible) {
-    const item = document.querySelector(`[data-path-id="${id}"]`);
-    if (!item) return;
-
-    let iconName, displayName;
-    const toolpath = toolpaths.find(tp => tp.id === id);
-    if (toolpath) {
-        iconName = visible ? getOperationIcon(toolpath.name) : 'eye-off';
-        displayName = toolpath.label || (toolpath.name + ' ' + toolpath.id.replace('T', ''));
-    } else {
-        const svgpath = svgpaths.find(p => p.id === id);
-        if (!svgpath) return;
-        iconName = visible ? getIconForPath(svgpath) : 'eye-off';
-        displayName = svgpath.name;
-    }
-
-    item.innerHTML = `<i data-lucide="${iconName}"></i>${displayName}`;
-    lucide.createIcons();
+    refreshToolPathsDisplay();
 }
 
 function getOperationIcon(operation) {
@@ -3752,7 +3832,7 @@ function notify(message, type = 'error') {
     if (!toastContainer) {
         toastContainer = document.createElement('div');
         toastContainer.id = 'toast-container';
-        toastContainer.className = 'toast-container position-fixed top-50 start-50 translate-middle p-3';
+        toastContainer.className = 'toast-container position-fixed bottom-0 start-50 translate-middle-x p-3';
         toastContainer.style.zIndex = '9999';
         document.body.appendChild(toastContainer);
     }

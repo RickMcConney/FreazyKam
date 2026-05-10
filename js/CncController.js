@@ -119,6 +119,26 @@ class CncController {
       //redraw();
     });
 
+    this.canvas.addEventListener('mouseleave', () => {
+      if (typeof svgpaths !== 'undefined') {
+        for (let i = 0; i < svgpaths.length; i++) {
+          svgpaths[i].highlight = false;
+        }
+      }
+
+      const currentOperation = this.operationManager.getCurrentOperation();
+      if (currentOperation) {
+        if (Object.prototype.hasOwnProperty.call(currentOperation, 'lastHoveredPath')) {
+          currentOperation.lastHoveredPath = null;
+        }
+        if (Object.prototype.hasOwnProperty.call(currentOperation, 'hoveredPath')) {
+          currentOperation.hoveredPath = null;
+        }
+      }
+
+      redraw();
+    });
+
     // Prevent context menu on middle mouse button
     this.canvas.addEventListener('contextmenu', (evt) => {
       if (evt.button === 1) {
