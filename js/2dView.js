@@ -62,6 +62,8 @@ var staticCtx = null;
 var staticDirty = true;
 var minimapCanvas = document.getElementById('canvas-minimap');
 var minimapCtx = minimapCanvas ? minimapCanvas.getContext('2d') : null;
+var canvasResizeObserver = null;
+var pendingCanvasResizeFrame = null;
 var minimapState = {
 	isDragging: false,
 	pointerId: null
@@ -388,12 +390,70 @@ function initializeCanvasOverlayControls() {
 
 initializeCanvasOverlayControls();
 
+function resizeCanvasToViewport() {
+	var viewport = getViewportSize();
+	var nextWidth = Math.max(1, Math.round(viewport.width || 0));
+	var nextHeight = Math.max(1, Math.round(viewport.height || 0));
+
+	if (!nextWidth || !nextHeight) {
+		return false;
+	}
+
+	if (canvas.width === nextWidth && canvas.height === nextHeight) {
+		return false;
+	}
+
+	var currentCenter = screenToWorld(canvas.width / 2, canvas.height / 2);
+
+	canvas.width = nextWidth;
+	canvas.height = nextHeight;
+
+	var clampedPan = clampPanToWorkpiece(
+		canvas.width / 2 - currentCenter.x * zoomLevel,
+		canvas.height / 2 - currentCenter.y * zoomLevel
+	);
+	panX = clampedPan.panX;
+	panY = clampedPan.panY;
+
+	return true;
+}
+
+function queueCanvasResizeSync() {
+	if (pendingCanvasResizeFrame !== null) {
+		return;
+	}
+
+	pendingCanvasResizeFrame = requestAnimationFrame(function () {
+		pendingCanvasResizeFrame = null;
+		if (resizeCanvasToViewport()) {
+			redraw();
+		}
+	});
+}
+
+function initializeCanvasResizeObserver() {
+	if (!window.ResizeObserver || canvasResizeObserver || !canvas || !canvas.parentElement) {
+		return;
+	}
+
+	canvasResizeObserver = new ResizeObserver(function () {
+		queueCanvasResizeSync();
+	});
+
+	canvasResizeObserver.observe(canvas.parentElement);
+}
+
+function updateCanvasCenter() {
+	resizeCanvasToViewport();
+}
+
+window.updateCanvasCenter = updateCanvasCenter;
+
+initializeCanvasResizeObserver();
+
 // Calculate dynamic center based on viewport dimensions and coordinate system
 function getCanvasCenter() {
-	var viewport = getViewportSize();
-
-	canvas.width = viewport.width;
-	canvas.height = viewport.height;
+	resizeCanvasToViewport();
 
 	return {
 		x: canvas.width / 2,
