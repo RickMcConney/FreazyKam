@@ -673,6 +673,8 @@ function updateGridSize3D(gridSizeMM) {
     gridSizeMM = (typeof getOption === 'function') ? getOption("gridSize") : 10;
   }
 
+
+
   // Get workpiece dimensions
   const { width: workpieceWidth, length: workpieceLength, thickness: workpieceThickness } = getWorkpieceDimensions();
   const maxDim = Math.max(workpieceWidth, workpieceLength);
@@ -1643,34 +1645,33 @@ class ToolpathAnimation {
         const clippedMinZ = Math.max(bounds.minZ, materialMinZ);
         const clippedMaxZ = Math.min(bounds.maxZ, materialMaxZ);
 
-        let clippedWidth = clippedMaxX - clippedMinX;
-        let clippedLength = clippedMaxY - clippedMinY;
-        let numberOfVoxels = clippedWidth*clippedLength/(this.voxelSize*this.voxelSize);
+        const clippedWidth = clippedMaxX - clippedMinX;
+        const clippedLength = clippedMaxY - clippedMinY;
 
-    
-        while (numberOfVoxels > CONFIG.MAX_VOXELS)
-        {
+        // Toolpath is entirely outside the (resized) workpiece — skip bounds-based sizing
+        if (clippedWidth > 0 && clippedLength > 0) {
+          let numberOfVoxels = clippedWidth*clippedLength/(this.voxelSize*this.voxelSize);
+
+          while (numberOfVoxels > CONFIG.MAX_VOXELS) {
             this.voxelSize += CONFIG.VOXEL_SIZE_INCREMENT;
             numberOfVoxels = clippedWidth*clippedLength/(this.voxelSize*this.voxelSize);
+          }
 
+          // Round clipped bounds UP to clean voxel boundaries to ensure all in-bounds toolpath is captured
+          const toolpathWidthMM = Math.ceil(clippedWidth / this.voxelSize) * this.voxelSize;
+          const toolpathLengthMM = Math.ceil(clippedLength / this.voxelSize) * this.voxelSize;
+
+          // Final clip to material bounds (safety check)
+          gridWidth = Math.min(toolpathWidthMM, width);
+          gridLength = Math.min(toolpathLengthMM, length);
+          gridThickness = thickness;
+
+          gridOrigin = new THREE.Vector3(
+            (clippedMinX + clippedMaxX) / 2,
+            (clippedMinY + clippedMaxY) / 2,
+            0
+          );
         }
-
-        // Round clipped bounds UP to clean voxel boundaries to ensure all in-bounds toolpath is captured
-        const toolpathWidthMM = Math.ceil((clippedMaxX - clippedMinX) / this.voxelSize) * this.voxelSize;
-        const toolpathLengthMM = Math.ceil((clippedMaxY - clippedMinY) / this.voxelSize) * this.voxelSize;
-
-        // Final clip to material bounds (safety check)
-        gridWidth = Math.min(toolpathWidthMM, width);
-        gridLength = Math.min(toolpathLengthMM, length);
-        gridThickness = thickness;  // Always use full material thickness for 2D height-based voxels
-
-        // Use clipped bounds center for grid origin
-        // (material bounds are already offset, so clipped bounds are in correct space)
-        gridOrigin = new THREE.Vector3(
-          (clippedMinX + clippedMaxX) / 2,
-          (clippedMinY + clippedMaxY) / 2,
-          0  // Keep Z at surface
-        );
       }
 
 
