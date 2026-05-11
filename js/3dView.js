@@ -1,5 +1,6 @@
 import * as THREE from './lib/three.module.js';
 import { VoxelGrid } from './voxels/VoxelGrid.js';
+import { QuadtreeVoxelGrid } from './voxels/QuadtreeVoxelGrid.js';
 import { VoxelMaterialRemover } from './voxels/VoxelMaterialRemover.js';
 
 
@@ -1567,6 +1568,11 @@ console.log('Calculated raw toolpath bounds:', { minX, maxX, minY, maxY, minZ, m
         return;
       }
 
+      // Save original voxel size before the auto-scaling loop below modifies it.
+      // The quadtree always uses the original fine resolution — it only places fine
+      // cells where the tool cuts, so it doesn't need the uniform-grid scaling.
+      const originalVoxelSize = this.voxelSize;
+
       // PHASE 2.1: Check if dimensions have actually changed before recreating
       const currentConfig = {
         width,
@@ -1666,15 +1672,27 @@ console.log('Calculated raw toolpath bounds:', { minX, maxX, minY, maxY, minZ, m
       }
 
 
-      // Create new voxel grid (2D grid with height-based voxels)
-      this.voxelGrid = new VoxelGrid(
-        gridWidth,
-        gridLength,
-        gridThickness,
-        this.voxelSize,
-        gridOrigin,
-        woodColor
+      // Build adaptive quadtree voxel grid.
+      // Coarse 8mm cells fill uncut areas; fine cells (≈ originalVoxelSize) are placed
+      // only where the tool actually cuts, so we always use the original fine resolution
+      // rather than the auto-scaled value computed for the uniform grid above.
+      this.voxelSize = originalVoxelSize;  // restore before passing to quadtree
+      const qtGrid = new QuadtreeVoxelGrid(
+        gridWidth, gridLength, gridThickness,
+        originalVoxelSize, gridOrigin, woodColor
       );
+
+      // Determine the largest tool radius across all tool changes so the
+      // quadtree pre-subdivides a sufficient buffer around each cut line.
+      let maxToolRadius = this.toolRadius || 1;
+      for (const tc of this.toolChangePoints) {
+        if (tc.toolInfo?.diameter) {
+          maxToolRadius = Math.max(maxToolRadius, tc.toolInfo.diameter / 2);
+        }
+      }
+
+      qtGrid.buildFromMovements(this.movementTiming, maxToolRadius);
+      this.voxelGrid = qtGrid;
 
 
       // Add voxel mesh to scene (single 2D height-based mesh)

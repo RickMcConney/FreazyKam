@@ -1,0 +1,464 @@
+/**
+ * QuadtreeVoxelGrid - Adaptive voxel grid using a quadtree for sparse material removal.
+ *
+ * Coarse 8mm cells cover areas with no toolpath; fine cells (matching the requested
+ * voxelSize) are placed only where the tool actually cuts.  Drop-in API replacement
+ * for VoxelGrid.  Key differences from VoxelGrid:
+ *   - Call buildFromMovements() once after construction, before adding to the scene.
+ *   - voxelSize property reflects the finest cell size (for external step-distance calc).
+ *   - Per-instance flat colour instead of per-vertex colours (no top/side distinction).
+ */
+
+import * as THREE from '../lib/three.module.js';
+
+const COARSE_CELL_SIZE = 64;   // mm – mandatory coarse grid pitch
+const MAX_FINE_DEPTH   = 9;   // cap tree depth inside a coarse cell
+
+// ── QuadTreeNode ────────────────────────────────────────────────────────────
+
+class QuadTreeNode {
+  constructor(x, y, w, h) {
+    this.x = x; this.y = y; this.w = w; this.h = h;
+    this.children  = null;  // null ⟹ leaf
+    this.leafIndex = -1;    // assigned during flatten pass
+  }
+
+  get cx() { return this.x + this.w * 0.5; }
+  get cy() { return this.y + this.h * 0.5; }
+  get isLeaf() { return this.children === null; }
+
+  subdivide() {
+    const hw = this.w * 0.5, hh = this.h * 0.5;
+    this.children = [
+      new QuadTreeNode(this.x,      this.y,      hw, hh),
+      new QuadTreeNode(this.x + hw, this.y,      hw, hh),
+      new QuadTreeNode(this.x,      this.y + hh, hw, hh),
+      new QuadTreeNode(this.x + hw, this.y + hh, hw, hh),
+    ];
+  }
+
+  // Fast AABB-circle intersection
+  intersectsCircle(cx, cy, r) {
+    const nearX = Math.max(this.x, Math.min(cx, this.x + this.w));
+    const nearY = Math.max(this.y, Math.min(cy, this.y + this.h));
+    const dx = cx - nearX, dy = cy - nearY;
+    return dx * dx + dy * dy <= r * r;
+  }
+}
+
+// ── QuadtreeVoxelGrid ────────────────────────────────────────────────────────
+
+class QuadtreeVoxelGrid {
+  /**
+   * @param {number} workpieceWidth     - Width (X) of the region in mm
+   * @param {number} workpieceLength    - Length (Y) of the region in mm
+   * @param {number} workpieceThickness - Thickness (Z) in mm
+   * @param {number} voxelSize          - Target fine cell size in mm (matched as closely as possible)
+   * @param {THREE.Vector3} originOffset - Centre of region in world space
+   * @param {number|string} workpieceColor - Hex colour for uncut wood
+   */
+  constructor(
+    workpieceWidth, workpieceLength, workpieceThickness,
+    voxelSize = 1.0,
+    originOffset  = new THREE.Vector3(),
+    workpieceColor = 0x8B6914
+  ) {
+    this.workpieceWidth     = workpieceWidth;
+    this.workpieceLength    = workpieceLength;
+    this.workpieceThickness = workpieceThickness;
+    this.originOffset       = originOffset;
+    this.workpieceColor     = workpieceColor;
+    this.materialBottomZ    = -workpieceThickness;
+
+    // Compute fine-cell depth so that leaf size ≈ voxelSize
+    const idealDepth = Math.round(Math.log2(COARSE_CELL_SIZE / Math.max(voxelSize, 0.05)));
+    this._maxFineDepth = Math.min(MAX_FINE_DEPTH, Math.max(1, idealDepth));
+    this.minCellSize   = COARSE_CELL_SIZE / Math.pow(2, this._maxFineDepth);
+
+    // Expose as voxelSize so external code (step-distance calc) works unchanged
+    this.voxelSize = this.minCellSize;
+
+    this.root = new QuadTreeNode(
+      originOffset.x - workpieceWidth  / 2,
+      originOffset.y - workpieceLength / 2,
+      workpieceWidth,
+      workpieceLength
+    );
+
+    this.leaves             = [];
+    this.voxelTopZ          = null;
+    this.voxelHeightChanged = new Set();
+    this.mesh               = null;
+    this._maxCellSizeUpdated = 0;  // diagnostic
+
+    // gridWidth / gridLength exposed so external profiling code (3dView.js ~line 997) works.
+    // Before buildFromMovements these are the raw input dimensions; after, they reflect the
+    // actual leaf count via a synthetic product (gridWidth=leaves.length, gridLength=1).
+    this.gridWidth  = Math.ceil(workpieceWidth  / this.voxelSize);
+    this.gridLength = Math.ceil(workpieceLength / this.voxelSize);
+  }
+
+  /**
+   * Analyse toolpath movements and build the adaptive quadtree.
+   * Must be called once after construction, before the mesh is added to the scene.
+   *
+   * @param {Array}  movementTiming - Array of {x,y,z,isG1,...} from ToolpathAnimation
+   * @param {number} maxToolRadius  - Largest tool radius across all tool changes (mm)
+   */
+  buildFromMovements(movementTiming, maxToolRadius = 3) {
+    // Sample the FULL cutting path at maxToolRadius intervals so that every point
+    // along a long straight G1 move is covered — not just G-code endpoints.
+    // Without this, long straight moves produce coarse cells in the middle of the
+    // path that the tool hits during simulation.
+    const pts = [];
+    const sampleStep = maxToolRadius;  // one sample per tool-radius guarantees overlap with buffer
+    let prevX = null, prevY = null;
+
+    for (const move of movementTiming) {
+      if (move.isG1 && move.z <= 0.001) {
+        if (prevX !== null) {
+          const dx = move.x - prevX, dy = move.y - prevY;
+          const len = Math.sqrt(dx * dx + dy * dy);
+          if (len < sampleStep) {
+            pts.push(move.x, move.y);
+          } else {
+            const steps = Math.ceil(len / sampleStep);
+            for (let i = 0; i <= steps; i++) {
+              const t = i / steps;
+              pts.push(prevX + dx * t, prevY + dy * t);
+            }
+          }
+        } else {
+          pts.push(move.x, move.y);
+        }
+        prevX = move.x;
+        prevY = move.y;
+      } else {
+        // Rapid (G0) or non-cutting move: break path continuity
+        prevX = null;
+        prevY = null;
+      }
+    }
+
+    // Use 1.5× tool radius as the subdivision buffer so the fine zone extends
+    // slightly beyond the raw tool envelope, eliminating boundary edge cases.
+    const subdivisionRadius = maxToolRadius * 1.5;
+
+    const t0 = performance.now();
+
+    // Build tree, then reduce fine resolution if the leaf count exceeds MAX_VOXELS.
+    // This mirrors the original VoxelGrid auto-scaling and keeps GPU instance count
+    // within a renderable budget.  Rebuilding takes < 100ms and happens at most a
+    // handful of times for very dense toolpaths.
+    let N;
+    for (let attempt = 0; attempt < 8; attempt++) {
+      // Reset tree before each attempt
+      this.root = new QuadTreeNode(
+        this.originOffset.x - this.workpieceWidth  / 2,
+        this.originOffset.y - this.workpieceLength / 2,
+        this.workpieceWidth,
+        this.workpieceLength
+      );
+
+      this._subdivide(this.root, pts, subdivisionRadius);
+
+      this.leaves = [];
+      this._flatten(this.root);
+      N = this.leaves.length;
+
+      if (N <= QuadtreeVoxelGrid.MAX_VOXELS) break;
+
+      // Too many voxels: coarsen fine cells by one depth level (doubles minCellSize)
+      this._maxFineDepth = Math.max(1, this._maxFineDepth - 1);
+      this.minCellSize   = COARSE_CELL_SIZE / Math.pow(2, this._maxFineDepth);
+      this.voxelSize     = this.minCellSize;
+      console.warn(
+        `[QuadtreeVoxelGrid] ${N} voxels exceeds limit (${QuadtreeVoxelGrid.MAX_VOXELS}), ` +
+        `coarsening to ${this.minCellSize.toFixed(3)}mm (attempt ${attempt + 1})`
+      );
+    }
+
+    this.voxelTopZ = new Float32Array(N);  // all 0 = at surface
+
+    // Update the compat properties so external profiling (gridWidth * gridLength) gives leaf count
+    this.gridWidth  = N;
+    this.gridLength = 1;
+
+    this._createMesh(N);
+
+    console.log(
+      `[QuadtreeVoxelGrid] ${N} adaptive voxels ` +
+      `(${pts.length / 2} samples, toolR=${maxToolRadius.toFixed(1)}mm, ` +
+      `bufferR=${subdivisionRadius.toFixed(1)}mm, fine=${this.minCellSize.toFixed(3)}mm) ` +
+      `built in ${(performance.now() - t0).toFixed(1)}ms`
+    );
+    this._maxCellSizeUpdated = 0;  // diagnostic: track largest voxel whose height was changed
+  }
+
+  // ── Tree construction ──────────────────────────────────────────────────────
+
+  // pts is a flat [x0,y0, x1,y1, ...] array for the points relevant to `node`.
+  _subdivide(node, pts, r) {
+    const mustSplit = node.w > COARSE_CELL_SIZE || node.h > COARSE_CELL_SIZE;
+
+    if (!mustSplit) {
+      // Fine phase: only subdivide if cutting pts overlap and we're above min size
+      if (node.w <= this.minCellSize * 1.001) return;
+      if (pts.length === 0 || !this._anyPtIntersects(node, pts, r)) return;
+    }
+
+    node.subdivide();
+    for (const child of node.children) {
+      const childPts = this._filterPts(child, pts, r);
+      this._subdivide(child, childPts, r);
+    }
+  }
+
+  _anyPtIntersects(node, pts, r) {
+    for (let i = 0; i < pts.length; i += 2) {
+      if (node.intersectsCircle(pts[i], pts[i + 1], r)) return true;
+    }
+    return false;
+  }
+
+  // Returns a new flat array with only the points that could affect `node`.
+  _filterPts(node, pts, r) {
+    const out = [];
+    for (let i = 0; i < pts.length; i += 2) {
+      if (node.intersectsCircle(pts[i], pts[i + 1], r)) {
+        out.push(pts[i], pts[i + 1]);
+      }
+    }
+    return out;
+  }
+
+  _flatten(node) {
+    if (node.isLeaf) {
+      node.leafIndex = this.leaves.length;
+      this.leaves.push(node);
+      return;
+    }
+    for (const child of node.children) this._flatten(child);
+  }
+
+  // ── Three.js mesh ──────────────────────────────────────────────────────────
+
+  _createMesh(N) {
+    // Unit cube (1×1×1) — scaled per-instance for varying leaf sizes.
+    // Use the same vertex-colour + instanceColor scheme as VoxelGrid so that
+    // uncut voxels render identically to the filler blocks surrounding them.
+    const geometry = new THREE.BoxGeometry(1, 1, 1);
+    geometry.computeVertexNormals();
+
+    const positions    = geometry.attributes.position.array;
+    const normals      = geometry.attributes.normal.array;
+    const matColor     = new THREE.Color(this.workpieceColor);
+    const yellowColor  = new THREE.Color(0xFFFF00);
+
+    const colors = [];
+    for (let i = 0; i < positions.length; i += 3) {
+      const absNormalZ = Math.abs(normals[i + 2]);
+      if (absNormalZ > 0.8) {
+        colors.push(matColor.r, matColor.g, matColor.b);      // top / bottom face
+      } else {
+        colors.push(yellowColor.r, yellowColor.g, yellowColor.b); // side faces
+      }
+    }
+    geometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array(colors), 3));
+
+    const material = new THREE.MeshLambertMaterial({ vertexColors: true });
+
+    this.mesh = new THREE.InstancedMesh(geometry, material, N);
+
+    const dummy   = new THREE.Object3D();
+    const midZ    = (0 + this.materialBottomZ) / 2;
+    const H       = this.workpieceThickness;
+
+    for (let i = 0; i < N; i++) {
+      const leaf = this.leaves[i];
+      dummy.position.set(leaf.cx, leaf.cy, midZ);
+      dummy.scale.set(leaf.w, leaf.h, H);
+      dummy.updateMatrix();
+      this.mesh.setMatrixAt(i, dummy.matrix);
+      this.mesh.setColorAt(i, matColor);  // instanceColor × vertexColor matches VoxelGrid & filler blocks
+    }
+
+    this.mesh.instanceMatrix.needsUpdate = true;
+    if (this.mesh.instanceColor) this.mesh.instanceColor.needsUpdate = true;
+  }
+
+  // ── Public API (mirrors VoxelGrid) ────────────────────────────────────────
+
+  getMesh() { return this.mesh; }
+
+  /**
+   * Lower the top surface of a single voxel.  Only shrinks; never grows.
+   */
+  updateVoxelHeight(index, newTopZ) {
+    if (index < 0 || index >= this.leaves.length) return false;
+    const cur = this.voxelTopZ[index];
+    if (newTopZ >= cur) return false;
+    if (cur === 0) this.voxelHeightChanged.add(index);
+    this.voxelTopZ[index] = newTopZ;
+
+    // Diagnostic: warn when a coarse cell (larger than fine resolution) is cut.
+    // This means the path sampling / subdivision buffer is insufficient.
+    const leaf = this.leaves[index];
+    const cellSize = Math.max(leaf.w, leaf.h);
+    if (cellSize > this._maxCellSizeUpdated) {
+      this._maxCellSizeUpdated = cellSize;
+      if (cellSize > this.minCellSize * 1.5) {
+        console.warn(
+          `[QuadtreeVoxelGrid] COARSE VOXEL CUT: size=${cellSize.toFixed(2)}mm ` +
+          `(fine=${this.minCellSize.toFixed(3)}mm) at (${leaf.cx.toFixed(1)}, ${leaf.cy.toFixed(1)}). ` +
+          `Increase subdivision buffer or sampling density.`
+        );
+      }
+    }
+
+    return true;
+  }
+
+  getVoxelWorldPosition(index) {
+    if (index < 0 || index >= this.leaves.length) return null;
+    const leaf = this.leaves[index];
+    return new THREE.Vector3(leaf.cx, leaf.cy, this.voxelTopZ[index]);
+  }
+
+  /**
+   * Remove material at a tool position.  Same signature as VoxelGrid.
+   */
+  removeVoxelsAtToolPosition(
+    toolX, toolY, toolZ,
+    toolRadius, toolRadiusSq,
+    toolType = 'End Mill', vbitTangent = null
+  ) {
+    let penetrationFn;
+    switch (toolType) {
+      case 'Ball Nose':
+        penetrationFn = (dSq) => toolZ + toolRadius - Math.sqrt(toolRadiusSq - dSq);
+        break;
+      case 'VBit':
+        penetrationFn = (dSq) => toolZ + Math.sqrt(dSq) / vbitTangent;
+        break;
+      default:   // 'End Mill', 'Drill', flat
+        penetrationFn = () => toolZ;
+    }
+
+    const updated = [];
+    this._queryCircle(this.root, toolX, toolY, toolRadius, toolRadiusSq, penetrationFn, updated);
+
+    if (updated.length > 0) {
+      this._updateMatrices(updated);
+      this._updateColors();
+    }
+
+    return updated;
+  }
+
+  // ── Quadtree range query ───────────────────────────────────────────────────
+
+  _queryCircle(node, cx, cy, r, rSq, fn, out) {
+    if (!node.intersectsCircle(cx, cy, r)) return;
+
+    if (node.isLeaf) {
+      const dx = node.cx - cx, dy = node.cy - cy;
+      const dSq = dx * dx + dy * dy;
+      if (dSq <= rSq) {
+        const pz = fn(dSq);
+        if (this.updateVoxelHeight(node.leafIndex, pz)) out.push(node.leafIndex);
+      }
+      return;
+    }
+
+    for (const child of node.children) {
+      this._queryCircle(child, cx, cy, r, rSq, fn, out);
+    }
+  }
+
+  // Public aliases used by 3dView.js after batch seek operations
+  updateVoxelColors()     { this._updateColors(); }
+  updateInstanceMatrices() { if (this.mesh) this.mesh.instanceMatrix.needsUpdate = true; }
+
+  // ── Matrix & colour updates ────────────────────────────────────────────────
+
+  _updateMatrices(indices) {
+    const dummy = new THREE.Object3D();
+    const botZ  = this.materialBottomZ;
+
+    for (const i of indices) {
+      const leaf = this.leaves[i];
+      const topZ = this.voxelTopZ[i];
+      const h    = topZ - botZ;
+      const visible = h > 0;
+      dummy.position.set(leaf.cx, leaf.cy, (topZ + botZ) / 2);
+      dummy.scale.set(
+        visible ? leaf.w : 0,
+        visible ? leaf.h : 0,
+        visible ? h      : 0
+      );
+      dummy.updateMatrix();
+      this.mesh.setMatrixAt(i, dummy.matrix);
+    }
+    this.mesh.instanceMatrix.needsUpdate = true;
+  }
+
+  _updateColors() {
+    if (this.voxelHeightChanged.size === 0) return;
+    const yellow = new THREE.Color(0xFFFF00);
+    const blue   = new THREE.Color(0xadd8e6);
+    for (const i of this.voxelHeightChanged) {
+      this.mesh.setColorAt(i, this.voxelTopZ[i] <= this.materialBottomZ ? blue : yellow);
+    }
+    if (this.mesh.instanceColor) this.mesh.instanceColor.needsUpdate = true;
+    this.voxelHeightChanged.clear();
+  }
+
+  // ── Reset / dispose ────────────────────────────────────────────────────────
+
+  reset() {
+    this.voxelTopZ.fill(0);
+    this.voxelHeightChanged.clear();
+    this._seedMatrices();
+    this._resetColors();
+  }
+
+  _seedMatrices() {
+    const dummy = new THREE.Object3D();
+    const midZ  = (0 + this.materialBottomZ) / 2;
+    const H     = this.workpieceThickness;
+    for (let i = 0; i < this.leaves.length; i++) {
+      const leaf = this.leaves[i];
+      dummy.position.set(leaf.cx, leaf.cy, midZ);
+      dummy.scale.set(leaf.w, leaf.h, H);
+      dummy.updateMatrix();
+      this.mesh.setMatrixAt(i, dummy.matrix);
+    }
+    this.mesh.instanceMatrix.needsUpdate = true;
+  }
+
+  _resetColors() {
+    if (!this.mesh?.instanceColor) return;
+    const matColor = new THREE.Color(this.workpieceColor);
+    for (let i = 0; i < this.leaves.length; i++) this.mesh.setColorAt(i, matColor);
+    this.mesh.instanceColor.needsUpdate = true;
+  }
+
+  dispose() {
+    if (this.mesh) {
+      this.mesh.geometry.dispose();
+      this.mesh.material.dispose();
+      this.mesh = null;
+    }
+    this.voxelTopZ = null;
+    this.voxelHeightChanged.clear();
+    this.leaves = [];
+    this.root   = null;
+  }
+}
+
+// Match the same budget as VoxelGrid's CONFIG.MAX_VOXELS (750 000 × 4 = 3 000 000).
+// Rendering more than ~3M InstancedMesh instances per frame reliably drops below 30 fps.
+QuadtreeVoxelGrid.MAX_VOXELS = 750000 * 4;
+
+export { QuadtreeVoxelGrid };
