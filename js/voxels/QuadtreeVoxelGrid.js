@@ -12,14 +12,14 @@
 import * as THREE from '../lib/three.module.js';
 
 const COARSE_CELL_SIZE = 64;   // mm – mandatory coarse grid pitch
-const MAX_FINE_DEPTH   = 9;   // cap tree depth inside a coarse cell
+const MAX_FINE_DEPTH = 9;   // cap tree depth inside a coarse cell
 
 // ── QuadTreeNode ────────────────────────────────────────────────────────────
 
 class QuadTreeNode {
   constructor(x, y, w, h) {
     this.x = x; this.y = y; this.w = w; this.h = h;
-    this.children  = null;  // null ⟹ leaf
+    this.children = null;  // null ⟹ leaf
     this.leafIndex = -1;    // assigned during flatten pass
   }
 
@@ -30,19 +30,42 @@ class QuadTreeNode {
   subdivide() {
     const hw = this.w * 0.5, hh = this.h * 0.5;
     this.children = [
-      new QuadTreeNode(this.x,      this.y,      hw, hh),
-      new QuadTreeNode(this.x + hw, this.y,      hw, hh),
-      new QuadTreeNode(this.x,      this.y + hh, hw, hh),
+      new QuadTreeNode(this.x, this.y, hw, hh),
+      new QuadTreeNode(this.x + hw, this.y, hw, hh),
+      new QuadTreeNode(this.x, this.y + hh, hw, hh),
       new QuadTreeNode(this.x + hw, this.y + hh, hw, hh),
     ];
   }
 
+  // Fast AABB-square intersection
+  intersectsSquare(cx, cy, r) {
+    const { x, y, w, h } = this;
+
+    // Check if point is outside the rectangle's bounds
+    return !(
+      cx + r < x ||
+      cx - r > x + w ||
+      cy + r < y ||
+      cy - r > y + h
+    );
+  }
+
   // Fast AABB-circle intersection
-  intersectsCircle(cx, cy, r) {
-    const nearX = Math.max(this.x, Math.min(cx, this.x + this.w));
-    const nearY = Math.max(this.y, Math.min(cy, this.y + this.h));
-    const dx = cx - nearX, dy = cy - nearY;
-    return dx * dx + dy * dy <= r * r;
+  intersectsCircle(cx, cy, rsq) {
+    const { x, y, w, h } = this; // Local stack access is fastest
+    let nx = cx;
+    let ny = cy;
+
+    if (nx < x) nx = x;
+    else if (nx > x + w) nx = x + w;
+
+    if (ny < y) ny = y;
+    else if (ny > y + h) ny = y + h;
+
+    const dx = cx - nx;
+    const dy = cy - ny;
+
+    return (dx * dx + dy * dy) <= rsq;
   }
 }
 
@@ -60,41 +83,41 @@ class QuadtreeVoxelGrid {
   constructor(
     workpieceWidth, workpieceLength, workpieceThickness,
     voxelSize = 1.0,
-    originOffset  = new THREE.Vector3(),
+    originOffset = new THREE.Vector3(),
     workpieceColor = 0x8B6914
   ) {
-    this.workpieceWidth     = workpieceWidth;
-    this.workpieceLength    = workpieceLength;
+    this.workpieceWidth = workpieceWidth;
+    this.workpieceLength = workpieceLength;
     this.workpieceThickness = workpieceThickness;
-    this.originOffset       = originOffset;
-    this.workpieceColor     = workpieceColor;
-    this.materialBottomZ    = -workpieceThickness;
+    this.originOffset = originOffset;
+    this.workpieceColor = workpieceColor;
+    this.materialBottomZ = -workpieceThickness;
 
     // Compute fine-cell depth so that leaf size ≈ voxelSize
     const idealDepth = Math.round(Math.log2(COARSE_CELL_SIZE / Math.max(voxelSize, 0.05)));
     this._maxFineDepth = Math.min(MAX_FINE_DEPTH, Math.max(1, idealDepth));
-    this.minCellSize   = COARSE_CELL_SIZE / Math.pow(2, this._maxFineDepth);
+    this.minCellSize = COARSE_CELL_SIZE / Math.pow(2, this._maxFineDepth);
 
     // Expose as voxelSize so external code (step-distance calc) works unchanged
     this.voxelSize = this.minCellSize;
 
     this.root = new QuadTreeNode(
-      originOffset.x - workpieceWidth  / 2,
+      originOffset.x - workpieceWidth / 2,
       originOffset.y - workpieceLength / 2,
       workpieceWidth,
       workpieceLength
     );
 
-    this.leaves             = [];
-    this.voxelTopZ          = null;
+    this.leaves = [];
+    this.voxelTopZ = null;
     this.voxelHeightChanged = new Set();
-    this.mesh               = null;
-    this._maxCellSizeUpdated = 0;  // diagnostic
+    this.mesh = null;
+
 
     // gridWidth / gridLength exposed so external profiling code (3dView.js ~line 997) works.
     // Before buildFromMovements these are the raw input dimensions; after, they reflect the
     // actual leaf count via a synthetic product (gridWidth=leaves.length, gridLength=1).
-    this.gridWidth  = Math.ceil(workpieceWidth  / this.voxelSize);
+    this.gridWidth = Math.ceil(workpieceWidth / this.voxelSize);
     this.gridLength = Math.ceil(workpieceLength / this.voxelSize);
   }
 
@@ -154,7 +177,7 @@ class QuadtreeVoxelGrid {
     // Capping depth here so the worst-case leaf count stays under MAX_VOXELS prevents
     // runaway allocation on the very first attempt.
     {
-      const numCoarseX = Math.ceil(this.workpieceWidth  / COARSE_CELL_SIZE);
+      const numCoarseX = Math.ceil(this.workpieceWidth / COARSE_CELL_SIZE);
       const numCoarseY = Math.ceil(this.workpieceLength / COARSE_CELL_SIZE);
       const numCoarseCells = numCoarseX * numCoarseY;
       const maxSafeDepth = Math.max(1, Math.floor(
@@ -162,8 +185,8 @@ class QuadtreeVoxelGrid {
       ));
       if (this._maxFineDepth > maxSafeDepth) {
         this._maxFineDepth = maxSafeDepth;
-        this.minCellSize   = COARSE_CELL_SIZE / Math.pow(2, this._maxFineDepth);
-        this.voxelSize     = this.minCellSize;
+        this.minCellSize = COARSE_CELL_SIZE / Math.pow(2, this._maxFineDepth);
+        this.voxelSize = this.minCellSize;
         // console.log(
         //   `[QuadtreeVoxelGrid] Pre-capping fine depth to ${maxSafeDepth} ` +
         //   `(${this.minCellSize.toFixed(2)}mm cells) for ${numCoarseCells} coarse cells`
@@ -179,7 +202,7 @@ class QuadtreeVoxelGrid {
     for (let attempt = 0; attempt < 8; attempt++) {
       // Reset tree before each attempt
       this.root = new QuadTreeNode(
-        this.originOffset.x - this.workpieceWidth  / 2,
+        this.originOffset.x - this.workpieceWidth / 2,
         this.originOffset.y - this.workpieceLength / 2,
         this.workpieceWidth,
         this.workpieceLength
@@ -195,8 +218,8 @@ class QuadtreeVoxelGrid {
 
       // Too many voxels: coarsen fine cells by one depth level (doubles minCellSize)
       this._maxFineDepth = Math.max(1, this._maxFineDepth - 1);
-      this.minCellSize   = COARSE_CELL_SIZE / Math.pow(2, this._maxFineDepth);
-      this.voxelSize     = this.minCellSize;
+      this.minCellSize = COARSE_CELL_SIZE / Math.pow(2, this._maxFineDepth);
+      this.voxelSize = this.minCellSize;
       // console.warn(
       //   `[QuadtreeVoxelGrid] ${N} voxels exceeds limit (${QuadtreeVoxelGrid.MAX_VOXELS}), ` +
       //   `coarsening to ${this.minCellSize.toFixed(3)}mm (attempt ${attempt + 1})`
@@ -206,7 +229,7 @@ class QuadtreeVoxelGrid {
     this.voxelTopZ = new Float32Array(N);  // all 0 = at surface
 
     // Update the compat properties so external profiling (gridWidth * gridLength) gives leaf count
-    this.gridWidth  = N;
+    this.gridWidth = N;
     this.gridLength = 1;
 
     this._createMesh(N);
@@ -217,7 +240,7 @@ class QuadtreeVoxelGrid {
     //   `bufferR=${subdivisionRadius.toFixed(1)}mm, fine=${this.minCellSize.toFixed(3)}mm) ` +
     //   `built in ${(performance.now() - t0).toFixed(1)}ms`
     // );
-    this._maxCellSizeUpdated = 0;  // diagnostic: track largest voxel whose height was changed
+
   }
 
   // ── Tree construction ──────────────────────────────────────────────────────
@@ -240,8 +263,9 @@ class QuadtreeVoxelGrid {
   }
 
   _anyPtIntersects(node, pts, r) {
+    //const rsq = r * r;
     for (let i = 0; i < pts.length; i += 2) {
-      if (node.intersectsCircle(pts[i], pts[i + 1], r)) return true;
+      if (node.intersectsSquare(pts[i], pts[i + 1], r)) return true;
     }
     return false;
   }
@@ -249,8 +273,9 @@ class QuadtreeVoxelGrid {
   // Returns a new flat array with only the points that could affect `node`.
   _filterPts(node, pts, r) {
     const out = [];
+    //const rsq = r*r;
     for (let i = 0; i < pts.length; i += 2) {
-      if (node.intersectsCircle(pts[i], pts[i + 1], r)) {
+      if (node.intersectsSquare(pts[i], pts[i + 1], r)) {
         out.push(pts[i], pts[i + 1]);
       }
     }
@@ -275,10 +300,10 @@ class QuadtreeVoxelGrid {
     const geometry = new THREE.BoxGeometry(1, 1, 1);
     geometry.computeVertexNormals();
 
-    const positions    = geometry.attributes.position.array;
-    const normals      = geometry.attributes.normal.array;
-    const matColor     = new THREE.Color(this.workpieceColor);
-    const yellowColor  = new THREE.Color(0xFFFF00);
+    const positions = geometry.attributes.position.array;
+    const normals = geometry.attributes.normal.array;
+    const matColor = new THREE.Color(this.workpieceColor);
+    const yellowColor = new THREE.Color(0xFFFF00);
 
     const colors = [];
     for (let i = 0; i < positions.length; i += 3) {
@@ -295,9 +320,9 @@ class QuadtreeVoxelGrid {
 
     this.mesh = new THREE.InstancedMesh(geometry, material, N);
 
-    const dummy   = new THREE.Object3D();
-    const midZ    = (0 + this.materialBottomZ) / 2;
-    const H       = this.workpieceThickness;
+    const dummy = new THREE.Object3D();
+    const midZ = (0 + this.materialBottomZ) / 2;
+    const H = this.workpieceThickness;
 
     for (let i = 0; i < N; i++) {
       const leaf = this.leaves[i];
@@ -325,22 +350,6 @@ class QuadtreeVoxelGrid {
     if (newTopZ >= cur) return false;
     if (cur === 0) this.voxelHeightChanged.add(index);
     this.voxelTopZ[index] = newTopZ;
-
-    // Diagnostic: warn when a coarse cell (larger than fine resolution) is cut.
-    // This means the path sampling / subdivision buffer is insufficient.
-    const leaf = this.leaves[index];
-    const cellSize = Math.max(leaf.w, leaf.h);
-    if (cellSize > this._maxCellSizeUpdated) {
-      this._maxCellSizeUpdated = cellSize;
-      if (cellSize > this.minCellSize * 1.5) {
-        // console.warn(
-        //   `[QuadtreeVoxelGrid] COARSE VOXEL CUT: size=${cellSize.toFixed(2)}mm ` +
-        //   `(fine=${this.minCellSize.toFixed(3)}mm) at (${leaf.cx.toFixed(1)}, ${leaf.cy.toFixed(1)}). ` +
-        //   `Increase subdivision buffer or sampling density.`
-        // );
-      }
-    }
-
     return true;
   }
 
@@ -384,7 +393,7 @@ class QuadtreeVoxelGrid {
   // ── Quadtree range query ───────────────────────────────────────────────────
 
   _queryCircle(node, cx, cy, r, rSq, fn, out) {
-    if (!node.intersectsCircle(cx, cy, r)) return;
+    if (!node.intersectsSquare(cx, cy, r)) return;
 
     if (node.isLeaf) {
       const dx = node.cx - cx, dy = node.cy - cy;
@@ -402,25 +411,25 @@ class QuadtreeVoxelGrid {
   }
 
   // Public aliases used by 3dView.js after batch seek operations
-  updateVoxelColors()     { this._updateColors(); }
+  updateVoxelColors() { this._updateColors(); }
   updateInstanceMatrices() { if (this.mesh) this.mesh.instanceMatrix.needsUpdate = true; }
 
   // ── Matrix & colour updates ────────────────────────────────────────────────
 
   _updateMatrices(indices) {
     const dummy = new THREE.Object3D();
-    const botZ  = this.materialBottomZ;
+    const botZ = this.materialBottomZ;
 
     for (const i of indices) {
       const leaf = this.leaves[i];
       const topZ = this.voxelTopZ[i];
-      const h    = topZ - botZ;
+      const h = topZ - botZ;
       const visible = h > 0;
       dummy.position.set(leaf.cx, leaf.cy, (topZ + botZ) / 2);
       dummy.scale.set(
         visible ? leaf.w : 0,
         visible ? leaf.h : 0,
-        visible ? h      : 0
+        visible ? h : 0
       );
       dummy.updateMatrix();
       this.mesh.setMatrixAt(i, dummy.matrix);
@@ -431,7 +440,7 @@ class QuadtreeVoxelGrid {
   _updateColors() {
     if (this.voxelHeightChanged.size === 0) return;
     const yellow = new THREE.Color(0xFFFF00);
-    const blue   = new THREE.Color(0xadd8e6);
+    const blue = new THREE.Color(0xadd8e6);
     for (const i of this.voxelHeightChanged) {
       this.mesh.setColorAt(i, this.voxelTopZ[i] <= this.materialBottomZ ? blue : yellow);
     }
@@ -450,8 +459,8 @@ class QuadtreeVoxelGrid {
 
   _seedMatrices() {
     const dummy = new THREE.Object3D();
-    const midZ  = (0 + this.materialBottomZ) / 2;
-    const H     = this.workpieceThickness;
+    const midZ = (0 + this.materialBottomZ) / 2;
+    const H = this.workpieceThickness;
     for (let i = 0; i < this.leaves.length; i++) {
       const leaf = this.leaves[i];
       dummy.position.set(leaf.cx, leaf.cy, midZ);
@@ -478,7 +487,7 @@ class QuadtreeVoxelGrid {
     this.voxelTopZ = null;
     this.voxelHeightChanged.clear();
     this.leaves = [];
-    this.root   = null;
+    this.root = null;
   }
 }
 
