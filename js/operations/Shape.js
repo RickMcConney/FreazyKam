@@ -328,12 +328,27 @@ class Shape extends Operation {
         selectMgr.unselectAll();
         selectMgr.selectPath(svgPath);
 
-        const title = document.getElementById('tool-properties-title');
-        const shapeLabel = AVAILABLE_SHAPES.find(item => item.value === shape)?.label || shape;
-        title.textContent = `Edit ${shapeLabel} - ${svgPath.name}`;
+        const floatingTitle = document.getElementById('floating-properties-popup-title');
+        const legacyTitle = document.getElementById('tool-properties-title');
+        const title = floatingTitle || legacyTitle;
+        const shapeConfig = AVAILABLE_SHAPES.find(item => item.value === shape);
+        const shapeLabel = shapeConfig?.label || shape;
+        if (title) {
+            if (title === floatingTitle && shapeConfig?.icon) {
+                title.innerHTML = `<i data-lucide="${shapeConfig.icon}"></i> Edit ${svgPath.name}`;
+                if (typeof window.lucide !== 'undefined' && typeof window.lucide.createIcons === 'function') {
+                    window.lucide.createIcons();
+                }
+            }
+            else {
+                title.textContent = `Edit ${svgPath.name}`;
+            }
+        }
 
+        PropertiesManager.setValue(this.nameField.key, svgPath.name);
+ 
         if (oldId != null && typeof regenerateToolpathsForPaths === 'function') {
-            if (oldId !== svgPath.id) {
+if (oldId !== svgPath.id) {
                 toolpaths.forEach(tp => {
                     if (tp.svgId === oldId) tp.svgId = svgPath.id;
                     if (tp.svgIds && Array.isArray(tp.svgIds)) {
@@ -429,29 +444,33 @@ class Shape extends Operation {
     getPropertiesHTML(path) {
         const currentShape = this.getCurrentShape();
         const pathProperties = this.currentPath?.creationProperties?.properties ?? null;
-
+        const resolvedNameValue = this.currentPath
+            ? (this.currentPath.name || '')
+            : PropertiesManager.resolveValue(this.nameField, pathProperties, null);
+ 
         if (this.fixedShape) {
             const fields = this.fieldSpecs[this.fixedShape] || [];
             const shapeLabel = AVAILABLE_SHAPES.find(shape => shape.value === this.fixedShape)?.label || this.fixedShape;
-
+ 
+            const titleText = this.currentPath ? `Edit ${resolvedNameValue}` : `${shapeLabel} Tool`;
             let html = `
                 <div class="alert alert-info mb-3">
-                    <strong>${shapeLabel} Tool</strong><br>
+                    <strong>${titleText}</strong><br>
                     ${this.tooltip}
                 </div>`;
-            html += PropertiesManager.fieldHTML(this.nameField, PropertiesManager.resolveValue(this.nameField, pathProperties, null));
+            html += PropertiesManager.fieldHTML(this.nameField, resolvedNameValue);
             html += PropertiesManager.formHTML(fields, pathProperties, this.properties);
             return html;
         }
-
+ 
         let html = `
             <div class="alert alert-info mb-3">
                 <strong>Shape Tool</strong><br>
                 Create basic shapes (circle, rectangle, polygon, star, etc.)
             </div>`;
         html += PropertiesManager.fieldHTML(this.shapeField, currentShape);
-        html += PropertiesManager.fieldHTML(this.nameField, PropertiesManager.resolveValue(this.nameField, pathProperties, null));
-
+        html += PropertiesManager.fieldHTML(this.nameField, resolvedNameValue);
+ 
         // Per-shape property sections (show/hide via CSS)
         for (const s of AVAILABLE_SHAPES) {
             const fields = this.fieldSpecs[s.value] || [];
@@ -461,11 +480,10 @@ class Shape extends Operation {
             html += PropertiesManager.formHTML(fields, pathProperties, this.properties);
             html += `</div>`;
         }
-
+ 
         return html;
     }
-
-    /**
+/**
      * Override base class to manage our own property parsing.
      * The base class would merge raw string values from `data` into this.properties
      * after onPropertiesChanged, overwriting our parsed numbers.

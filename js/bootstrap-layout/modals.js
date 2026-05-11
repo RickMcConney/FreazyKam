@@ -518,6 +518,12 @@ function showProjectPanelModal(title, renderCallback) {
         renderCallback('project-panel-content');
     }
 
+    modalElement.addEventListener('hidden.bs.modal', function handleProjectPanelHidden() {
+        if (typeof showToolsList === 'function') {
+            showToolsList();
+        }
+    }, { once: true });
+
     const modal = new bootstrap.Modal(modalElement);
     modal.show();
     lucide.createIcons();

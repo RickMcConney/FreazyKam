@@ -91,6 +91,171 @@ html, body {
     align-items: flex-end;
 }
 
+.floating-properties-popup {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 1055;
+}
+
+.floating-properties-window {
+    position: absolute;
+    top: 96px;
+    left: 300px;
+    width: min(360px, calc(100vw - 24px));
+    max-height: calc(100vh - 128px);
+    background: rgba(255, 255, 255, 0.98);
+    border: 1px solid rgba(15, 23, 42, 0.12);
+    border-radius: 10px;
+    box-shadow: 0 16px 40px rgba(15, 23, 42, 0.2);
+    overflow: hidden;
+    pointer-events: auto;
+    display: flex;
+    flex-direction: column;
+    backdrop-filter: blur(6px);
+}
+
+.floating-properties-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 12px;
+    border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+    background: linear-gradient(180deg, rgba(248, 249, 250, 0.98) 0%, rgba(255, 255, 255, 0.98) 100%);
+    cursor: move;
+    user-select: none;
+}
+
+.floating-properties-header-main {
+    min-width: 0;
+    flex: 1 1 auto;
+    max-width: calc(100% - 28px);
+}
+
+.floating-properties-popup-title {
+    font-size: 0.86rem;
+    font-weight: 600;
+    line-height: 1.1;
+    margin: 0;
+    color: var(--color-gray-600);
+}
+
+.floating-properties-popup-subtitle {
+    display: block;
+    margin-top: 1px;
+    font-size: 10px;
+    line-height: 1.1;
+}
+
+.floating-properties-body {
+    overflow: auto;
+    min-height: 0;
+    font-size: 11px;
+    padding: 0 12px 12px;
+}
+
+.floating-properties-footer {
+    display: none;
+    padding: 10px 12px 12px;
+    border-top: 1px solid rgba(15, 23, 42, 0.08);
+    background: rgba(255, 255, 255, 0.98);
+    box-shadow: 0 -8px 18px rgba(15, 23, 42, 0.06);
+}
+
+.floating-properties-footer.is-visible {
+    display: block;
+}
+
+.floating-properties-footer .mb-3,
+.floating-properties-footer .mb-3:last-child {
+    margin-bottom: 0 !important;
+}
+
+.floating-properties-body .form-group,
+.floating-properties-body .mb-3,
+.floating-properties-body .mt-4,
+.floating-properties-body .mb-2 {
+    margin-bottom: 0.45rem !important;
+}
+
+.floating-properties-body .form-group:last-child,
+.floating-properties-body .mb-3:last-child,
+.floating-properties-body .mt-4:last-child,
+.floating-properties-body .mb-2:last-child {
+    margin-bottom: 0 !important;
+}
+
+.floating-properties-body label,
+.floating-properties-body .form-label,
+.floating-properties-body .control-label,
+.floating-properties-body .input-group-text,
+.floating-properties-body .btn,
+.floating-properties-body .form-control,
+.floating-properties-body .form-select,
+.floating-properties-body select,
+.floating-properties-body input,
+.floating-properties-body textarea,
+.floating-properties-body small,
+.floating-properties-body .small,
+.floating-properties-body .text-muted,
+.floating-properties-body h6 {
+    font-size: 11px;
+}
+
+.floating-properties-body .form-control,
+.floating-properties-body .form-select,
+.floating-properties-body select,
+.floating-properties-body input,
+.floating-properties-body textarea {
+    min-height: 28px;
+    padding: 3px 6px;
+    border-radius: 5px;
+}
+
+.floating-properties-body input[type="checkbox"],
+.floating-properties-body input[type="radio"] {
+    min-height: auto;
+    padding: 0;
+}
+
+.floating-properties-body .btn {
+    padding: 3px 6px;
+}
+
+.floating-properties-body h6 {
+    margin-bottom: 0.2rem !important;
+    font-weight: 600;
+    line-height: 1.1;
+}
+
+.floating-properties-body #tool-help-content,
+.floating-properties-body #operation-help-content,
+.floating-properties-body .small.text-muted {
+    font-size: 10px !important;
+    line-height: 1.2;
+    margin-bottom: 0 !important;
+}
+
+.floating-properties-body .mt-4 {
+    margin-top: 0.35rem !important;
+}
+
+.floating-properties-content {
+    display: none;
+    padding: 8px !important;
+}
+
+.floating-properties-content.is-active {
+    display: block !important;
+}
+
+.floating-properties-dragging,
+.floating-properties-dragging * {
+    cursor: move !important;
+    user-select: none !important;
+}
+
 .canvas-minimap {
     width: 180px;
     height: 120px;
@@ -834,7 +999,6 @@ html, body {
     background-color: var(--color-gray-100);
     border: 1px solid var(--color-gray-200);
     border-radius: 6px;
-    padding: 12px;
 }
 
 .help-text {
@@ -846,9 +1010,34 @@ html, body {
     margin-top: 8px;
 }
 
-.help-navigation .btn-group-sm > .btn {
-    padding: 2px 6px;
-    font-size: 11px;
+.help-navigation {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+}
+
+.help-navigation .help-nav-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    min-height: 22px;
+    padding: 0;
+    font-size: 10px;
+    border-radius: 4px;
+    flex: 0 0 22px;
+}
+
+.help-navigation .help-nav-btn .lucide {
+    width: 12px;
+    height: 12px;
+}
+
+.help-navigation .help-navigation-text {
+    flex: 1 1 auto;
+    min-width: 0;
 }
 
 /* Step progress bar */

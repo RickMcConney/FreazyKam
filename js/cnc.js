@@ -241,6 +241,10 @@ function setVisibility(id, visible, options) {
 }
 
 function doRemoveToolPath(id) {
+	if (typeof window.closeFloatingPropertiesPopupIfEditingDeletedItem === 'function') {
+		window.closeFloatingPropertiesPopupIfEditingDeletedItem(id);
+	}
+
 	var removedSvgPath = null;
 	for (var i = 0; i < svgpaths.length; i++) {
 		if (svgpaths[i].id == id) {
@@ -263,6 +267,9 @@ function doRemoveToolPath(id) {
 		var toolpathSvgIds = toolpath.svgIds || (toolpath.svgId ? [toolpath.svgId] : []);
 		var isLinkedToRemovedPath = removedSvgPath && toolpathSvgIds.includes(removedSvgPath.id);
 		if (toolpath.id == id || toolpath.tool.name == id || isLinkedToRemovedPath) {
+			if (typeof window.closeFloatingPropertiesPopupIfEditingDeletedItem === 'function') {
+				window.closeFloatingPropertiesPopupIfEditingDeletedItem(toolpath.id);
+			}
 			toolpaths.splice(i, 1);
 			removeToolPath(toolpath.id);
 		}

@@ -1006,7 +1006,6 @@ function createSidebar() {
             <button class="nav-link" id="operations-tab" data-bs-toggle="tab" data-bs-target="#operations" type="button" role="tab">
                 <i data-lucide="cog"></i> Operations
             </button>
-            <button type="button" class="btn-close ms-auto me-2 align-self-center" id="panel-close-button" aria-label="Close" style="display: none;" title="Close panel"></button>
         </nav>
 
         <!-- Tab Content (scrollable) -->
@@ -1017,21 +1016,15 @@ function createSidebar() {
                     <!-- Draw Tools will be added dynamically -->
                 </div>
 
-                
-
-                <!-- Tool Properties Editor (hidden by default) -->
-                <div id="tool-properties-editor" class="p-3" style="display: none;">
-                    <div class="mb-3 pb-3 border-bottom d-flex justify-content-between align-items-center">
-                        <h6 class="mb-0" id="tool-properties-title">Tool Properties</h6>
-                    </div>
-
+                <!-- Tool Properties Editor (rendered inside floating popup) -->
+                <div id="tool-properties-editor" class="floating-properties-content p-3" style="display: none;">
                     <!-- Properties form will be injected here -->
                     <div id="tool-properties-form"></div>
 
                     <!-- Help section -->
                     <div class="mt-4">
-                        <h6 class="text-muted mb-2">
-                            <i data-lucide="help-circle"></i> How to use
+                        <h6 class="text-muted mb-2" style="font-weight: bold; margin-top:10px;">
+                            How to use
                         </h6>
                         <div id="tool-help-content" class="small text-muted mb-3">
                             Select a tool to see instructions here.
@@ -1066,19 +1059,15 @@ function createSidebar() {
                         <i data-lucide="mountain"></i>3D Profile
                     </div>
                 </div>
-                <!-- Operation Properties Editor (hidden by default) -->
-                <div id="operation-properties-editor" class="p-3" style="display: none;">
-                    <div class="mb-3 pb-3 border-bottom d-flex justify-content-between align-items-center">
-                        <h6 class="mb-0" id="operation-properties-title">Operation Properties</h6>
-                    </div>
-
+                <!-- Operation Properties Editor (rendered inside floating popup) -->
+                <div id="operation-properties-editor" class="floating-properties-content p-3" style="display: none;">
                     <!-- Operation properties form will be injected here -->
                     <div id="operation-properties-form"></div>
 
                     <!-- Help section -->
                     <div class="mt-4">
-                        <h6 class="text-muted mb-2">
-                            <i data-lucide="help-circle"></i> How to use
+                        <h6 class="text-muted mb-2" style="font-weight: bold; margin-top:10px;">
+                            How to use
                         </h6>
                         <div id="operation-help-content" class="small text-muted mb-3">
                             Select an operation to see instructions here.
@@ -1404,14 +1393,8 @@ function setupSidebarEventHandlers(sidebar) {
 
     eventRoots.forEach(eventRoot => eventRoot.addEventListener('click', function (e) {
         const item = e.target.closest('.sidebar-item');
-        const closeButton = e.target.closest('#panel-close-button');
         const objectChevron = e.target.closest('.sidebar-object-chevron');
         const visibilityToggle = e.target.closest('.sidebar-visibility-toggle');
-
-        if (closeButton) {
-            showToolsList();
-            return;
-        }
 
         if (visibilityToggle) {
             e.preventDefault();
@@ -1633,21 +1616,197 @@ function setupCanvasTabHandlers() {
 
 // Initialize G-code profiles UI
 // Properties Editor Control Functions
+function getFloatingPropertiesElements() {
+    return {
+        popup: document.getElementById('floating-properties-popup'),
+        windowEl: document.getElementById('floating-properties-window'),
+        body: document.getElementById('floating-properties-body'),
+        title: document.getElementById('floating-properties-popup-title'),
+        subtitle: document.getElementById('floating-properties-popup-subtitle'),
+        close: document.getElementById('floating-properties-close'),
+        header: document.getElementById('floating-properties-header')
+    };
+}
+
+function ensureFloatingPropertiesPopup() {
+    const elements = getFloatingPropertiesElements();
+    if (!elements.popup || !elements.windowEl || elements.popup.dataset.initialized === 'true') {
+        return elements;
+    }
+
+    const popupState = {
+        dragging: false,
+        offsetX: 0,
+        offsetY: 0
+    };
+
+    const positionPopupOnRight = () => {
+        const margin = 16;
+        const popupWidth = elements.windowEl.getBoundingClientRect().width || elements.windowEl.offsetWidth || 360;
+        const left = Math.max(margin, window.innerWidth - popupWidth - margin);
+        const top = 96;
+        elements.windowEl.style.left = `${left}px`;
+        elements.windowEl.style.top = `${top}px`;
+    };
+ 
+    const clampPopupPosition = () => {
+        const margin = 16;
+        const maxLeft = Math.max(margin, window.innerWidth - elements.windowEl.offsetWidth - margin);
+        const maxTop = Math.max(margin, window.innerHeight - elements.windowEl.offsetHeight - margin);
+        const left = parseFloat(elements.windowEl.style.left || elements.windowEl.offsetLeft || margin);
+        const top = parseFloat(elements.windowEl.style.top || elements.windowEl.offsetTop || margin);
+        elements.windowEl.style.left = `${Math.min(Math.max(left, margin), maxLeft)}px`;
+        elements.windowEl.style.top = `${Math.min(Math.max(top, margin), maxTop)}px`;
+    };
+const stopDragging = () => {
+        popupState.dragging = false;
+        document.body.classList.remove('floating-properties-dragging');
+    };
+
+    const onPointerMove = (event) => {
+        if (!popupState.dragging) return;
+        const margin = 16;
+        const maxLeft = Math.max(margin, window.innerWidth - elements.windowEl.offsetWidth - margin);
+        const maxTop = Math.max(margin, window.innerHeight - elements.windowEl.offsetHeight - margin);
+        const nextLeft = Math.min(Math.max(event.clientX - popupState.offsetX, margin), maxLeft);
+        const nextTop = Math.min(Math.max(event.clientY - popupState.offsetY, margin), maxTop);
+        elements.windowEl.style.left = `${nextLeft}px`;
+        elements.windowEl.style.top = `${nextTop}px`;
+    };
+
+    elements.header.addEventListener('pointerdown', (event) => {
+        if (event.target.closest('button, input, select, textarea, label, a')) {
+            return;
+        }
+        popupState.dragging = true;
+        const rect = elements.windowEl.getBoundingClientRect();
+        popupState.offsetX = event.clientX - rect.left;
+        popupState.offsetY = event.clientY - rect.top;
+        document.body.classList.add('floating-properties-dragging');
+        elements.header.setPointerCapture?.(event.pointerId);
+        event.preventDefault();
+    });
+
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', stopDragging);
+    window.addEventListener('pointercancel', stopDragging);
+    window.addEventListener('resize', clampPopupPosition);
+ 
+    elements.close?.addEventListener('click', () => showToolsList());
+ 
+    elements.popup.dataset.initialized = 'true';
+    positionPopupOnRight();
+    clampPopupPosition();
+    return elements;
+}
+
+function extractPropertiesPanelMeta(htmlContent) {
+    const temp = document.createElement('div');
+    temp.innerHTML = htmlContent || '';
+
+    const infoAlert = temp.querySelector('.alert.alert-info');
+    if (!infoAlert) {
+        return {
+            titleHtml: 'Properties',
+            subtitle: ''
+        };
+    }
+
+    const infoStrong = infoAlert.querySelector('strong');
+    const titleHtml = infoStrong ? infoStrong.innerHTML.trim() : 'Properties';
+    const alertClone = infoAlert.cloneNode(true);
+    alertClone.querySelectorAll('strong, br').forEach(node => node.remove());
+    const subtitle = alertClone.textContent.trim().replace(/\s+/g, ' ');
+
+    infoAlert.remove();
+
+    return {
+        titleHtml,
+        subtitle,
+        cleanedHtml: temp.innerHTML
+    };
+}
+
+function syncFloatingPropertiesPopupText(meta) {
+    const elements = getFloatingPropertiesElements();
+    if (!elements.title || !elements.subtitle) return;
+ 
+    elements.title.innerHTML = meta?.titleHtml || 'Properties';
+    elements.subtitle.textContent = meta?.subtitle || 'Move this window anywhere in the workspace.';
+    if (window.lucide && typeof window.lucide.createIcons === 'function') {
+        window.lucide.createIcons();
+    }
+}
+
+function setFloatingPropertiesPopupContext(context = null) {
+    window.floatingPropertiesPopupContext = context;
+}
+
+function shouldCloseFloatingPropertiesPopupForDeletedItem(id) {
+    const context = window.floatingPropertiesPopupContext;
+    if (!context || !id) return false;
+
+    if (context.type === 'shape') {
+        return context.id === id;
+    }
+
+    if (context.type === 'toolpath') {
+        if (context.id === id) return true;
+        if (Array.isArray(context.svgIds) && context.svgIds.includes(id)) return true;
+    }
+
+    return false;
+}
+
+function closeFloatingPropertiesPopupIfEditingDeletedItem(id) {
+    if (!shouldCloseFloatingPropertiesPopupForDeletedItem(id)) return;
+    showToolsList();
+}
+
+function showFloatingPropertiesPopup(contentElement, meta = null) {
+    const elements = ensureFloatingPropertiesPopup();
+    if (!elements.popup || !elements.body || !contentElement) return;
+
+    Array.from(elements.body.children).forEach(child => {
+        child.classList.remove('is-active');
+        child.style.display = 'none';
+    });
+
+    if (contentElement.parentElement !== elements.body) {
+        elements.body.appendChild(contentElement);
+    }
+
+    syncFloatingPropertiesPopupText(meta);
+
+    elements.popup.style.display = 'block';
+    contentElement.classList.add('is-active');
+    contentElement.style.display = 'block';
+}
+
+function hideFloatingPropertiesPopup() {
+    const elements = getFloatingPropertiesElements();
+    if (!elements.popup || !elements.body) return;
+
+    Array.from(elements.body.children).forEach(child => {
+        child.classList.remove('is-active');
+        child.style.display = 'none';
+    });
+
+    elements.popup.style.display = 'none';
+    setFloatingPropertiesPopupContext(null);
+}
+
 function showToolPropertiesEditor(operationName) {
     const toolsList = document.getElementById('draw-tools-list');
     const propertiesEditor = document.getElementById('tool-properties-editor');
-    const title = document.getElementById('tool-properties-title');
+    const operationPropertiesEditor = document.getElementById('operation-properties-editor');
     const form = document.getElementById('tool-properties-form');
     const helpContent = document.getElementById('tool-help-content');
-
-    // Hide tools list and show properties editor
-    toolsList.style.display = 'none';
-        propertiesEditor.style.display = 'block';
-
-    // Show close button in tab bar
-    var closeBtn = document.getElementById('panel-close-button');
-    if (closeBtn) closeBtn.style.display = 'block';
-
+ 
+    // Keep tools list visible while preparing popup content
+    toolsList.style.display = 'block';
+    if (operationPropertiesEditor) operationPropertiesEditor.style.display = 'none';
+ 
     currentOperationName = operationName;
 
     // Get the operation instance first (needed for icon and properties)
@@ -1658,15 +1817,6 @@ function showToolPropertiesEditor(operationName) {
     if (selectedToolItem) selectedToolItem.classList.add('selected');
     syncGroupedToolSelection();
 
-    // Update title with icon if available
-    const operationLabel = operation?.displayName || operationName;
-
-    if (operation && operation.icon) {
-        title.innerHTML = `<i data-lucide="${operation.icon}"></i> ${operationLabel} Tool`;
-        lucide.createIcons(); // Re-render newly added Lucide icons
-    } else {
-        title.textContent = `${operationLabel} Tool`;
-    }
     if (operation && typeof operation.getPropertiesHTML === 'function') {
         // Restore persisted last-used values before rendering
         if (operation.fields) {
@@ -1674,7 +1824,8 @@ function showToolPropertiesEditor(operationName) {
             if (Object.keys(saved).length > 0)
                 operation.properties = { ...operation.properties, ...saved };
         }
-        form.innerHTML = operation.getPropertiesHTML();
+        const propertiesMeta = extractPropertiesPanelMeta(operation.getPropertiesHTML());
+        form.innerHTML = propertiesMeta.cleanedHtml || '';
 
         // Add event listeners directly to input elements
         const inputs = form.querySelectorAll('input, select, textarea');
@@ -1722,11 +1873,18 @@ function showToolPropertiesEditor(operationName) {
         });
 
         // Refresh Lucide icons after adding all HTML and handlers
-        if (window.lucide) {
-            window.lucide.createIcons();
-        }
+        showFloatingPropertiesPopup(propertiesEditor, {
+            titleHtml: operation && operation.icon
+                ? `<i data-lucide="${operation.icon}"></i> ${propertiesMeta.titleHtml}`
+                : propertiesMeta.titleHtml,
+            subtitle: propertiesMeta.subtitle
+        });
     } else {
         form.innerHTML = '<p class="text-muted">No properties available for this tool.</p>';
+        showFloatingPropertiesPopup(propertiesEditor, {
+            titleHtml: 'Properties',
+            subtitle: ''
+        });
     }
 
     // Help content is managed by StepWiseHelpSystem when operation.start() is called
@@ -1881,12 +2039,36 @@ function generateToolpathForSelection() {
         // Use centralized helper to set active state
         setActiveToolpaths(newToolpaths);
 
+        const editedOperationName = data.toolpathName || newToolpaths[0]?.label || currentOperationName;
+        const operationIcon = getOperationIcon(currentOperationName);
+        syncFloatingPopupOperationName(operationIcon, editedOperationName);
+
+        const popupContextSvgIds = newToolpaths.flatMap(tp => getToolpathSourceIds(tp));
+        setFloatingPropertiesPopupContext({
+            type: 'toolpath',
+            id: newToolpaths[0]?.id || null,
+            operationName: currentOperationName,
+            svgIds: Array.from(new Set(popupContextSvgIds))
+        });
+
+        const refreshedPropertiesMeta = extractPropertiesPanelMeta(window.toolPathProperties.getPropertiesHTML(currentOperationName, data, {
+            showUpdateButton: true
+        }));
+        const operationForm = document.getElementById('operation-properties-form');
+        if (operationForm) {
+            operationForm.innerHTML = refreshedPropertiesMeta.cleanedHtml || '';
+        }
+        setupToolpathUpdateButton(currentOperationName);
+        wireDepthToNameAutoUpdate(currentOperationName, operationIcon);
+
+        // Keep the operations tool highlighted in creation mode after generation.
+        redraw();
+
         // Clear the properties after successful generation
         window.currentToolpathProperties = null;
 
         return newToolpaths;
     }
-
     // Clear the properties even if generation failed
     window.currentToolpathProperties = null;
     redraw();
@@ -1896,22 +2078,40 @@ function generateToolpathForSelection() {
 /**
  * Wire depth input to auto-update the name field when name still matches the default pattern.
  */
-function wireDepthToNameAutoUpdate(operationName) {
+function syncFloatingPopupOperationName(operationIcon, name) {
+    const displayName = name || 'Operation';
+    syncFloatingPropertiesPopupText({
+        titleHtml: operationIcon
+            ? `<i data-lucide="${operationIcon}"></i> Edit ${displayName}`
+            : `Edit ${displayName}`,
+        subtitle: getFloatingPropertiesElements().subtitle?.textContent || ''
+    });
+}
+
+function wireDepthToNameAutoUpdate(operationName, operationIcon = null) {
     const depthInput = document.getElementById('pm-depth') || document.getElementById('depth-input');
     const nameInput  = document.getElementById('pm-toolpathName') || document.getElementById('toolpath-name-input');
-    if (!depthInput || !nameInput) return;
-
-    // Remember the current default so we know if the user has customized the name
+    if (!nameInput) return;
+ 
+    const syncTitleFromInput = () => {
+        const trimmedName = nameInput.value.trim();
+        syncFloatingPopupOperationName(operationIcon, trimmedName || operationName);
+    };
+ 
     let lastAutoName = nameInput.value;
-
+    syncTitleFromInput();
+    nameInput.addEventListener('input', syncTitleFromInput);
+ 
+    if (!depthInput) return;
+ 
     depthInput.addEventListener('input', function () {
-        // Only auto-update if the name still matches the last auto-generated value
         if (nameInput.value !== lastAutoName) return;
         const depth = parseDimension(depthInput.value);
         if (depth > 0) {
             const newName = formatDimension(depth, false) + ' deep ' + operationName;
             nameInput.value = newName;
             lastAutoName = newName;
+            syncTitleFromInput();
         }
     });
 }
@@ -1919,44 +2119,72 @@ function wireDepthToNameAutoUpdate(operationName) {
 function showOperationPropertiesEditor(operationName) {
     const operationsList = document.getElementById('operations-list');
     const propertiesEditor = document.getElementById('operation-properties-editor');
-    const title = document.getElementById('operation-properties-title');
+    const toolPropertiesEditor = document.getElementById('tool-properties-editor');
     const form = document.getElementById('operation-properties-form');
     const helpContent = document.getElementById('operation-help-content');
 
-    // Hide operations list and show properties editor
-    operationsList.style.display = 'none';
-    propertiesEditor.style.display = 'block';
-
-    // Show close button in tab bar
-    var closeBtn = document.getElementById('panel-close-button');
-    if (closeBtn) closeBtn.style.display = 'block';
-
-    // Update title with icon
+    document.querySelectorAll('#operations-list .sidebar-item.selected').forEach(el => el.classList.remove('selected'));
+    const selectedOperationItem = document.querySelector(`#operations-list [data-operation="${operationName}"]`);
+    if (selectedOperationItem) selectedOperationItem.classList.add('selected');
+    syncGroupedToolSelection();
+ 
+    // Keep operations list visible while preparing popup content
+    operationsList.style.display = 'block';
+    if (toolPropertiesEditor) toolPropertiesEditor.style.display = 'none';
+ 
     currentOperationName = operationName;
     const operationIcon = getOperationIcon(operationName);
-    if (operationIcon) {
-        title.innerHTML = `<i data-lucide="${operationIcon}"></i> ${operationName} Operation`;
-        lucide.createIcons(); // Re-render newly added Lucide icons
-    } else {
-        title.textContent = `${operationName} Operation`;
-    }
 
     // Check if this is a toolpath operation
     const isToolpathOperation = window.toolPathProperties?.hasOperation(operationName);
 
     if (isToolpathOperation) {
-        form.innerHTML = window.toolPathProperties.getPropertiesHTML(operationName);
-
+        const selectedSvgIds = typeof getSelectedSvgPathIds === 'function'
+            ? getSelectedSvgPathIds().filter(Boolean)
+            : [];
+        const existingToolpaths = selectedSvgIds.length > 0
+            ? findExistingToolpathsForSelection(operationName, selectedSvgIds)
+            : [];
+        const hasAssociatedShape = existingToolpaths.length > 0;
+        const propertiesMeta = extractPropertiesPanelMeta(window.toolPathProperties.getPropertiesHTML(operationName, null, {
+            showUpdateButton: hasAssociatedShape
+        }));
+        form.innerHTML = propertiesMeta.cleanedHtml || '';
+ 
         // Store the active operation name for path selection handler
         window.activeToolpathOperation = operationName;
 
-        // Set up the "Update Toolpath" button using the shared handler
-        setupToolpathUpdateButton(operationName);
+        if (hasAssociatedShape) {
+            setActiveToolpaths(existingToolpaths);
+            setupToolpathUpdateButton(operationName);
+        } else {
+            const footer = document.getElementById('floating-properties-footer');
+            if (footer) {
+                footer.innerHTML = '';
+                footer.classList.remove('is-visible');
+            }
+        }
+ 
+        const creationTitle = `${operationName} tool`;
+        const editingTitle = (document.getElementById('pm-toolpathName') || document.getElementById('toolpath-name-input'))?.value || operationName;
+ 
+        // Auto-update name when depth changes and keep popup title in sync with the name field
+        if (hasAssociatedShape) {
+            wireDepthToNameAutoUpdate(operationName, operationIcon);
+        }
+ 
+        setFloatingPropertiesPopupContext(hasAssociatedShape
+            ? { type: 'toolpath', id: existingToolpaths[0]?.id || null, operationName, svgIds: selectedSvgIds.slice() }
+            : null);
 
-        // Auto-update name when depth changes
-        wireDepthToNameAutoUpdate(operationName);
+        showFloatingPropertiesPopup(propertiesEditor, {
+            titleHtml: operationIcon
+                ? `<i data-lucide="${operationIcon}"></i> ${hasAssociatedShape ? `Edit ${editingTitle}` : creationTitle}`
+                : (hasAssociatedShape ? `Edit ${editingTitle}` : creationTitle),
+            subtitle: propertiesMeta.subtitle
+        });
     } else {
-        // Use the old behavior for drawing tool operations
+// Use the old behavior for drawing tool operations
         const operation = window.cncController?.operationManager?.getOperation(operationName);
         if (operation && typeof operation.getPropertiesHTML === 'function') {
             // Restore persisted last-used values before rendering
@@ -1965,7 +2193,8 @@ function showOperationPropertiesEditor(operationName) {
                 if (Object.keys(saved).length > 0)
                     operation.properties = { ...operation.properties, ...saved };
             }
-            form.innerHTML = operation.getPropertiesHTML();
+            const propertiesMeta = extractPropertiesPanelMeta(operation.getPropertiesHTML());
+            form.innerHTML = propertiesMeta.cleanedHtml || '';
 
             // Add event listeners directly to input elements
             const inputs = form.querySelectorAll('input, select, textarea');
@@ -1982,8 +2211,19 @@ function showOperationPropertiesEditor(operationName) {
                 // Add both change and input events for real-time updates
                 input.addEventListener('change', handleInputChange);
             });
+
+            showFloatingPropertiesPopup(propertiesEditor, {
+                titleHtml: operationIcon
+                    ? `<i data-lucide="${operationIcon}"></i> ${propertiesMeta.titleHtml}`
+                    : propertiesMeta.titleHtml,
+                subtitle: propertiesMeta.subtitle
+            });
         } else {
             form.innerHTML = '<p class="text-muted">No properties available for this operation.</p>';
+            showFloatingPropertiesPopup(propertiesEditor, {
+                titleHtml: 'Properties',
+                subtitle: ''
+            });
         }
     }
 
@@ -2164,11 +2404,17 @@ function regenerateToolpathFromSvg(operationName, activeToolpaths, selectedTool,
         window.toolpathUpdateTargets = null;
     }
 
+    const updatedNameInput = document.getElementById('pm-toolpathName') || document.getElementById('toolpath-name-input');
+    const updatedOperationName = updatedNameInput?.value?.trim();
+    if (updatedOperationName) {
+        const updatedOperationIcon = getOperationIcon(operationName);
+        syncFloatingPopupOperationName(updatedOperationIcon, updatedOperationName);
+    }
+ 
     if (typeof refreshToolPathsDisplay === 'function') {
         refreshToolPathsDisplay();
     }
-
-    // After VCarve mode switches, the number of toolpaths may have changed.
+// After VCarve mode switches, the number of toolpaths may have changed.
     // Mark all toolpaths linked to the regenerated source paths as active.
     const regenIds = new Set(svgPathsToRegenerate.map(p => p.id));
     const newActive = toolpaths.filter(tp => {
@@ -2179,11 +2425,24 @@ function regenerateToolpathFromSvg(operationName, activeToolpaths, selectedTool,
 }
 
 function setupToolpathUpdateButton(operationName) {
-    const updateButton = document.getElementById('update-toolpath-button');
-    if (!updateButton) return;
+    const bodyButton = document.getElementById('update-toolpath-button');
+    const footer = document.getElementById('floating-properties-footer');
+    if (!bodyButton || !footer) return;
 
-    const newButton = updateButton.cloneNode(true);
-    updateButton.parentNode.replaceChild(newButton, updateButton);
+    footer.innerHTML = '';
+    footer.classList.remove('is-visible');
+
+    const footerButtonWrapper = bodyButton.parentNode;
+    if (!footerButtonWrapper) return;
+
+    footer.appendChild(footerButtonWrapper);
+    footer.classList.add('is-visible');
+
+    const footerButton = document.getElementById('update-toolpath-button');
+    if (!footerButton) return;
+
+    const newButton = footerButton.cloneNode(true);
+    footerButton.parentNode.replaceChild(newButton, footerButton);
 
     newButton.addEventListener('click', function () {
         const activeToolpaths = getActiveToolpaths();
@@ -2380,21 +2639,15 @@ function showToolpathPropertiesEditor(toolpath) {
     // Show the operation properties editor
     const operationsList = document.getElementById('operations-list');
     const propertiesEditor = document.getElementById('operation-properties-editor');
-    const title = document.getElementById('operation-properties-title');
     const form = document.getElementById('operation-properties-form');
 
-    operationsList.style.display = 'none';
-    propertiesEditor.style.display = 'block';
-
-    // Show close button in tab bar
-    var closeBtn = document.getElementById('panel-close-button');
-    if (closeBtn) closeBtn.style.display = 'block';
-
+    operationsList.style.display = 'block';
+ 
     // Map HelicalDrill to Drill for properties panel
     const propsOperation = toolpath.operation === 'HelicalDrill' ? 'Drill' : toolpath.operation;
     currentOperationName = propsOperation;
-    // Update title
-    title.textContent = `Edit ${toolpath.operation === 'HelicalDrill' ? 'Helical Drill' : toolpath.operation} Toolpath`;
+
+    let propertiesMeta = null;
 
     // Generate properties HTML with existing values
     if (window.toolPathProperties?.hasOperation(propsOperation)) {
@@ -2413,13 +2666,16 @@ function showToolpathPropertiesEditor(toolpath) {
         if (properties.angle === undefined && toolpath.tool.angle !== undefined) properties.angle = toolpath.tool.angle;
         if (toolpath.label) properties.toolpathName = toolpath.label;
 
-        form.innerHTML = window.toolPathProperties.getPropertiesHTML(propsOperation, properties);
+        propertiesMeta = extractPropertiesPanelMeta(window.toolPathProperties.getPropertiesHTML(propsOperation, properties, {
+            showUpdateButton: true
+        }));
+        form.innerHTML = propertiesMeta.cleanedHtml || '';
 
         // Set up the "Update Toolpath" button using the shared handler
         setupToolpathUpdateButton(propsOperation);
 
-        // Auto-update name when depth changes
-        wireDepthToNameAutoUpdate(propsOperation);
+        // Auto-update name when depth changes and keep popup title in sync with the name field
+        wireDepthToNameAutoUpdate(propsOperation, getOperationIcon(propsOperation));
 
         // Update help content
         if (window.stepWiseHelp) {
@@ -2430,6 +2686,24 @@ function showToolpathPropertiesEditor(toolpath) {
     } else {
         form.innerHTML = '<p class="text-muted">This toolpath cannot be edited.</p>';
     }
+
+    const toolpathOperationIcon = getOperationIcon(propsOperation);
+    const editedOperationName = (document.getElementById('pm-toolpathName') || document.getElementById('toolpath-name-input'))?.value
+        || toolpath.label
+        || (toolpath.operation === 'HelicalDrill' ? 'Helical Drill' : propsOperation);
+    setFloatingPropertiesPopupContext({
+        type: 'toolpath',
+        id: toolpath.id,
+        operationName: propsOperation,
+        svgIds: (toolpath.svgIds || (toolpath.svgId ? [toolpath.svgId] : [])).slice()
+    });
+
+    showFloatingPropertiesPopup(propertiesEditor, {
+        titleHtml: toolpathOperationIcon
+            ? `<i data-lucide="${toolpathOperationIcon}"></i> Edit ${editedOperationName}`
+            : `Edit ${editedOperationName}`,
+        subtitle: propertiesMeta?.subtitle || ''
+    });
 }
 
 // Auto-close tool properties when context switches
@@ -2447,68 +2721,66 @@ function autoCloseToolProperties(reason) {
 
 function showToolsList() {
     currentOperationName = null;
-    // Hide close button in tab bar
-    var closeBtn = document.getElementById('panel-close-button');
-    if (closeBtn) closeBtn.style.display = 'none';
+    hideFloatingPropertiesPopup();
     const activeTab = document.querySelector('#sidebar-tabs .nav-link.active');
     const form = document.getElementById('tool-properties-form');
     form.innerHTML = "";
+
+    document.querySelectorAll('#draw-tools-list .sidebar-item.selected').forEach(el => el.classList.remove('selected'));
+    syncGroupedToolSelection();
+
     if (activeTab && activeTab.id === 'draw-tools-tab') {
         const toolsList = document.getElementById('draw-tools-list');
         const propertiesEditor = document.getElementById('tool-properties-editor');
-
+ 
         toolsList.style.display = 'block';
         propertiesEditor.style.setProperty('display', 'none', 'important');
-        syncGroupedToolSelection();
     } else if (activeTab && activeTab.id === 'operations-tab') {
         const operationsList = document.getElementById('operations-list');
         const propertiesEditor = document.getElementById('operation-properties-editor');
-
+ 
         operationsList.style.display = 'block';
         propertiesEditor.style.setProperty('display', 'none', 'important');
     }
-
+ 
     selectMgr.unselectAll();
     if (window.toolpaths) {
         toolpaths.forEach(tp => tp.active = false);
     }
-
-
+ 
+ 
     // Return to Select mode
     if (window.cncController) {
         window.cncController.setMode('Select');
         handleOperationClick('Select');
     }
 }
-
-
 // Path Properties Editor for editing existing paths
 function showPathPropertiesEditor(path) {
     const toolsList = document.getElementById('draw-tools-list');
     const propertiesEditor = document.getElementById('tool-properties-editor');
-    const title = document.getElementById('tool-properties-title');
+    const operationPropertiesEditor = document.getElementById('operation-properties-editor');
     const form = document.getElementById('tool-properties-form');
     const helpContent = document.getElementById('tool-help-content');
 
-    // Hide tools list and show properties editor
-    toolsList.style.display = 'none';
-    propertiesEditor.style.display = 'flex';
+    // Keep tools list visible while preparing popup content
+    toolsList.style.display = 'block';
+    if (operationPropertiesEditor) operationPropertiesEditor.style.display = 'none';
     propertiesEditor.style.flexDirection = 'column';
-
-    // Show close button in tab bar
-    var closeBtn = document.getElementById('panel-close-button');
-    if (closeBtn) closeBtn.style.display = 'block';
-
-    // Update title
+ 
     const operation = window.cncController?.operationManager?.getOperation(path.creationTool);
     const operationLabel = operation?.displayName || path.creationTool;
     currentOperationName = path.creationTool;
-    title.textContent = `Edit ${operationLabel} - ${path.name}`;
 
     // Get properties HTML from the operation
     let propertiesHTML = '';
-
-
+    let propertiesMeta = {
+        titleHtml: operation?.icon
+            ? `<i data-lucide="${operation.icon}"></i> Edit ${path.name}`
+            : `Edit ${path.name}`,
+        subtitle: '',
+        cleanedHtml: ''
+    };
 
     // Now get the properties HTML (works for both edit and creation modes)
     if (operation && typeof operation.getPropertiesHTML === 'function') {
@@ -2517,7 +2789,14 @@ function showPathPropertiesEditor(path) {
             //operation.onPropertiesChanged(path.creationProperties.properties); // Ensure properties are synced
         }
         propertiesHTML = operation.getPropertiesHTML(path);
-        form.innerHTML = propertiesHTML;
+        propertiesMeta = extractPropertiesPanelMeta(propertiesHTML);
+        propertiesMeta.titleHtml = propertiesMeta.titleHtml || (operation?.icon
+            ? `<i data-lucide="${operation.icon}"></i> Edit ${path.name}`
+            : `Edit ${path.name}`);
+        if (operation?.icon && !propertiesMeta.titleHtml.includes('data-lucide=')) {
+            propertiesMeta.titleHtml = `<i data-lucide="${operation.icon}"></i> ${propertiesMeta.titleHtml}`;
+        }
+        form.innerHTML = propertiesMeta.cleanedHtml || '';
         
         if (operation && typeof operation.update === 'function') {
             operation.update(path);
@@ -2527,10 +2806,17 @@ function showPathPropertiesEditor(path) {
     } else {
         // Fallback for operations without properties
         propertiesHTML = '<p class="text-muted">No editable properties available for this path.</p>';
+        form.innerHTML = propertiesHTML;
     }
 
+    setFloatingPropertiesPopupContext({ type: 'shape', id: path.id, operationName: path.creationTool });
 
-
+    showFloatingPropertiesPopup(propertiesEditor, {
+        titleHtml: propertiesMeta.titleHtml || (operation?.icon
+            ? `<i data-lucide="${operation.icon}"></i> Edit ${path.name}`
+            : `Edit ${path.name}`),
+        subtitle: propertiesMeta.subtitle
+    });
 
     // Add event listeners directly to input elements for path editing
     const inputs = form.querySelectorAll('input, select, textarea');
@@ -3695,9 +3981,24 @@ function syncModifyGroupSelection() {
     );
 }
 
+function syncOperationsToolSelection() {
+    const operationsGroup = document.getElementById('operations-list');
+    if (!operationsGroup) return;
+
+    const selectedOperation = operationsGroup.querySelector('.sidebar-item.selected[data-operation]');
+    const selectedOperationName = selectedOperation ? selectedOperation.dataset.operation : null;
+
+    operationsGroup.querySelectorAll('.sidebar-item.selected[data-operation]').forEach(item => {
+        if (item.dataset.operation !== selectedOperationName) {
+            item.classList.remove('selected');
+        }
+    });
+}
+
 function syncGroupedToolSelection() {
     syncShapeGroupSelection();
     syncModifyGroupSelection();
+    syncOperationsToolSelection();
 }
 
 // Compatibility function for operation manager

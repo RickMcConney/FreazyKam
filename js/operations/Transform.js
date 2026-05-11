@@ -838,11 +838,13 @@ class Transform extends Select {
             text = formatDimension(currentWidth, true) + ' × ' + formatDimension(currentHeight, true);
         }
 
-        let screenHandle = worldToScreen(this.mouse.x, this.mouse.y);
+        const textAnchor = this.mouse
+            ? worldToScreen(this.mouse.x, this.mouse.y)
+            : worldToScreen(this.transformBox.centerX, this.transformBox.centerY);
         ctx.save();
         ctx.fillStyle = pointFillColor;
         ctx.font = '12px Arial';
-        ctx.fillText(text, screenHandle.x + 10, screenHandle.y - 25);
+        ctx.fillText(text, textAnchor.x + 10, textAnchor.y - 25);
         ctx.restore();
     }
 

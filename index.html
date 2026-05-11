@@ -202,11 +202,23 @@
     <canvas id="paper-canvas" style="display: none;" width="1000" height="1000"></canvas>
 
 
+    <div id="floating-properties-popup" class="floating-properties-popup" style="display: none;">
+        <div id="floating-properties-window" class="floating-properties-window" role="dialog" aria-modal="false" aria-labelledby="floating-properties-popup-title">
+            <div id="floating-properties-header" class="floating-properties-header">
+                <div class="floating-properties-header-main">
+                    <h5 id="floating-properties-popup-title" class="floating-properties-popup-title mb-0">Properties</h5>
+                    <small id="floating-properties-popup-subtitle" class="text-muted">Move this window anywhere in the workspace.</small>
+                </div>
+                <button type="button" class="btn-close" id="floating-properties-close" aria-label="Close"></button>
+            </div>
+            <div id="floating-properties-body" class="floating-properties-body"></div>
+            <div id="floating-properties-footer" class="floating-properties-footer"></div>
+        </div>
+    </div>
 </body>
-
-
-<!--  Bootstrap JS -->
-
+ 
+ 
+ <!--  Bootstrap JS -->
 <script src="js/lib/jquery-2.1.1.min.js"></script>
 
 <script type="text/javascript" src="js/lib/paper-full.js"></script>

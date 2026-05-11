@@ -132,27 +132,21 @@ class StepWiseHelpSystem {
 
         return `
             <div class="help-navigation mt-2">
-                <div class="btn-group btn-group-sm" role="group">
-                    <button type="button"
-                            class="btn btn-outline-secondary"
-                            id="help-prev"
-                            ${!hasPrev ? 'disabled' : ''}
-                            onclick="window.stepWiseHelp?.previousStep()">
-                        <i data-lucide="chevron-left"></i>
-                    </button>
-                    <button type="button"
-                            class="btn btn-outline-secondary"
-                            id="help-next"
-                            ${!hasNext ? 'disabled' : ''}
-                            onclick="window.stepWiseHelp?.nextStep()">
-                        <i data-lucide="chevron-right"></i>
-                    </button>
-                    <button type="button"
-                            class="btn btn-outline-secondary"
-                            onclick="window.stepWiseHelp?.reset()">
-                        <i data-lucide="rotate-ccw"></i>
-                    </button>
-                </div>
+                <button type="button"
+                        class="btn btn-outline-secondary help-nav-btn"
+                        id="help-prev"
+                        ${!hasPrev ? 'disabled' : ''}
+                        onclick="window.stepWiseHelp?.previousStep()">
+                    <i data-lucide="chevron-left"></i>
+                </button>
+                <div class="help-navigation-text"></div>
+                <button type="button"
+                        class="btn btn-outline-secondary help-nav-btn"
+                        id="help-next"
+                        ${!hasNext ? 'disabled' : ''}
+                        onclick="window.stepWiseHelp?.nextStep()">
+                    <i data-lucide="chevron-right"></i>
+                </button>
             </div>
         `;
     }

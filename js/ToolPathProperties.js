@@ -40,7 +40,6 @@ class ToolPathProperties {
                 description: 'Cut along the profile of the selected path',
                 noToolMsg:   'Please add an End Mill, Ball Nose, or VBit in the tool library.',
                 buttonLabel: 'Update Toolpath',
-                buttonHelp:  'Select paths to generate toolpaths. Click Update to apply changes to the last toolpath.',
                 buildFields: (d) => this._buildProfileFields(d),
             },
             'Pocket': {
@@ -48,7 +47,6 @@ class ToolPathProperties {
                 description: 'Remove all material inside the path',
                 noToolMsg:   'Please add an End Mill or Ball Nose in the tool library.',
                 buttonLabel: 'Update Toolpath',
-                buttonHelp:  'Select paths to generate toolpaths. Click Update to apply changes to the last toolpath.',
                 buildFields: (d) => this._buildPocketFields(d),
             },
             'VCarve': {
@@ -56,7 +54,6 @@ class ToolPathProperties {
                 description: 'V-carve inside the path with tapered cuts',
                 noToolMsg:   'Please add a VBit in the tool library.',
                 buttonLabel: 'Update Toolpath',
-                buttonHelp:  'Select paths to generate toolpaths. Click Update to apply changes to the last toolpath.',
                 buildFields: (d) => this._buildVCarveFields(d),
             },
             'Drill': {
@@ -64,7 +61,6 @@ class ToolPathProperties {
                 description: 'Drill holes at selected points or helical drill selected circles',
                 noToolMsg:   'Please add a Drill or End Mill in the tool library.',
                 buttonLabel: 'Update Toolpath',
-                buttonHelp:  'Select points or circles, then click Update to generate drill paths.',
                 buildFields: (d) => this._buildDrillFields(d),
             },
             '3dProfile': {
@@ -72,7 +68,6 @@ class ToolPathProperties {
                 description: 'Raster toolpath following STL surface with ball nose bit',
                 noToolMsg:   'Please add a Ball Nose in the tool library.',
                 buttonLabel: 'Generate 3D Profile',
-                buttonHelp:  'Generates raster toolpaths that follow the STL surface.',
                 buildFields: (d) => this._build3dProfileFields(d),
             },
             'Surfacing': {
@@ -80,7 +75,6 @@ class ToolPathProperties {
                 description: 'Surface the entire workpiece with parallel passes',
                 noToolMsg:   'Please add an End Mill in the tool library.',
                 buttonLabel: 'Apply Surfacing',
-                buttonHelp:  'Generates a surfacing toolpath over the entire workpiece.',
                 buildFields: (d) => this._buildSurfacingFields(d),
             },
             'Inlay': {
@@ -88,7 +82,6 @@ class ToolPathProperties {
                 description: 'Create male plug or female socket for inlay work',
                 noToolMsg:   'Please add an End Mill or Ball Nose in the tool library.',
                 buttonLabel: 'Generate Inlay',
-                buttonHelp:  'Select paths then click to generate inlay toolpaths (pocket + finishing profile).',
                 buildFields: (d) => this._buildInlayFields(d),
                 extraValidate(data, errors) {
                     if (!data.finishingToolId) errors.push('Please select a finishing tool');
@@ -305,10 +298,11 @@ class ToolPathProperties {
 
     // ── HTML generation ───────────────────────────────────────────────────────
 
-    getPropertiesHTML(operationName, existingProperties = null) {
+    getPropertiesHTML(operationName, existingProperties = null, options = {}) {
         const meta = this._operationMeta[operationName];
         if (!meta) return '<p class="text-danger">Unknown operation</p>';
 
+        const { showUpdateButton = true } = options;
         const defaults = this.getDefaults(operationName);
         const tools    = this.getCompatibleTools(operationName);
 
@@ -321,18 +315,19 @@ class ToolPathProperties {
         }
 
         const fields = meta.buildFields(defaults);
+        const updateButtonHtml = showUpdateButton ? `
+            <div class="mb-3">
+                <button type="button" class="btn btn-primary btn-sm w-100" id="update-toolpath-button">
+                    <i data-lucide="refresh-cw"></i> ${meta.buttonLabel}
+                </button>
+            </div>` : '';
 
         return `
             <div class="alert alert-info mb-3">
                 <strong>${meta.label}</strong><br>${meta.description}
             </div>
             ${PropertiesManager.formHTML(fields, existingProperties, defaults)}
-            <div class="mb-3">
-                <button type="button" class="btn btn-primary btn-sm w-100" id="update-toolpath-button">
-                    <i data-lucide="refresh-cw"></i> ${meta.buttonLabel}
-                </button>
-                <div class="form-text">${meta.buttonHelp}</div>
-            </div>`;
+            ${updateButtonHtml}`;
     }
 
     // ── Data collection ───────────────────────────────────────────────────────
