@@ -125,21 +125,27 @@ class QuadtreeVoxelGrid {
    * Analyse toolpath movements and build the adaptive quadtree.
    * Must be called once after construction, before the mesh is added to the scene.
    *
-   * @param {Array}  movementTiming - Array of {x,y,z,isG1,...} from ToolpathAnimation
-   * @param {number} maxToolRadius  - Largest tool radius across all tool changes (mm)
+   * @param {Array}  movementTiming - Array of {x,y,z,isG1,toolRadius,...} from ToolpathAnimation
+   * @param {number} maxToolRadius  - Fallback radius for moves without a toolRadius annotation (mm)
    */
   buildFromMovements(movementTiming, maxToolRadius = 3) {
-    // Sample the FULL cutting path at maxToolRadius intervals so that every point
-    // along a long straight G1 move is covered — not just G-code endpoints.
-    // Without this, long straight moves produce coarse cells in the middle of the
-    // path that the tool hits during simulation.
-    const pts = [];
-    const sampleStep = maxToolRadius;  // one sample per tool-radius guarantees overlap with buffer
-    let prevX = null, prevY = null;
+    // Group cutting moves by their per-move tool radius so each section of the
+    // toolpath is sampled at the correct density for that tool.
+    // Moves annotated with move.toolRadius (set by 3dView before calling this)
+    // use that radius; unannotated moves fall back to maxToolRadius.
+    const radiusGroups = new Map();  // Map<radius, flat [x,y,...] array>
+    let prevX = null, prevY = null, prevR = null;
 
     for (const move of movementTiming) {
       if (move.isG1 && move.z <= 0.001) {
-        if (prevX !== null) {
+        const r = move.toolRadius || maxToolRadius;
+        if (!radiusGroups.has(r)) radiusGroups.set(r, []);
+        const pts = radiusGroups.get(r);
+        const sampleStep = r;
+
+        if (prevX !== null && prevR === r) {
+          // Same tool — sample at this tool's radius interval so adjacent
+          // circles of radius r overlap and cover the full swept area.
           const dx = move.x - prevX, dy = move.y - prevY;
           const len = Math.sqrt(dx * dx + dy * dy);
           if (len < sampleStep) {
@@ -152,20 +158,23 @@ class QuadtreeVoxelGrid {
             }
           }
         } else {
+          // Start of new path segment or tool change — add endpoint only.
           pts.push(move.x, move.y);
         }
         prevX = move.x;
         prevY = move.y;
+        prevR = r;
       } else {
         // Rapid (G0) or non-cutting move: break path continuity
         prevX = null;
         prevY = null;
+        prevR = null;
       }
     }
 
-    // Use 1.5× tool radius as the subdivision buffer so the fine zone extends
-    // slightly beyond the raw tool envelope, eliminating boundary edge cases.
-    const subdivisionRadius = maxToolRadius;
+    // Each group uses its own radius as the subdivision buffer so the fine zone
+    // matches the actual tool envelope for that section of the toolpath.
+    // (No single subdivisionRadius — each _subdivide call uses the group's r.)
 
     const t0 = performance.now();
 
@@ -208,7 +217,12 @@ class QuadtreeVoxelGrid {
         this.workpieceLength
       );
 
-      this._subdivide(this.root, pts, subdivisionRadius);
+      // Process each radius group separately. _subdivide is idempotent on
+      // already-subdivided interior nodes, so multiple passes on the same
+      // tree are safe and additive.
+      for (const [r, pts] of radiusGroups) {
+        this._subdivide(this.root, pts, r);
+      }
 
       this.leaves = [];
       this._flatten(this.root);
@@ -220,10 +234,6 @@ class QuadtreeVoxelGrid {
       this._maxFineDepth = Math.max(1, this._maxFineDepth - 1);
       this.minCellSize = COARSE_CELL_SIZE / Math.pow(2, this._maxFineDepth);
       this.voxelSize = this.minCellSize;
-      // console.warn(
-      //   `[QuadtreeVoxelGrid] ${N} voxels exceeds limit (${QuadtreeVoxelGrid.MAX_VOXELS}), ` +
-      //   `coarsening to ${this.minCellSize.toFixed(3)}mm (attempt ${attempt + 1})`
-      // );
     }
 
     this.voxelTopZ = new Float32Array(N);  // all 0 = at surface
@@ -233,31 +243,29 @@ class QuadtreeVoxelGrid {
     this.gridLength = 1;
 
     this._createMesh(N);
-    console.log(
-      `[QuadtreeVoxelGrid] ${N} adaptive voxels ` 
-    );
-    // console.log(
-    //   `[QuadtreeVoxelGrid] ${N} adaptive voxels ` +
-    //   `(${pts.length / 2} samples, toolR=${maxToolRadius.toFixed(1)}mm, ` +
-    //   `bufferR=${subdivisionRadius.toFixed(1)}mm, fine=${this.minCellSize.toFixed(3)}mm) ` +
-    //   `built in ${(performance.now() - t0).toFixed(1)}ms`
-    // );
+    console.log(`[QuadtreeVoxelGrid] ${N} adaptive voxels (${radiusGroups.size} radius groups)`);
 
   }
 
   // ── Tree construction ──────────────────────────────────────────────────────
 
   // pts is a flat [x0,y0, x1,y1, ...] array for the points relevant to `node`.
+  // Safe to call multiple times on the same tree (for different radius groups):
+  // interior nodes (already subdivided) are recursed into without re-splitting.
   _subdivide(node, pts, r) {
     const mustSplit = node.w > COARSE_CELL_SIZE || node.h > COARSE_CELL_SIZE;
 
     if (!mustSplit) {
-      // Fine phase: only subdivide if cutting pts overlap and we're above min size
+      // Fine phase
       if (node.w <= this.minCellSize * 1.001) return;
-      if (pts.length === 0 || !this._anyPtIntersects(node, pts, r)) return;
+      if (node.isLeaf) {
+        // Unsubdivided leaf: only split if pts overlap this node
+        if (pts.length === 0 || !this._anyPtIntersects(node, pts, r)) return;
+      }
+      // Interior node (subdivided by a prior call): always recurse to propagate new pts
     }
 
-    node.subdivide();
+    if (node.isLeaf) node.subdivide();
     for (const child of node.children) {
       const childPts = this._filterPts(child, pts, r);
       this._subdivide(child, childPts, r);

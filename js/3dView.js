@@ -1685,9 +1685,16 @@ class ToolpathAnimation {
         originalVoxelSize, gridOrigin, woodColor
       );
 
-      // Determine the largest tool radius across all tool changes so the
-      // quadtree pre-subdivides a sufficient buffer around each cut line.
-      let maxToolRadius = this.toolRadius || 1;
+      // Annotate each movement with the active tool radius so buildFromMovements
+      // can sample each path segment at the correct density for that tool.
+      const defaultRadius = this.toolRadius || 1;
+      for (const move of this.movementTiming) {
+        const toolData = this.getToolForLine(move.gcodeLineNumber);
+        move.toolRadius = toolData?.diameter ? toolData.diameter / 2 : defaultRadius;
+      }
+
+      // maxToolRadius is still passed as fallback for any unannotated moves
+      let maxToolRadius = defaultRadius;
       for (const tc of this.toolChangePoints) {
         if (tc.toolInfo?.diameter) {
           maxToolRadius = Math.max(maxToolRadius, tc.toolInfo.diameter / 2);
