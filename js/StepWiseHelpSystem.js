@@ -213,12 +213,6 @@ class StepWiseHelpSystem {
                 'Select Multiple paths',
                 'Select Operation and click Apply',
             ],
-            'Gemini': [
-                'Make sure you have a Gemini API key from Google Cloud',
-                'Enter your API key and a text prompt describing the shape you want to create',
-                'Click Apply, wait a few seconds for the AI to generate the SVG paths',
-                'The generated paths will be added to your canvas for further editing'
-            ],
             'Pen': [
                 'Click on the canvas to set the first point of the path',
                 'Click to add more points and create line segments',

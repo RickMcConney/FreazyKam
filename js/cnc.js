@@ -746,10 +746,6 @@ function doBoolean() {
 	cncController.setMode("Boolean");
 }
 
-function doGemini() {
-	cncController.setMode("Gemini");
-}
-
 function doPen() {
 	cncController.setMode("Pen");
 	selectMgr.unselectAll();

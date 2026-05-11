@@ -1433,7 +1433,7 @@ function setupSidebarEventHandlers(sidebar) {
         }
 
         if (operation) {
-            const isDrawTool = ['Select', 'Move', 'Edit', 'Pen', 'Curve', 'Shape', 'Boolean', 'Gemini', 'Text', 'Tabs', 'Offset', 'Pattern', ...(window.SHAPE_TOOL_NAMES || [])].includes(operation);
+            const isDrawTool = ['Select', 'Move', 'Edit', 'Pen', 'Curve', 'Shape', 'Boolean', 'Text', 'Tabs', 'Offset', 'Pattern', ...(window.SHAPE_TOOL_NAMES || [])].includes(operation);
 
             if (isDrawTool) {
                 showToolPropertiesEditor(operation);
@@ -3316,9 +3316,6 @@ function handleOperationClick(operation) {
             doBoolean();
             setMode("Select");
             break;
-        case 'Gemini':
-            doGemini();
-            break;
         case 'Pen':
             doPen();
             break;
@@ -4069,7 +4066,6 @@ function getPathIcon(name) {
     if (name.includes('Union')) return 'squares-unite';
     if (name.includes('Intersect')) return 'squares-intersect';
     if (name.includes('Subtract')) return 'squares-subtract';
-    if (name.includes('Gemini')) return 'brain';
     if (name.includes('Closed')) return 'vector-square';
     return 'route';
 }

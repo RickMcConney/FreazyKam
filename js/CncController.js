@@ -24,7 +24,6 @@ class CncController {
     this.operationManager.registerOperation(new OffsetOpp());
     this.operationManager.registerOperation(new PatternOpp());
     this.operationManager.registerOperation(new TabEditor());
-    this.operationManager.registerOperation(new Gemini());
     this.operationManager.registerOperation(new Drill());
 
     // Set default operation to Select
