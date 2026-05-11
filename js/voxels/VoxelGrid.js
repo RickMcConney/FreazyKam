@@ -117,20 +117,12 @@ class VoxelGrid {
     // Create geometry (single unified geometry)
     const geometry = this.createGeometry();
 
-    // Create material with vertex colors enabled
-    // Per-vertex colors from geometry define the appearance
-    const material = new THREE.MeshPhongMaterial({
-      vertexColors: true,  // Use per-vertex colors from geometry
-      shininess: 30,
-      transparent: false,
-      opacity: 1.0,
-      wireframe: false
+    const material = new THREE.MeshLambertMaterial({
+      vertexColors: true,
     });
 
     // Create single InstancedMesh with capacity for all voxels
     this.mesh = new THREE.InstancedMesh(geometry, material, this.maxVoxels);
-    this.mesh.castShadow = true;
-    this.mesh.receiveShadow = true;
 
     const materialColor = new THREE.Color(this.workpieceColor);
 

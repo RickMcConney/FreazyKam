@@ -318,9 +318,9 @@ function initThree() {
   // Setup renderer
   renderer = new THREE.WebGLRenderer({ antialias: CONFIG.ANTIALIAS, alpha: false });
   renderer.setSize(width, height, false);
-  renderer.setPixelRatio(window.devicePixelRatio);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1));
   renderer.setClearColor(CONFIG.RENDERER_CLEAR_COLOR, 1.0);
-  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.enabled = false;
   renderer.domElement.style.width = '100%';
   renderer.domElement.style.height = '100%';
   container.appendChild(renderer.domElement);
@@ -451,23 +451,16 @@ function createToolVisualization(toolDiameter) {
     color: 0x4a9eda,  // Blue matching SVG tool icons
     transparent: true,
     opacity: 0.85,
-    side: THREE.DoubleSide
   });
 
   const shankMaterial = new THREE.MeshPhongMaterial({
     color: 0x888888,  // Gray matching SVG tool icons
     transparent: true,
     opacity: 0.85,
-    side: THREE.DoubleSide
   });
 
   const tipMesh = new THREE.Mesh(new THREE.BufferGeometry(), tipMaterial);
-  tipMesh.castShadow = true;
-  tipMesh.receiveShadow = true;
-
   const shankMesh = new THREE.Mesh(new THREE.BufferGeometry(), shankMaterial);
-  shankMesh.castShadow = true;
-  shankMesh.receiveShadow = true;
 
   toolGroup.add(tipMesh);
   toolGroup.add(shankMesh);
@@ -661,14 +654,6 @@ function setupLighting() {
   // Directional light from above and front (positive Z, negative Y)
   const dirLight = new THREE.DirectionalLight(CONFIG.DIRECTIONAL_LIGHT_COLOR, CONFIG.DIRECTIONAL_LIGHT_INTENSITY);
   dirLight.position.set(0, -maxDim * 0.5, maxDim);
-  dirLight.castShadow = true;
-  const shadowScale = CONFIG.DIRECTIONAL_LIGHT_SHADOW_SCALE;
-  dirLight.shadow.camera.left = -maxDim * shadowScale;
-  dirLight.shadow.camera.right = maxDim * shadowScale;
-  dirLight.shadow.camera.top = maxDim * shadowScale;
-  dirLight.shadow.camera.bottom = -maxDim * shadowScale;
-  dirLight.shadow.camera.near = 0.1;
-  dirLight.shadow.camera.far = workpieceThickness + maxDim;
   scene.add(dirLight);
 
   // Ambient light for overall illumination
@@ -998,24 +983,29 @@ function animate() {
     window.timingStats.renderTotal += renderTime;
     window.timingStats.count++;
 
-    // Report FPS every 300 frames using wall-clock timing (includes all overhead)
-    /*
+    // Report render performance every 300 frames (~5s at 60fps)
     if (profileFrameCount % 300 === 0) {
       const now = performance.now();
       const elapsedSeconds = (now - profileStartTime) / 1000;
       const fps = (profileFrameCount / elapsedSeconds).toFixed(1);
-      const avgUpdate = (window.timingStats.updateTotal / window.timingStats.count).toFixed(2);
-      const avgRender = (window.timingStats.renderTotal / window.timingStats.count).toFixed(2);
+      const n = window.timingStats.count;
+      const avgUpdate = n ? (window.timingStats.updateTotal / n).toFixed(2) : '0.00';
+      const avgRender = n ? (window.timingStats.renderTotal / n).toFixed(2) : '0.00';
+      const avgFrame  = n ? ((window.timingStats.updateTotal + window.timingStats.renderTotal) / n).toFixed(2) : '0.00';
+      const voxelCount = toolpathAnimation?.voxelGrid
+        ? toolpathAnimation.voxelGrid.gridWidth * toolpathAnimation.voxelGrid.gridLength
+        : 0;
+      console.log(
+        `[3D Render] ${fps} fps | frame: ${avgFrame}ms (update: ${avgUpdate}ms, render: ${avgRender}ms)` +
+        (voxelCount ? ` | voxels: ${(voxelCount / 1000).toFixed(0)}K` : '')
+      );
 
-
-      // Reset for next 300 frames
       profileFrameCount = 0;
       profileStartTime = now;
       window.timingStats.updateTotal = 0;
       window.timingStats.renderTotal = 0;
       window.timingStats.count = 0;
     }
-    */
   }
 }
 
@@ -1358,15 +1348,11 @@ class WorkpieceManager {
     matrix.makeTranslation(offsetX, offsetY, offsetZ);
     geometry.applyMatrix4(matrix);
 
-    const material = new THREE.MeshPhongMaterial({
-      color: this.woodColor,  // Use wood species color
-      shininess: 30,
-      side: THREE.DoubleSide
+    const material = new THREE.MeshLambertMaterial({
+      color: this.woodColor,
     });
 
     this.mesh = new THREE.Mesh(geometry, material);
-    this.mesh.castShadow = true;
-    this.mesh.receiveShadow = true;
     scene.add(this.mesh);
 
     // Store original vertices for deformation
@@ -1552,7 +1538,7 @@ class ToolpathAnimation {
     if (!hasCuttingMoves) {
       return null;
     }
-
+console.log('Calculated raw toolpath bounds:', { minX, maxX, minY, maxY, minZ, maxZ });
     // Apply padding
     return {
       minX: minX - padding,
@@ -1827,19 +1813,12 @@ class ToolpathAnimation {
 
     geometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array(colors), 3));
 
-    // Create material (same as voxel grid)
-    const material = new THREE.MeshPhongMaterial({
+    const material = new THREE.MeshLambertMaterial({
       vertexColors: true,
-      shininess: 30,
-      transparent: false,
-      opacity: 1.0,
-      wireframe: false
     });
 
     // Create InstancedMesh for filler voxels
     this.workpieceOutlineBox = new THREE.InstancedMesh(geometry, material, fillerBoxes.length);
-    this.workpieceOutlineBox.castShadow = true;
-    this.workpieceOutlineBox.receiveShadow = true;
 
     // Create dummy object for transforms
     const dummy = new THREE.Object3D();
@@ -1937,7 +1916,7 @@ class ToolpathAnimation {
         z: 5,  // Start at safe height
         f: 6000,  // Feed rate (fast rapid)
         t: -1,  // No tool
-        m: 1    // Rapid move
+        m: 0    // Rapid move (RAPID=0, not CUT=1)
       });
     }
 
