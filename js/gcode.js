@@ -922,7 +922,7 @@ function _generateGcodeFooter(profile) {
 // HELPER FUNCTION: Process drill operations
 function _generateDrillOperationGcode(toolpath, profile, useInches, settings) {
 	var output = "";
-	var { feed, zfeed, depth, toolStep, woodSpecies, safeHeight, zbacklash } = settings;
+	var { feed, zfeed, rapidFeed, depth, toolStep, woodSpecies, safeHeight, zbacklash } = settings;
 	var paths = toolpath.paths;
 
 	for (var k = 0; k < paths.length; k++) {
@@ -934,8 +934,9 @@ function _generateDrillOperationGcode(toolpath, profile, useInches, settings) {
 		var zCoordSafe = toGcodeUnitsZ(z, useInches);
 		var feedXY = convertFeedUnits(feed, useInches);
 		var feedZ = convertFeedUnits(zfeed, useInches);
+		var feedRapid = convertFeedUnits(rapidFeed, useInches);
 
-		output += applyGcodeTemplate(profile.rapidFormater, { z: zCoordSafe, f: feedZ / 2 }) + '\n';
+		output += applyGcodeTemplate(profile.rapidFormater, { z: zCoordSafe, f: feedZ }) + '\n';
 
 		z = 0;
 		var left = depth;
@@ -943,12 +944,12 @@ function _generateDrillOperationGcode(toolpath, profile, useInches, settings) {
 		for (var j = 0; j < path.length; j++) {
 			// Retract to safe height before moving to next hole
 			if (j > 0) {
-				output += applyGcodeTemplate(profile.rapidFormater, { z: zCoordSafe, f: feedZ / 2 }) + '\n';
+				output += applyGcodeTemplate(profile.rapidFormater, { z: zCoordSafe, f: feedZ }) + '\n';
 			}
 
 			// Move to hole position at safe height
 			var p = toGcodeUnits(path[j].x, path[j].y, useInches);
-			output += applyGcodeTemplate(profile.rapidFormater, { x: p.x, y: p.y, f: feedXY }) + '\n';
+			output += applyGcodeTemplate(profile.rapidFormater, { x: p.x, y: p.y, f: feedRapid }) + '\n';
 
 			// Reset left for this hole
 			left = depth;
@@ -961,12 +962,12 @@ function _generateDrillOperationGcode(toolpath, profile, useInches, settings) {
 				var zCoord = toGcodeUnitsZ(z, useInches);
 				var zCoordPullUp = toGcodeUnitsZ(z + toolStep + zbacklash, useInches);
 				output += applyGcodeTemplate(profile.cutFormater, { z: zCoord, f: feedZ }) + '\n';
-				output += applyGcodeTemplate(profile.rapidFormater, { z: zCoordPullUp, f: feedZ / 2 }) + '\n';
+				output += applyGcodeTemplate(profile.rapidFormater, { z: zCoordPullUp, f: feedZ }) + '\n';
 			}
 		}
 
 		// Retract to safe height after drilling
-		output += applyGcodeTemplate(profile.rapidFormater, { z: zCoordSafe, f: feedZ / 2 }) + '\n';
+		output += applyGcodeTemplate(profile.rapidFormater, { z: zCoordSafe, f: feedZ }) + '\n';
 	}
 
 	return output;
@@ -975,11 +976,12 @@ function _generateDrillOperationGcode(toolpath, profile, useInches, settings) {
 // HELPER FUNCTION: Process helical drill operations
 function _generateHelicalDrillOperationGcode(toolpath, profile, useInches, settings) {
 	var output = "";
-	var { feed, zfeed, depth, toolStep, safeHeight } = settings;
+	var { feed, zfeed, rapidFeed, depth, toolStep, safeHeight } = settings;
 	var paths = toolpath.paths;
 
 	var feedXY = convertFeedUnits(feed, useInches);
 	var feedZ = convertFeedUnits(zfeed, useInches);
+	var feedRapid = convertFeedUnits(rapidFeed, useInches);
 	// Use a blended feed rate for helical moves (simultaneous XY + Z)
 	var helicalFeed = Math.min(feedXY, feedZ);
 	var zCoordSafe = toGcodeUnitsZ(safeHeight, useInches);
@@ -992,11 +994,11 @@ function _generateHelicalDrillOperationGcode(toolpath, profile, useInches, setti
 		if (comment) output += comment + '\n';
 
 		// Rapid to safe height
-		output += applyGcodeTemplate(profile.rapidFormater, { z: zCoordSafe, f: feedZ / 2 }) + '\n';
+		output += applyGcodeTemplate(profile.rapidFormater, { z: zCoordSafe, f: feedZ }) + '\n';
 
 		// Rapid to start position
 		var startP = toGcodeUnits(path[0].x, path[0].y, useInches);
-		output += applyGcodeTemplate(profile.rapidFormater, { x: startP.x, y: startP.y, f: feedXY }) + '\n';
+		output += applyGcodeTemplate(profile.rapidFormater, { x: startP.x, y: startP.y, f: feedRapid }) + '\n';
 
 		// Plunge to surface (z=0)
 		output += applyGcodeTemplate(profile.cutFormater, { z: toGcodeUnitsZ(0, useInches), f: feedZ }) + '\n';
@@ -1005,7 +1007,7 @@ function _generateHelicalDrillOperationGcode(toolpath, profile, useInches, setti
 		output += emitHelicalPathWithArcs(path.slice(1), profile, useInches, helicalFeed);
 
 		// Retract to safe height
-		output += applyGcodeTemplate(profile.rapidFormater, { z: zCoordSafe, f: feedZ / 2 }) + '\n';
+		output += applyGcodeTemplate(profile.rapidFormater, { z: zCoordSafe, f: feedZ }) + '\n';
 	}
 
 	return output;
@@ -1014,7 +1016,7 @@ function _generateHelicalDrillOperationGcode(toolpath, profile, useInches, setti
 // HELPER FUNCTION: Process V-carve operations
 function _generateVcarveOperationGcode(toolpath, profile, useInches, settings) {
 	var output = "";
-	var { feed, zfeed, angle, woodSpecies, safeHeight, zbacklash } = settings;
+	var { feed, zfeed, rapidFeed, angle, woodSpecies, safeHeight, zbacklash } = settings;
 	var paths = toolpath.paths;
 
 	for (var k = 0; k < paths.length; k++) {
@@ -1028,8 +1030,9 @@ function _generateVcarveOperationGcode(toolpath, profile, useInches, settings) {
 		var zCoordSafe = toGcodeUnitsZ(safeHeight, useInches);
 		var feedXY = convertFeedUnits(feed, useInches);
 		var feedZ = convertFeedUnits(zfeed, useInches);
+		var feedRapid = convertFeedUnits(rapidFeed, useInches);
 
-		output += applyGcodeTemplate(profile.rapidFormater, { z: zCoordSafe, f: feedZ / 2 }) + '\n';
+		output += applyGcodeTemplate(profile.rapidFormater, { z: zCoordSafe, f: feedZ }) + '\n';
 
 		for (var j = 0; j < path.length; j++) {
 			var p = toGcodeUnits(path[j].x, path[j].y, useInches);
@@ -1053,7 +1056,7 @@ function _generateVcarveOperationGcode(toolpath, profile, useInches, settings) {
 
 			if (j == 0) {
 				// Move to first point at safe height, then plunge
-				output += applyGcodeTemplate(profile.rapidFormater, { x: p.x, y: p.y, f: feedXY }) + '\n';
+				output += applyGcodeTemplate(profile.rapidFormater, { x: p.x, y: p.y, f: feedRapid }) + '\n';
 			}
 
 			output += applyGcodeTemplate(profile.cutFormater, { x: p.x, y: p.y, z: cz, f: feedZ }) + '\n';
@@ -1067,7 +1070,7 @@ function _generateVcarveOperationGcode(toolpath, profile, useInches, settings) {
 // Unlike pocket, surfacing stays at cut depth between passes — no safe-height retracts.
 function _generateSurfacingOperationGcode(toolpath, profile, useInches, settings) {
 	var output = "";
-	var { feed, zfeed, depth, safeHeight } = settings;
+	var { feed, zfeed, rapidFeed, depth, safeHeight } = settings;
 	var paths = toolpath.paths;
 
 	var comment = formatComment(toolpath.operation + ' ' + toolpath.id, profile);
@@ -1075,6 +1078,7 @@ function _generateSurfacingOperationGcode(toolpath, profile, useInches, settings
 
 	var feedXY = convertFeedUnits(feed, useInches);
 	var feedZ  = convertFeedUnits(zfeed, useInches);
+	var feedRapid = convertFeedUnits(rapidFeed, useInches);
 	var zCoord = toGcodeUnitsZ(-depth, useInches);
 
 	var firstLine = true;
@@ -1088,7 +1092,7 @@ function _generateSurfacingOperationGcode(toolpath, profile, useInches, settings
 		if (firstLine) {
 			// Initial retract, rapid to start XY, then plunge once
 			output += applyGcodeTemplate(profile.rapidFormater, { z: safeHeight, f: feedZ }) + '\n';
-			output += applyGcodeTemplate(profile.rapidFormater, { x: start.x, y: start.y, f: feedXY }) + '\n';
+			output += applyGcodeTemplate(profile.rapidFormater, { x: start.x, y: start.y, f: feedRapid }) + '\n';
 			output += applyGcodeTemplate(profile.cutFormater, { z: zCoord, f: feedZ }) + '\n';
 			// Feed changed from feedZ to feedXY — emit on first XY move only
 			if (cutPath.length > 0) {
@@ -1111,7 +1115,7 @@ function _generateSurfacingOperationGcode(toolpath, profile, useInches, settings
 // Each raster line has per-point Z values (in mm) for surface-following cuts.
 function _generate3dProfileOperationGcode(toolpath, profile, useInches, settings) {
 	var output = "";
-	var { feed, zfeed, safeHeight } = settings;
+	var { feed, zfeed, rapidFeed, safeHeight } = settings;
 	var paths = toolpath.paths;
 
 	var comment = formatComment(toolpath.operation + ' ' + toolpath.id, profile);
@@ -1119,6 +1123,7 @@ function _generate3dProfileOperationGcode(toolpath, profile, useInches, settings
 
 	var feedXY = convertFeedUnits(feed, useInches);
 	var feedZ  = convertFeedUnits(zfeed, useInches);
+	var feedRapid = convertFeedUnits(rapidFeed, useInches);
 	var zCoordSafe = toGcodeUnitsZ(safeHeight, useInches);
 	var lastEndX = null, lastEndY = null, lastEndZ = null;
 	// Threshold for skipping retract: if next start is within this distance (mm)
@@ -1150,7 +1155,7 @@ function _generate3dProfileOperationGcode(toolpath, profile, useInches, settings
 			} else {
 				// Far away — retract to safe height and rapid to start
 				output += applyGcodeTemplate(profile.rapidFormater, { z: zCoordSafe, f: feedZ }) + '\n';
-				output += applyGcodeTemplate(profile.rapidFormater, { x: start.x, y: start.y, f: feedXY }) + '\n';
+				output += applyGcodeTemplate(profile.rapidFormater, { x: start.x, y: start.y, f: feedRapid }) + '\n';
 				output += applyGcodeTemplate(profile.cutFormater, { z: startZ, f: feedZ }) + '\n';
 			}
 		} else {
@@ -1236,7 +1241,7 @@ function getPointAlongPath(path, distance) {
 // 1. Rapid to a point offset 2x tool diameter along the path from start
 // 2. Plunge to previous pass depth (one stepdown shallower)
 // 3. Cut back to path start while ramping down to current depth
-function generateRampIn(path, toolDiameter, currentZ, stepdown, safeHeight, profile, useInches, feedXY, feedZ) {
+function generateRampIn(path, toolDiameter, currentZ, stepdown, safeHeight, profile, useInches, feedXY, feedZ, feedRapid) {
 	var output = '';
 	var rampDistWorld = 2 * toolDiameter * viewScale; // world units
 	var safeZCoord = toGcodeUnitsZ(safeHeight, useInches);
@@ -1254,7 +1259,7 @@ function generateRampIn(path, toolDiameter, currentZ, stepdown, safeHeight, prof
 	// Retract to safe height
 	output += applyGcodeTemplate(profile.rapidFormater, { z: safeZCoord, f: feedZ }) + '\n';
 	// Rapid to ramp start point (offset along path)
-	output += applyGcodeTemplate(profile.rapidFormater, { x: rampCoord.x, y: rampCoord.y, f: feedXY }) + '\n';
+	output += applyGcodeTemplate(profile.rapidFormater, { x: rampCoord.x, y: rampCoord.y, f: feedRapid }) + '\n';
 	// Plunge to previous pass depth
 	output += applyGcodeTemplate(profile.cutFormater, { z: prevZCoord, f: feedZ }) + '\n';
 
@@ -1306,19 +1311,21 @@ function generateRampIn(path, toolDiameter, currentZ, stepdown, safeHeight, prof
 // HELPER FUNCTION: Process pocket operations
 function _generatePocketOperationGcode(toolpath, profile, useInches, settings) {
 	var output = "";
-	var { feed, zfeed, depth, toolStep, woodSpecies, safeHeight } = settings;
+	var { feed, zfeed, rapidFeed, depth, toolStep, woodSpecies, safeHeight } = settings;
 	var paths = toolpath.paths;
 
 	var comment = formatComment(toolpath.operation + ' ' + toolpath.id, profile);
 	if (comment) output += comment + '\n';
 
+	var feedXY = convertFeedUnits(feed, useInches);
+	var feedZ = convertFeedUnits(zfeed, useInches);
+	var feedRapid = convertFeedUnits(rapidFeed, useInches);
+
 	var z = safeHeight;
-	output += applyGcodeTemplate(profile.rapidFormater, { z: z, f: zfeed / 2 }) + '\n';
+	output += applyGcodeTemplate(profile.rapidFormater, { z: z, f: feedZ }) + '\n';
 
 	var left = depth;
 	var pass = 0;
-	var feedXY = convertFeedUnits(feed, useInches);
-	var feedZ = convertFeedUnits(zfeed, useInches);
 
 	// Loop through depth passes
 	while (left > 0) {
@@ -1363,7 +1370,7 @@ function _generatePocketOperationGcode(toolpath, profile, useInches, settings) {
 				output += applyGcodeTemplate(profile.cutFormater, { x: startP.x, y: startP.y, z: zCoord, f: feedXY }) + '\n';
 			} else {
 				// Full ramp-in with retract
-				output += generateRampIn(path, toolpath.tool.diameter, z, toolStep, safeHeight, profile, useInches, feedXY, feedZ);
+				output += generateRampIn(path, toolpath.tool.diameter, z, toolStep, safeHeight, profile, useInches, feedXY, feedZ, feedRapid);
 			}
 
 			// Cut entire path (with arc fitting if enabled)
@@ -1418,7 +1425,7 @@ function emitProfileRun(points, z, profile, useInches, feedXY) {
 
 // Generate G-code for one depth pass of a profile cut.
 // Handles ramp-in, tab lift/lower markers, arc fitting, and start-lifted cleanup.
-function _generateProfilePass(augmentedPath, pass, z, tabData, toolDiameter, toolStep, safeHeight, profile, useInches, feedXY, feedZ) {
+function _generateProfilePass(augmentedPath, pass, z, tabData, toolDiameter, toolStep, safeHeight, profile, useInches, feedXY, feedZ, feedRapid) {
 	var { tabs, workpieceThickness, tabHeightMM, toolRadiusWorld } = tabData;
 	var output = '';
 	var currentlyLifted = false;
@@ -1443,7 +1450,7 @@ function _generateProfilePass(augmentedPath, pass, z, tabData, toolDiameter, too
 	var targetZ = (tabBlocksStart && tabLift > 0) ? z + tabLift : z;
 	currentlyLifted = startedLifted = (tabBlocksStart && tabLift > 0);
 
-	output += generateRampIn(augmentedPath, toolDiameter, targetZ, toolStep, safeHeight, profile, useInches, feedXY, feedZ);
+	output += generateRampIn(augmentedPath, toolDiameter, targetZ, toolStep, safeHeight, profile, useInches, feedXY, feedZ, feedRapid);
 
 	// Process remaining path points (skip j=0, which is the ramp-in start)
 	for (var j = 1; j < augmentedPath.length; j++) {
@@ -1495,7 +1502,7 @@ function _generateProfilePass(augmentedPath, pass, z, tabData, toolDiameter, too
 // HELPER FUNCTION: Process profile operations (inside, outside, center cuts)
 function _generateProfileOperationGcode(toolpath, profile, useInches, settings) {
 	var output = "";
-	var { feed, zfeed, depth, toolStep, radius, woodSpecies, safeHeight } = settings;
+	var { feed, zfeed, rapidFeed, depth, toolStep, radius, woodSpecies, safeHeight } = settings;
 	var paths = toolpath.paths;
 
 	for (var k = 0; k < paths.length; k++) {
@@ -1506,7 +1513,8 @@ function _generateProfileOperationGcode(toolpath, profile, useInches, settings) 
 
 		var feedXY = convertFeedUnits(feed, useInches);
 		var feedZ = convertFeedUnits(zfeed, useInches);
-		output += applyGcodeTemplate(profile.rapidFormater, { z: toGcodeUnitsZ(safeHeight, useInches), f: feedZ / 2 }) + '\n';
+		var feedRapid = convertFeedUnits(rapidFeed, useInches);
+		output += applyGcodeTemplate(profile.rapidFormater, { z: toGcodeUnitsZ(safeHeight, useInches), f: feedZ }) + '\n';
 
 		// Collect tabs from the source SVG path
 		var svgPath = toolpath.svgId ? svgpaths.find(p => p.id === toolpath.svgId) : null;
@@ -1528,7 +1536,7 @@ function _generateProfileOperationGcode(toolpath, profile, useInches, settings) 
 			if (left < 0 || toolStep <= 0) left = 0;
 			var z = left - depth;
 
-			output += _generateProfilePass(augmentedPath, pass, z, tabData, toolpath.tool.diameter, toolStep, safeHeight, profile, useInches, feedXY, feedZ);
+			output += _generateProfilePass(augmentedPath, pass, z, tabData, toolpath.tool.diameter, toolStep, safeHeight, profile, useInches, feedXY, feedZ, feedRapid);
 		}
 	}
 
@@ -1642,6 +1650,7 @@ function toGcode() {
 		var settings = {
 			feed: calculateFeedRate(toolpath.tool, getOption("woodSpecies"), toolpath.operation),
 			zfeed: calculateZFeedRate(toolpath.tool, getOption("woodSpecies"), toolpath.operation),
+			rapidFeed: Math.round((getOption('maxFeedRate') || 3000) * 0.75),
 			depth: toolpath.tool.depth,
 			toolStep: toolpath.tool.step || 0,
 			radius: toolpath.tool.diameter / 2,
@@ -1675,7 +1684,7 @@ function toGcode() {
 		output += generator(toolpath, profile, useInches, settings);
 
 		// Retract to safe height after finishing operation
-		output += applyGcodeTemplate(profile.rapidFormater, { z: safeHeight, f: settings.zfeed / 2 }) + '\n';
+		output += applyGcodeTemplate(profile.rapidFormater, { z: safeHeight, f: convertFeedUnits(settings.zfeed, useInches) }) + '\n';
 	}
 
 	// 5. GENERATE FOOTER

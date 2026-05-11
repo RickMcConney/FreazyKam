@@ -165,7 +165,7 @@ class QuadtreeVoxelGrid {
 
     // Use 1.5× tool radius as the subdivision buffer so the fine zone extends
     // slightly beyond the raw tool envelope, eliminating boundary edge cases.
-    const subdivisionRadius = maxToolRadius * 1.5;
+    const subdivisionRadius = maxToolRadius;
 
     const t0 = performance.now();
 
@@ -233,7 +233,9 @@ class QuadtreeVoxelGrid {
     this.gridLength = 1;
 
     this._createMesh(N);
-
+    console.log(
+      `[QuadtreeVoxelGrid] ${N} adaptive voxels ` 
+    );
     // console.log(
     //   `[QuadtreeVoxelGrid] ${N} adaptive voxels ` +
     //   `(${pts.length / 2} samples, toolR=${maxToolRadius.toFixed(1)}mm, ` +
@@ -263,9 +265,9 @@ class QuadtreeVoxelGrid {
   }
 
   _anyPtIntersects(node, pts, r) {
-    //const rsq = r * r;
+    const rsq = r * r;
     for (let i = 0; i < pts.length; i += 2) {
-      if (node.intersectsSquare(pts[i], pts[i + 1], r)) return true;
+      if (node.intersectsCircle(pts[i], pts[i + 1], rsq)) return true;
     }
     return false;
   }
@@ -273,9 +275,9 @@ class QuadtreeVoxelGrid {
   // Returns a new flat array with only the points that could affect `node`.
   _filterPts(node, pts, r) {
     const out = [];
-    //const rsq = r*r;
+    const rsq = r*r;
     for (let i = 0; i < pts.length; i += 2) {
-      if (node.intersectsSquare(pts[i], pts[i + 1], r)) {
+      if (node.intersectsCircle(pts[i], pts[i + 1], rsq)) {
         out.push(pts[i], pts[i + 1]);
       }
     }
