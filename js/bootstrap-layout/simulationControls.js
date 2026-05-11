@@ -85,6 +85,18 @@ function create2DSimulationControls() {
     });
 }
 
+function update3DSimulationOverlayLayout() {
+    const overlay = document.getElementById('simulation-overlay-3d');
+    const container = document.getElementById('3d-canvas-container');
+
+    if (!overlay || !container) {
+        return;
+    }
+
+    const overlayHeight = overlay.classList.contains('d-none') ? 0 : overlay.offsetHeight;
+    container.style.height = overlayHeight > 0 ? `calc(100% - ${overlayHeight}px)` : '100%';
+}
+
 function create3DSimulationControls() {
     const overlayControls = document.getElementById('3d-simulation-controls');
     overlayControls.innerHTML = `
@@ -226,4 +238,25 @@ function create3DSimulationControls() {
             setSTLVisibility3D(e.target.checked);
         }
     });
+
+    update3DSimulationOverlayLayout();
+
+    if (window.ResizeObserver) {
+        if (window._simulationOverlay3DResizeObserver) {
+            window._simulationOverlay3DResizeObserver.disconnect();
+        }
+
+        const overlay = document.getElementById('simulation-overlay-3d');
+        if (overlay) {
+            window._simulationOverlay3DResizeObserver = new ResizeObserver(() => {
+                update3DSimulationOverlayLayout();
+                if (typeof requestThreeRender === 'function') {
+                    requestThreeRender();
+                }
+            });
+            window._simulationOverlay3DResizeObserver.observe(overlay);
+        }
+    }
+
+    window.update3DSimulationOverlayLayout = update3DSimulationOverlayLayout;
 }

@@ -1569,12 +1569,13 @@ function setupCanvasTabHandlers() {
             }
             const overlay3D = document.getElementById('simulation-overlay-3d');
             if (overlay3D) overlay3D.classList.add('d-none');
-
+            if (typeof update3DSimulationOverlayLayout === 'function') update3DSimulationOverlayLayout();
+ 
 			requestAnimationFrame(() => {
 				fitWorkpieceInView();
 				redraw();
 			});
-        });
+});
     }
 
     if (canvas3DTab) {
@@ -1599,10 +1600,11 @@ function setupCanvasTabHandlers() {
             if (overlay2D) overlay2D.classList.add('d-none');
             const overlay3D = document.getElementById('simulation-overlay-3d');
             if (overlay3D) overlay3D.classList.remove('d-none');
-
+            if (typeof update3DSimulationOverlayLayout === 'function') update3DSimulationOverlayLayout();
+ 
             if (typeof updateSimulation3DUI === 'function') updateSimulation3DUI();
             if (typeof updateSimulation3DDisplays === 'function') updateSimulation3DDisplays();
-        });
+});
 
         canvas3DTab.addEventListener('hidden.bs.tab', function () {
             if (typeof stopSimulation3D === 'function') stopSimulation3D();
@@ -1620,6 +1622,7 @@ function setupCanvasTabHandlers() {
             if (overlay2D) overlay2D.classList.add('d-none');
             const overlay3D = document.getElementById('simulation-overlay-3d');
             if (overlay3D) overlay3D.classList.add('d-none');
+            if (typeof update3DSimulationOverlayLayout === 'function') update3DSimulationOverlayLayout();
         });
     }
 }

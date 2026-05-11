@@ -10,6 +10,7 @@ let workpieceManager, toolpathAnimation, toolpathVisualizer;
 let orbitControls;
 let toolGroup;  // Visual representation of the cutting tool (Group: children[0]=tip, children[1]=shank)
 let gridHelper3D;  // Grid helper reference for updates
+let currentGridStep3D = null;  // Active grid step in mm for progressive zoom behavior
 let axisLines = { x: null, y: null, z: null };  // Store axis line references
 let resizeListenerAttached = false;  // Track if resize listener has been added
 let isResizing = false;  // Track if window is currently being resized
@@ -59,6 +60,11 @@ const CONFIG = {
 
   // Grid
   GRID_DISPLAY_SIZE_MULTIPLIER: 1.5,
+  GRID_MAX_SIZE_MULTIPLIER: 12,
+  GRID_MIN_DIVISIONS: 8,
+  GRID_MAX_DIVISIONS: 120,
+  GRID_PROGRESSIVE_DISTANCE_DIVISOR: 2.5,
+  GRID_PROGRESSIVE_SCALE_FACTOR: 2,
   GRID_COLOR: 0x666666,
   GRID_ROTATION_X: Math.PI / 2,
 
@@ -422,6 +428,7 @@ function initThree() {
   orbitControls.theta = Math.atan2(camX, camZ);
 
   orbitControls.setTarget(0, 0, 0);
+  updateProgressiveGrid3D(true);
 
   // Simulation controls are now created by bootstrap-layout.js overlay system
   // No need to create them here
@@ -735,6 +742,8 @@ function updateGridSize3D(gridSizeMM) {
     gridSizeMM = (typeof getOption === 'function') ? getOption("gridSize") : 10;
   }
 
+  gridSizeMM = Math.max(gridSizeMM || CONFIG.DEFAULT_GRID_SIZE, 0.1);
+
   // Get workpiece dimensions
   const { width: workpieceWidth, length: workpieceLength, thickness: workpieceThickness } = getWorkpieceDimensions();
   const maxDim = Math.max(workpieceWidth, workpieceLength);
@@ -744,19 +753,47 @@ function updateGridSize3D(gridSizeMM) {
     scene.remove(gridHelper3D);
   }
 
-  // Create new grid with size based on gridSize setting
-  const displaySize = maxDim * CONFIG.GRID_DISPLAY_SIZE_MULTIPLIER;
-  const gridDivisions = Math.ceil(displaySize / gridSizeMM);
+  const displaySize = Math.max(
+    maxDim * CONFIG.GRID_DISPLAY_SIZE_MULTIPLIER,
+    maxDim * CONFIG.GRID_MAX_SIZE_MULTIPLIER,
+    gridSizeMM * CONFIG.GRID_MIN_DIVISIONS
+  );
+  const stepForDisplay = currentGridStep3D || gridSizeMM;
+  const gridDivisions = Math.max(
+    CONFIG.GRID_MIN_DIVISIONS,
+    Math.min(CONFIG.GRID_MAX_DIVISIONS, Math.round(displaySize / stepForDisplay))
+  );
 
-  // GridHelper(size, divisions, colorGrid, colorCenterLine)
-  // Use the same lighter color for all grid lines
   gridHelper3D = new THREE.GridHelper(displaySize, gridDivisions, CONFIG.GRID_COLOR, CONFIG.GRID_COLOR);
+  gridHelper3D.userData.baseGridSizeMM = gridSizeMM;
+  gridHelper3D.userData.activeGridStepMM = stepForDisplay;
 
   // Position grid on X-Y plane at bottom of workpiece
   gridHelper3D.rotation.x = CONFIG.GRID_ROTATION_X;
   gridHelper3D.position.z = -workpieceThickness;
 
   scene.add(gridHelper3D);
+}
+
+function updateProgressiveGrid3D(force = false) {
+  if (!scene || !orbitControls) return;
+
+  const baseGridSizeMM = (typeof getOption === 'function') ? getOption("gridSize") : CONFIG.DEFAULT_GRID_SIZE;
+  const safeBaseGridSizeMM = Math.max(baseGridSizeMM || CONFIG.DEFAULT_GRID_SIZE, 0.1);
+  const scaleFactor = CONFIG.GRID_PROGRESSIVE_SCALE_FACTOR;
+  const distanceDivisor = CONFIG.GRID_PROGRESSIVE_DISTANCE_DIVISOR;
+  const desiredStep = Math.max(safeBaseGridSizeMM, orbitControls.distance / distanceDivisor);
+
+  let progressiveStep = safeBaseGridSizeMM;
+  while (progressiveStep < desiredStep) {
+    progressiveStep *= scaleFactor;
+  }
+
+  if (!force && currentGridStep3D === progressiveStep && gridHelper3D) return;
+
+  currentGridStep3D = progressiveStep;
+  updateGridSize3D(safeBaseGridSizeMM);
+  requestThreeRender();
 }
 
 // Export functions for external access
@@ -2882,6 +2919,7 @@ class OrbitControls {
     this.distance += event.deltaY * this.zoomSpeed;
     this.distance = Math.max(this.minDistance, Math.min(this.maxDistance, this.distance));
     this.updateCamera();
+    updateProgressiveGrid3D();
     requestThreeRender();
   }
 
