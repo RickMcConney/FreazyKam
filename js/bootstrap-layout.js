@@ -1543,6 +1543,8 @@ function setupCanvasTabHandlers() {
 
             const currentSidebarTab = document.querySelector('#sidebar-tabs .nav-link.active');
             const overlay2D = document.getElementById('simulation-overlay-2d');
+            const canvasObjectTree = document.getElementById('canvas-object-tree');
+            if (canvasObjectTree) canvasObjectTree.classList.remove('d-none');
             if (overlay2D) {
                 if (currentSidebarTab && currentSidebarTab.id === 'draw-tools-tab') {
                     overlay2D.classList.add('d-none');
@@ -1564,6 +1566,7 @@ function setupCanvasTabHandlers() {
     if (canvas3DTab) {
         canvas3DTab.addEventListener('shown.bs.tab', function () {
             if (typeof stopSimulation2D === 'function') stopSimulation2D();
+            hideFloatingPropertiesPopup();
 
             if (typeof gcodeView !== 'undefined' && gcodeView) {
                 let gcode;
@@ -1580,6 +1583,8 @@ function setupCanvasTabHandlers() {
             }
 
             const overlay2D = document.getElementById('simulation-overlay-2d');
+            const canvasObjectTree = document.getElementById('canvas-object-tree');
+            if (canvasObjectTree) canvasObjectTree.classList.add('d-none');
             if (overlay2D) overlay2D.classList.add('d-none');
             const overlay3D = document.getElementById('simulation-overlay-3d');
             if (overlay3D) overlay3D.classList.remove('d-none');
