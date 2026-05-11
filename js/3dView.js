@@ -110,7 +110,6 @@ const CONFIG = {
   TOOL_LENGTH: 40,  // Tool visualization length
 
   // Performance
-  VOXEL_REMOVAL_RATE: 2,  // Only remove voxels every N frames
   PROFILE_FRAME_INTERVAL: 300  // Log profiling every N frames
 };
 
@@ -952,6 +951,13 @@ function animate() {
   if (toolpathAnimation && toolpathAnimation.isPlaying) {
     toolpathAnimation.update();
 
+    // Camera follows tool when checkbox is checked
+    const followToolCheckbox = document.getElementById('3d-follow-tool');
+    if (followToolCheckbox && followToolCheckbox.checked && toolGroup && orbitControls) {
+      orbitControls.target.copy(toolGroup.position);
+      orbitControls.updateCamera();
+    }
+
     // Update 3D progress slider in overlay (now line-based, not percentage)
     const progressSlider = document.getElementById('3d-simulation-progress');
     if (progressSlider) {
@@ -976,37 +982,36 @@ function animate() {
     renderer.render(scene, camera);
     const renderTime = performance.now() - renderStart;
 
-    // Track timing stats
-    if (!window.timingStats) {
-      window.timingStats = { updateTotal: 0, renderTotal: 0, count: 0 };
-    }
-    window.timingStats.updateTotal += updateTime;
-    window.timingStats.renderTotal += renderTime;
-    window.timingStats.count++;
-
-    // Report render performance every 300 frames (~5s at 60fps)
-    if (profileFrameCount % 300 === 0) {
-      const now = performance.now();
-      const elapsedSeconds = (now - profileStartTime) / 1000;
-      const fps = (profileFrameCount / elapsedSeconds).toFixed(1);
-      const n = window.timingStats.count;
-      const avgUpdate = n ? (window.timingStats.updateTotal / n).toFixed(2) : '0.00';
-      const avgRender = n ? (window.timingStats.renderTotal / n).toFixed(2) : '0.00';
-      const avgFrame  = n ? ((window.timingStats.updateTotal + window.timingStats.renderTotal) / n).toFixed(2) : '0.00';
-      const voxelCount = toolpathAnimation?.voxelGrid
-        ? toolpathAnimation.voxelGrid.gridWidth * toolpathAnimation.voxelGrid.gridLength
-        : 0;
-      console.log(
-        `[3D Render] ${fps} fps | frame: ${avgFrame}ms (update: ${avgUpdate}ms, render: ${avgRender}ms)` +
-        (voxelCount ? ` | voxels: ${(voxelCount / 1000).toFixed(0)}K` : '')
-      );
-
-      profileFrameCount = 0;
-      profileStartTime = now;
-      window.timingStats.updateTotal = 0;
-      window.timingStats.renderTotal = 0;
-      window.timingStats.count = 0;
-    }
+    // // Track timing stats
+    // if (!window.timingStats) {
+    //   window.timingStats = { updateTotal: 0, renderTotal: 0, count: 0 };
+    // }
+    // window.timingStats.updateTotal += updateTime;
+    // window.timingStats.renderTotal += renderTime;
+    // window.timingStats.count++;
+    //
+    // // Report render performance every 300 frames (~5s at 60fps)
+    // if (profileFrameCount % 300 === 0) {
+    //   const now = performance.now();
+    //   const elapsedSeconds = (now - profileStartTime) / 1000;
+    //   const fps = (profileFrameCount / elapsedSeconds).toFixed(1);
+    //   const n = window.timingStats.count;
+    //   const avgUpdate = n ? (window.timingStats.updateTotal / n).toFixed(2) : '0.00';
+    //   const avgRender = n ? (window.timingStats.renderTotal / n).toFixed(2) : '0.00';
+    //   const avgFrame  = n ? ((window.timingStats.updateTotal + window.timingStats.renderTotal) / n).toFixed(2) : '0.00';
+    //   const voxelCount = toolpathAnimation?.voxelGrid
+    //     ? toolpathAnimation.voxelGrid.gridWidth * toolpathAnimation.voxelGrid.gridLength
+    //     : 0;
+    //   console.log(
+    //     `[3D Render] ${fps} fps | frame: ${avgFrame}ms (update: ${avgUpdate}ms, render: ${avgRender}ms)` +
+    //     (voxelCount ? ` | voxels: ${(voxelCount / 1000).toFixed(0)}K` : '')
+    //   );
+    //   profileFrameCount = 0;
+    //   profileStartTime = now;
+    //   window.timingStats.updateTotal = 0;
+    //   window.timingStats.renderTotal = 0;
+    //   window.timingStats.count = 0;
+    // }
   }
 }
 
@@ -1459,7 +1464,6 @@ class ToolpathAnimation {
     this.toolpathLines = [];  // Store references to line meshes for cleanup
     this.movementTiming = [];  // Array of movement timings with G-code line numbers
     this.lastSubtractionSegmentIndex = -1;  // Track last segment where we performed subtraction
-    this.subtractionStepDistance = 2;  // Subtract every N mm of movement (reduced for smoother cuts)
     this.toolCommentsInOrder = [];  // Array of tool comments in chronological order for tool switching
 
     // G-code text for line iteration
@@ -1488,8 +1492,6 @@ class ToolpathAnimation {
     this.voxelMaterialRemover = new VoxelMaterialRemover();
     this.voxelSize = 0.1;  // 0.1mm voxel size in X/Y (Z is step-down from tool, sparse grid reduces performance impact)
     this.enableVoxelRemoval = true;  // Toggle for voxel removal feature
-    this.voxelRemovalRate = 2;  // Only remove voxels every N frames to reduce per-frame cost
-    this.frameCount = 0;  // Frame counter for throttling voxel removal
 
     // PHASE 2.1: Track last voxel config to avoid unnecessary recreation
     this.lastVoxelConfig = null;
@@ -1539,7 +1541,7 @@ class ToolpathAnimation {
     if (!hasCuttingMoves) {
       return null;
     }
-console.log('Calculated raw toolpath bounds:', { minX, maxX, minY, maxY, minZ, maxZ });
+// console.log('Calculated raw toolpath bounds:', { minX, maxX, minY, maxY, minZ, maxZ });
     // Apply padding
     return {
       minX: minX - padding,
@@ -2474,9 +2476,12 @@ console.log('Calculated raw toolpath bounds:', { minX, maxX, minY, maxY, minZ, m
   }
 
   _replayFromMovementIndexToIndex(startIndex, endIndex) {
-    // Replay material removal from one movement index to another
-    // Uses distance-based step size (half voxel size) so no voxels are missed
-    const stepDist = this.voxelGrid ? this.voxelGrid.voxelSize * 0.5 : 0.5;
+    // Step at half the tool radius — adjacent circles overlap so no voxels are missed.
+    // Using voxelSize * 0.5 was far too fine: a 200mm move with 0.05mm steps = 4000
+    // quadtree queries, each traversing the full tree.
+    const stepDist = this.voxelGrid
+      ? Math.max(this.voxelGrid.voxelSize, this.toolRadius * 0.5)
+      : 1.0;
 
     for (let i = startIndex; i <= endIndex && i < this.movementTiming.length; i++) {
       const move = this.movementTiming[i];
@@ -2527,8 +2532,16 @@ console.log('Calculated raw toolpath bounds:', { minX, maxX, minY, maxY, minZ, m
     const baseTime = prevMovementAtStart ? prevMovementAtStart.cumulativeTime : 0;
     const targetCumulativeTime = baseTime + this.elapsedTime;
 
-    // Advance through all movements that should have completed by now
-    const stepDist = this.voxelGrid ? this.voxelGrid.voxelSize * 0.5 : 0.5;
+    // Step at half the tool radius — adjacent circles overlap so no voxels are missed.
+    const stepDist = this.voxelGrid
+      ? Math.max(this.voxelGrid.voxelSize, this.toolRadius * 0.5)
+      : 1.0;
+
+    // Budget ~8ms for voxel removal per frame so the rAF handler stays under 16ms.
+    // When playback is fast and many moves complete in one frame we skip removal for
+    // moves beyond the budget — the animation position stays accurate regardless.
+    const REMOVAL_BUDGET_MS = 8;
+    const removalFrameStart = performance.now();
 
     while (this.currentMovementIndex < this.movementTiming.length) {
       const move = this.movementTiming[this.currentMovementIndex];
@@ -2539,7 +2552,8 @@ console.log('Calculated raw toolpath bounds:', { minX, maxX, minY, maxY, minZ, m
       }
 
       // This movement has completed - do voxel removal along its full path
-      if (move.isG1 && this.enableVoxelRemoval && this.voxelGrid && this.voxelMaterialRemover) {
+      if (move.isG1 && this.enableVoxelRemoval && this.voxelGrid && this.voxelMaterialRemover &&
+          (performance.now() - removalFrameStart) < REMOVAL_BUDGET_MS) {
         const prev = this.currentMovementIndex > 0 ? this.movementTiming[this.currentMovementIndex - 1] : null;
         const prevPos = prev ? { x: prev.x, y: prev.y, z: prev.z } : { x: 0, y: 0, z: 5 };
         try {
@@ -2727,7 +2741,7 @@ class OrbitControls {
     this.theta = 0;
 
     this.minDistance = 10;
-    this.maxDistance = 1000;
+    this.maxDistance = 3000;
     this.rotateSpeed = 0.005;
     this.zoomSpeed = 0.1;
 

@@ -146,6 +146,31 @@ class QuadtreeVoxelGrid {
 
     const t0 = performance.now();
 
+    // Pre-limit fine depth before any recursion.
+    // For full-coverage toolpaths (e.g. surfacing) _subdivide will try to subdivide every
+    // coarse cell all the way to _maxFineDepth, allocating numCoarseCells * 4^depth
+    // QuadTreeNode objects in one shot — easily tens of millions for a large workpiece,
+    // which freezes the browser before the rebuild loop below can scale back.
+    // Capping depth here so the worst-case leaf count stays under MAX_VOXELS prevents
+    // runaway allocation on the very first attempt.
+    {
+      const numCoarseX = Math.ceil(this.workpieceWidth  / COARSE_CELL_SIZE);
+      const numCoarseY = Math.ceil(this.workpieceLength / COARSE_CELL_SIZE);
+      const numCoarseCells = numCoarseX * numCoarseY;
+      const maxSafeDepth = Math.max(1, Math.floor(
+        Math.log(QuadtreeVoxelGrid.MAX_VOXELS / numCoarseCells) / Math.log(4)
+      ));
+      if (this._maxFineDepth > maxSafeDepth) {
+        this._maxFineDepth = maxSafeDepth;
+        this.minCellSize   = COARSE_CELL_SIZE / Math.pow(2, this._maxFineDepth);
+        this.voxelSize     = this.minCellSize;
+        // console.log(
+        //   `[QuadtreeVoxelGrid] Pre-capping fine depth to ${maxSafeDepth} ` +
+        //   `(${this.minCellSize.toFixed(2)}mm cells) for ${numCoarseCells} coarse cells`
+        // );
+      }
+    }
+
     // Build tree, then reduce fine resolution if the leaf count exceeds MAX_VOXELS.
     // This mirrors the original VoxelGrid auto-scaling and keeps GPU instance count
     // within a renderable budget.  Rebuilding takes < 100ms and happens at most a
@@ -172,10 +197,10 @@ class QuadtreeVoxelGrid {
       this._maxFineDepth = Math.max(1, this._maxFineDepth - 1);
       this.minCellSize   = COARSE_CELL_SIZE / Math.pow(2, this._maxFineDepth);
       this.voxelSize     = this.minCellSize;
-      console.warn(
-        `[QuadtreeVoxelGrid] ${N} voxels exceeds limit (${QuadtreeVoxelGrid.MAX_VOXELS}), ` +
-        `coarsening to ${this.minCellSize.toFixed(3)}mm (attempt ${attempt + 1})`
-      );
+      // console.warn(
+      //   `[QuadtreeVoxelGrid] ${N} voxels exceeds limit (${QuadtreeVoxelGrid.MAX_VOXELS}), ` +
+      //   `coarsening to ${this.minCellSize.toFixed(3)}mm (attempt ${attempt + 1})`
+      // );
     }
 
     this.voxelTopZ = new Float32Array(N);  // all 0 = at surface
@@ -186,12 +211,12 @@ class QuadtreeVoxelGrid {
 
     this._createMesh(N);
 
-    console.log(
-      `[QuadtreeVoxelGrid] ${N} adaptive voxels ` +
-      `(${pts.length / 2} samples, toolR=${maxToolRadius.toFixed(1)}mm, ` +
-      `bufferR=${subdivisionRadius.toFixed(1)}mm, fine=${this.minCellSize.toFixed(3)}mm) ` +
-      `built in ${(performance.now() - t0).toFixed(1)}ms`
-    );
+    // console.log(
+    //   `[QuadtreeVoxelGrid] ${N} adaptive voxels ` +
+    //   `(${pts.length / 2} samples, toolR=${maxToolRadius.toFixed(1)}mm, ` +
+    //   `bufferR=${subdivisionRadius.toFixed(1)}mm, fine=${this.minCellSize.toFixed(3)}mm) ` +
+    //   `built in ${(performance.now() - t0).toFixed(1)}ms`
+    // );
     this._maxCellSizeUpdated = 0;  // diagnostic: track largest voxel whose height was changed
   }
 
@@ -308,11 +333,11 @@ class QuadtreeVoxelGrid {
     if (cellSize > this._maxCellSizeUpdated) {
       this._maxCellSizeUpdated = cellSize;
       if (cellSize > this.minCellSize * 1.5) {
-        console.warn(
-          `[QuadtreeVoxelGrid] COARSE VOXEL CUT: size=${cellSize.toFixed(2)}mm ` +
-          `(fine=${this.minCellSize.toFixed(3)}mm) at (${leaf.cx.toFixed(1)}, ${leaf.cy.toFixed(1)}). ` +
-          `Increase subdivision buffer or sampling density.`
-        );
+        // console.warn(
+        //   `[QuadtreeVoxelGrid] COARSE VOXEL CUT: size=${cellSize.toFixed(2)}mm ` +
+        //   `(fine=${this.minCellSize.toFixed(3)}mm) at (${leaf.cx.toFixed(1)}, ${leaf.cy.toFixed(1)}). ` +
+        //   `Increase subdivision buffer or sampling density.`
+        // );
       }
     }
 
