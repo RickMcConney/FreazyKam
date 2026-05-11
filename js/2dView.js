@@ -93,6 +93,7 @@ window.addEventListener('resize', function () {
 var ZOOM_STEP_FACTOR = 1.05; // Multiplier per scroll tick
 var MIN_ZOOM_LEVEL = 0.15;
 var MAX_ZOOM_LEVEL = 20;
+var MAX_ZOOM_OUT_MARGIN_FACTOR = 1.25;
 
 function getViewportSize() {
 	var canvasParent = $('#canvas').parent()[0];
@@ -121,10 +122,11 @@ function getMinZoomLevel() {
 		return MIN_ZOOM_LEVEL;
 	}
 
-	// Keep the viewport inside the workpiece at max zoom-out.
+	// Allow a small margin around the workpiece at max zoom-out so its sides remain visible.
 	var fitZoom = Math.min(viewportWidth / workpieceWidth, viewportHeight / workpieceLength);
+	var zoomWithMargin = fitZoom / MAX_ZOOM_OUT_MARGIN_FACTOR;
 
-	return Math.min(MIN_ZOOM_LEVEL, fitZoom);
+	return Math.min(MIN_ZOOM_LEVEL, zoomWithMargin);
 }
 
 function clampPanToWorkpiece(nextPanX, nextPanY, effectiveZoomLevel) {
