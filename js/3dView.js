@@ -2847,13 +2847,26 @@ class OrbitControls {
 
     this.isDragging = false;
     this.previousMousePosition = { x: 0, y: 0 };
-    this.dragMode = null;  // Track which mouse button is being used: 'rotate' or 'pan'
-    this.panSpeed = 0.1;   // Speed of panning (world units per pixel)
+    this.dragMode = null;
+    this.panSpeed = 0.1;
+    this.moveSpeed = 0.1;
 
-    this.domElement.addEventListener('mousedown', this.onMouseDown.bind(this));
-    this.domElement.addEventListener('mousemove', this.onMouseMove.bind(this));
-    this.domElement.addEventListener('mouseup', this.onMouseUp.bind(this));
-    this.domElement.addEventListener('wheel', this.onMouseWheel.bind(this), false);
+    this.onMouseDownBound = this.onMouseDown.bind(this);
+    this.onMouseMoveBound = this.onMouseMove.bind(this);
+    this.onMouseUpBound = this.onMouseUp.bind(this);
+    this.onMouseWheelBound = this.onMouseWheel.bind(this);
+    this.onContextMenuBound = this.onContextMenu.bind(this);
+    this.onKeyDownBound = this.onKeyDown.bind(this);
+
+    this.domElement.addEventListener('mousedown', this.onMouseDownBound);
+    this.domElement.addEventListener('mousemove', this.onMouseMoveBound);
+    this.domElement.addEventListener('mouseup', this.onMouseUpBound);
+    this.domElement.addEventListener('mouseleave', this.onMouseUpBound);
+    this.domElement.addEventListener('wheel', this.onMouseWheelBound, false);
+    this.domElement.addEventListener('contextmenu', this.onContextMenuBound);
+    this.domElement.tabIndex = 0;
+    window.addEventListener('keydown', this.onKeyDownBound, true);
+    this.domElement.addEventListener('keydown', this.onKeyDownBound, true);
   }
 
   setTarget(x, y, z) {
@@ -2862,40 +2875,38 @@ class OrbitControls {
     requestThreeRender();
   }
 
+  onContextMenu(event) {
+    event.preventDefault();
+  }
+
   onMouseDown(event) {
+    if (event.button !== 0 && event.button !== 1 && event.button !== 2) return;
+
+    this.domElement.focus();
     this.isDragging = true;
     this.previousMousePosition = { x: event.clientX, y: event.clientY };
 
-    // Determine drag mode based on mouse button
     if (event.button === 0) {
-      // Left mouse button: rotation
       this.dragMode = 'rotate';
-    } else if (event.button === 1) {
-      // Middle mouse button: panning
+    } else if (event.button === 1 || event.button === 2) {
       this.dragMode = 'pan';
     }
   }
 
   onMouseMove(event) {
-    if (!this.isDragging) return;
+    if (!this.isDragging || !this.dragMode) return;
 
     const deltaX = event.clientX - this.previousMousePosition.x;
     const deltaY = event.clientY - this.previousMousePosition.y;
 
     if (this.dragMode === 'rotate') {
-      // Rotation mode
       this.theta -= deltaX * this.rotateSpeed;
-      this.phi += deltaY * this.rotateSpeed;  // Reversed: positive deltaY increases phi
+      this.phi += deltaY * this.rotateSpeed;
       this.phi = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.phi));
     } else if (this.dragMode === 'pan') {
-      // Panning mode: move camera target in world space
-      // Simple approach: pan proportional to screen movement, scaled by distance
-      const panScale = this.distance * this.panSpeed * 0.01;
-
-      // Pan in X-Y plane (horizontal movement follows screen)
-      this.target.x -= deltaX * panScale;
-      this.target.y += deltaY * panScale;
-      // Z panning: if desired, could add modifier key support
+      this.pan(deltaX, deltaY);
+    } else if (this.dragMode === 'move') {
+      this.move(deltaX, deltaY);
     }
 
     this.previousMousePosition = { x: event.clientX, y: event.clientY };
@@ -2916,6 +2927,77 @@ class OrbitControls {
     this.updateCamera();
     updateProgressiveGrid3D();
     requestThreeRender();
+  }
+
+  onKeyDown(event) {
+    const isArrowKey = event.key === 'ArrowLeft' || event.key === 'ArrowRight' || event.key === 'ArrowUp' || event.key === 'ArrowDown';
+    if (!isArrowKey) return;
+
+    const activeElement = document.activeElement;
+    const isTypingContext = activeElement && (
+      activeElement.tagName === 'INPUT' ||
+      activeElement.tagName === 'TEXTAREA' ||
+      activeElement.tagName === 'SELECT' ||
+      activeElement.tagName === 'BUTTON' ||
+      activeElement.isContentEditable
+    );
+    if (isTypingContext) return;
+
+    let deltaX = 0;
+    let deltaY = 0;
+    const keyboardStep = 20;
+
+    if (event.key === 'ArrowLeft') {
+      deltaX = -keyboardStep;
+    } else if (event.key === 'ArrowRight') {
+      deltaX = keyboardStep;
+    } else if (event.key === 'ArrowUp') {
+      deltaY = -keyboardStep;
+    } else if (event.key === 'ArrowDown') {
+      deltaY = keyboardStep;
+    }
+
+    event.preventDefault();
+    this.move(deltaX, deltaY);
+    this.updateCamera();
+    requestThreeRender();
+  }
+
+  pan(deltaX, deltaY) {
+    const panScale = this.distance * this.panSpeed * 0.01;
+    const right = new THREE.Vector3();
+    const up = new THREE.Vector3();
+
+    this.camera.getWorldDirection(up);
+    right.crossVectors(up, this.camera.up).normalize();
+    up.copy(this.camera.up).normalize();
+
+    this.target.addScaledVector(right, -deltaX * panScale);
+    this.target.addScaledVector(up, deltaY * panScale);
+  }
+
+  move(deltaX, deltaY) {
+    const moveScale = this.distance * this.moveSpeed * 0.01;
+    const right = new THREE.Vector3();
+    const forward = new THREE.Vector3();
+    const cameraDirection = new THREE.Vector3();
+
+    this.camera.getWorldDirection(cameraDirection);
+    right.crossVectors(cameraDirection, this.camera.up).normalize();
+    forward.copy(cameraDirection);
+    forward.z = 0;
+
+    if (forward.lengthSq() > 0) {
+      forward.normalize();
+    } else {
+      forward.set(0, 1, 0);
+    }
+
+    const movement = new THREE.Vector3();
+    movement.addScaledVector(right, deltaX * moveScale);
+    movement.addScaledVector(forward, -deltaY * moveScale);
+
+    this.target.add(movement);
   }
 
   updateCamera() {
