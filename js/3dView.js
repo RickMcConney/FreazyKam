@@ -145,32 +145,27 @@ function getWorkpieceDimensions() {
   };
 }
 
-function getWorkpieceBoundsOffset() {
-  // Return the offset of workpiece bounds from (0,0,0) center
-  // This matches the origin offset used in WorkpieceManager.calculateBounds()
+function getWorkpieceBoundsOffset(originPositionOverride, widthOverride, lengthOverride) {
+  // Return the logical origin position on a workpiece centered in the 3D scene.
   const dims = getWorkpieceDimensions();
-  const originPosition = dims.originPosition || 'middle-center';
-  const width = dims.width;
-  const length = dims.length;
+  const originPosition = originPositionOverride || dims.originPosition || 'middle-center';
+  const width = widthOverride ?? dims.width;
+  const length = lengthOverride ?? dims.length;
 
-  let offsetX = 0, offsetY = 0;
+  let offsetX = 0;
+  let offsetY = 0;
 
-  // Mirror the logic in WorkpieceManager.calculateBounds()
-  // Handle X offset based on origin position
   if (originPosition.includes('left')) {
-    offsetX = width / 2;  // Mesh center is at width/2
+    offsetX = -width / 2;
   } else if (originPosition.includes('right')) {
-    offsetX = -width / 2;  // Mesh center is at -width/2
+    offsetX = width / 2;
   }
-  // 'center' keeps offsetX = 0
 
-  // Handle Y offset based on origin position
   if (originPosition.includes('top')) {
-    offsetY = length / 2;  // Mesh center is at length/2
+    offsetY = length / 2;
   } else if (originPosition.includes('bottom')) {
-    offsetY = -length / 2;  // Mesh center is at -length/2
+    offsetY = -length / 2;
   }
-  // 'middle' keeps offsetY = 0
 
   return { x: offsetX, y: offsetY };
 }
@@ -459,12 +454,13 @@ function initThree() {
 }
 
 function addAxisHelper() {
-  // Create axes at world origin (0, 0, 0)
+  // Create axes at logical workpiece origin
   // X axis: red (positive goes right)
   // Y axis: green (positive goes away from camera)
   // Z axis: blue (positive goes up)
 
   const axisLength = CONFIG.AXIS_LENGTH;
+  const boundsOffset = getWorkpieceBoundsOffset();
 
   // X axis (red)
   const xGeometry = new THREE.BufferGeometry();
@@ -473,6 +469,7 @@ function addAxisHelper() {
   ));
   const xMaterial = new THREE.LineBasicMaterial({ color: CONFIG.AXIS_RED, linewidth: CONFIG.AXIS_LINE_WIDTH });
   axisLines.x = new THREE.Line(xGeometry, xMaterial);
+  axisLines.x.position.set(boundsOffset.x, boundsOffset.y, 0);
   scene.add(axisLines.x);
 
   // Y axis (green)
@@ -482,6 +479,7 @@ function addAxisHelper() {
   ));
   const yMaterial = new THREE.LineBasicMaterial({ color: CONFIG.AXIS_GREEN, linewidth: CONFIG.AXIS_LINE_WIDTH });
   axisLines.y = new THREE.Line(yGeometry, yMaterial);
+  axisLines.y.position.set(boundsOffset.x, boundsOffset.y, 0);
   scene.add(axisLines.y);
 
   // Z axis (blue)
@@ -491,6 +489,7 @@ function addAxisHelper() {
   ));
   const zMaterial = new THREE.LineBasicMaterial({ color: CONFIG.AXIS_BLUE, linewidth: CONFIG.AXIS_LINE_WIDTH });
   axisLines.z = new THREE.Line(zGeometry, zMaterial);
+  axisLines.z.position.set(boundsOffset.x, boundsOffset.y, 0);
   scene.add(axisLines.z);
 }
 
@@ -823,19 +822,37 @@ function updateWorkpiece3D(width, length, thickness, originPosition, woodSpecies
 
   // Get wood color from species database
   const woodColor = getWoodColor(woodSpecies);
+  const previousOriginPosition = workpieceManager.originPosition || 'middle-center';
+  const dimensionsChanged =
+    workpieceManager.width !== width ||
+    workpieceManager.length !== length ||
+    workpieceManager.thickness !== thickness;
 
-  // Remove old workpiece
-  scene.remove(workpieceManager.mesh);
-  if (workpieceManager.mesh.geometry) workpieceManager.mesh.geometry.dispose();
-  if (workpieceManager.mesh.material) workpieceManager.mesh.material.dispose();
+  if (dimensionsChanged) {
+    // Dimensions impact voxel geometry and stock mesh size, so rebuild the workpiece
+    scene.remove(workpieceManager.mesh);
+    if (workpieceManager.mesh.geometry) workpieceManager.mesh.geometry.dispose();
+    if (workpieceManager.mesh.material) workpieceManager.mesh.material.dispose();
 
-  // Create new workpiece with updated dimensions and color
-  workpieceManager = new WorkpieceManager(scene, width, length, thickness, originPosition, woodColor);
-  workpieceManager.mesh.visible = true;
+    workpieceManager = new WorkpieceManager(scene, width, length, thickness, originPosition, woodColor);
+    workpieceManager.mesh.visible = true;
 
-  // Update the toolpath animation's reference
-  if (toolpathAnimation) {
-    toolpathAnimation.workpieceManager = workpieceManager;
+    if (toolpathAnimation) {
+      toolpathAnimation.workpieceManager = workpieceManager;
+    }
+  } else {
+    // Origin change only: keep the workpiece fixed and move only the axes helper
+    workpieceManager.originPosition = originPosition;
+    workpieceManager.woodColor = woodColor;
+    if (workpieceManager.mesh && workpieceManager.mesh.material) {
+      workpieceManager.mesh.material.color.set(woodColor);
+    }
+
+    const boundsOffset = getWorkpieceBoundsOffset(originPosition, width, length);
+
+    if (axisLines.x) axisLines.x.position.set(boundsOffset.x, boundsOffset.y, 0);
+    if (axisLines.y) axisLines.y.position.set(boundsOffset.x, boundsOffset.y, 0);
+    if (axisLines.z) axisLines.z.position.set(boundsOffset.x, boundsOffset.y, 0);
   }
 
   sync3DVisibilityControls();
@@ -864,24 +881,21 @@ window.setWorkpieceVisibility3D = function(visible) {
   // Instead of toggling visibility (which causes GPU corruption), move meshes off-screen
   // This keeps them rendering but hidden from view, avoiding blotchy discoloration
   const offscreenPosition = new THREE.Vector3(10000, 10000, 10000);  // Far behind camera
+  const fixedWorkpiecePosition = new THREE.Vector3(0, 0, 0);
 
-  // Position workpiece so its center aligns with 3D origin
-  const boundsOffset = getWorkpieceBoundsOffset();
-  const originalPosition = new THREE.Vector3(-boundsOffset.x, boundsOffset.y, 0);  // Offset to center at origin
-
-  // Move workpiece
+  // Keep workpiece fixed in the 3D scene regardless of origin choice
   if (workpieceManager && workpieceManager.mesh) {
-    workpieceManager.mesh.position.copy(visible ? originalPosition : offscreenPosition);
+    workpieceManager.mesh.position.copy(visible ? fixedWorkpiecePosition : offscreenPosition);
   }
 
-  // Move filler workpiece boxes
+  // Keep filler workpiece boxes fixed too
   if (toolpathAnimation && toolpathAnimation.workpieceOutlineBox) {
-    toolpathAnimation.workpieceOutlineBox.position.copy(visible ? originalPosition : offscreenPosition);
+    toolpathAnimation.workpieceOutlineBox.position.copy(visible ? fixedWorkpiecePosition : offscreenPosition);
   }
 
-  // Move voxel grid
+  // Keep voxel grid fixed too
   if (toolpathAnimation && toolpathAnimation.voxelGrid && toolpathAnimation.voxelGrid.mesh) {
-    toolpathAnimation.voxelGrid.mesh.position.copy(visible ? originalPosition : offscreenPosition);
+    toolpathAnimation.voxelGrid.mesh.position.copy(visible ? fixedWorkpiecePosition : offscreenPosition);
   }
 
   requestThreeRender();
@@ -1442,31 +1456,12 @@ class WorkpieceManager {
     this.originPosition = originPosition || 'middle-center';
     this.woodColor = woodColor || 0x8B7355;  // Default wood color if not provided
 
-    // Calculate the workpiece bounds based on origin position
-    // Top surface is always at Z = 0, bottom at Z = -thickness
-    // X and Y bounds depend on where the origin is
-    const bounds = this.calculateBounds(width, length, thickness, this.originPosition);
-
-    // Create geometry with correct bounds built in
-    // BoxGeometry(width, height, depth) - we need to adjust for correct positioning
-    const geomWidth = bounds.maxX - bounds.minX;
-    const geomLength = bounds.maxY - bounds.minY;
-    const geomThickness = bounds.maxZ - bounds.minZ;
-
-    // Simple box geometry - minimal segments for efficient boolean operations
-    // We don't need high detail since cuts will add the geometry detail
-    const geometry = new THREE.BoxGeometry(geomWidth, geomLength, geomThickness, 1, 1, 1);
-
-    // The BoxGeometry is centered at (0, 0, 0) by default
-    // We need to translate it so that:
-    // - minX, minY, minZ are at the desired corners
-    // - maxX, maxY, maxZ are at the opposite corners
-    const offsetX = (bounds.minX + bounds.maxX) / 2;
-    const offsetY = (bounds.minY + bounds.maxY) / 2;
-    const offsetZ = (bounds.minZ + bounds.maxZ) / 2;
-
+    // Keep the 3D workpiece physically centered in the scene.
+    // Origin changes are represented only by the axes/toolpath offsets.
+    // The stock stays centered in X/Y and spans from Z=0 to Z=-thickness.
+    const geometry = new THREE.BoxGeometry(width, length, thickness, 1, 1, 1);
     const matrix = new THREE.Matrix4();
-    matrix.makeTranslation(offsetX, offsetY, offsetZ);
+    matrix.makeTranslation(0, 0, -thickness / 4);
     geometry.applyMatrix4(matrix);
 
     const material = new THREE.MeshPhongMaterial({
