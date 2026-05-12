@@ -24,6 +24,7 @@ var vcarveGenerationWorker = null;
 var drillGenerationWorker = null;
 var profileGenerationWorker = null;
 var inlayGenerationWorker = null;
+var surfacingGenerationWorker = null;
 
 function makePendingToolpath(svgIds, name, operation, pendingKey, overrides) {
 	const pendingToolpath = {
@@ -967,6 +968,11 @@ function doSurfacing() {
 		return;
 	}
 
+	if (typeof Worker === 'undefined') {
+		notify('Web Workers are not supported in this browser', 'error');
+		return;
+	}
+
 	const radius = toolRadius();
 	const stepover = 2 * radius * currentTool.stepover / 100;
 	const angle = window.currentToolpathProperties?.angle || 0;
@@ -976,64 +982,118 @@ function doSurfacing() {
 		return;
 	}
 
-	const cx = wpWidth / 2;
-	const cy = wpLength / 2;
-
-	// Clip bounds: workpiece expanded by one tool radius so the cutter edge
-	// reaches exactly to the workpiece boundary on all sides.
-	const xMin = -radius, xMax = wpWidth + radius;
-	const yMin = -radius, yMax = wpLength + radius;
-
-	// Rotate the clip-region corners by -angle to get the bounding box in which
-	// horizontal lines are generated, then rotate each line back by +angle.
-	const clipCorners = [
-		{ x: xMin, y: yMin }, { x: xMax, y: yMin },
-		{ x: xMax, y: yMax }, { x: xMin, y: yMax }
-	];
-	const rotated = angle !== 0
-		? clipCorners.map(p => rotatePoint(p, cx, cy, -angle * Math.PI / 180))
-		: clipCorners;
-
-	const minX = Math.min(...rotated.map(p => p.x));
-	const maxX = Math.max(...rotated.map(p => p.x));
-	const minY = Math.min(...rotated.map(p => p.y));
-	const maxY = Math.max(...rotated.map(p => p.y));
-
-	const paths = [];
-	let lineIndex = 0;
-
-	for (let y = minY; ; y += stepover) {
-		const ly = Math.min(y, maxY);
-
-		// Full-width line in the rotated frame
-		let p1 = { x: minX, y: ly };
-		let p2 = { x: maxX, y: ly };
-
-		// Rotate back to world orientation
-		if (angle !== 0) {
-			const rad = angle * Math.PI / 180;
-			p1 = rotatePoint(p1, cx, cy, rad);
-			p2 = rotatePoint(p2, cx, cy, rad);
-		}
-
-		// Clip to workpiece + radius bounds so lines never extend past the stock
-		const clipped = clipLineToRect(p1, p2, xMin, yMin, xMax, yMax);
-		if (clipped) {
-			// Zigzag: alternate direction each pass
-			const tpath = lineIndex % 2 === 0 ? clipped : [clipped[1], clipped[0]];
-			paths.push({ tpath: tpath });
-			lineIndex++;
-		}
-
-		if (ly >= maxY) break;
-	}
-
-	if (paths.length === 0) {
-		notify('Unable to generate surfacing paths');
+	const pendingKey = ['Surfacing', wpWidth, wpLength, radius, stepover, angle].join('|');
+	const duplicateRequest = toolpaths.some(function(tp) {
+		return tp.pending === true && tp.pendingKey === pendingKey;
+	});
+	if (duplicateRequest) {
+		notify('A surfacing generation is already pending for this configuration', 'info');
 		return;
 	}
 
-	pushToolPath(paths, 'Surfacing', 'Surfacing', null, null);
+	const updateTargets = Array.isArray(window.toolpathUpdateTargets)
+		? window.toolpathUpdateTargets.slice(0, 1)
+		: [];
+	const pendingToolpaths = [];
+	const updateTarget = updateTargets[0] || null;
+	if (updateTarget) {
+		updateTarget.paths = [];
+		updateTarget.visible = true;
+		updateTarget.operation = 'Surfacing';
+		updateTarget.name = 'Surfacing';
+		updateTarget.tool = { ...currentTool };
+		updateTarget.svgId = null;
+		updateTarget.svgIds = [];
+		updateTarget.pending = true;
+		updateTarget.pendingKey = pendingKey;
+		if (window.currentToolpathProperties) {
+			updateTarget.toolpathProperties = { ...window.currentToolpathProperties };
+			if (window.currentToolpathProperties.toolpathName) {
+				updateTarget.label = window.currentToolpathProperties.toolpathName;
+			}
+		}
+		pendingToolpaths.push(updateTarget);
+	} else {
+		pendingToolpaths.push(makePendingToolpath([], 'Surfacing', 'Surfacing', pendingKey, {
+			svgId: null,
+			svgIds: []
+		}));
+	}
+	if (typeof refreshToolPathsDisplay === 'function') refreshToolPathsDisplay();
+	redraw();
+
+	const worker = new Worker('js/workers/SurfacingWorker.js');
+	window.surfacingGenerationWorker = worker;
+	console.log('SurfacingWorker: queued', { wpWidth, wpLength, radius, stepover, angle, pendingKey });
+	notify('Generating surfacing paths…', 'info');
+
+	function clearPendingToolpaths() {
+		if (window.surfacingGenerationWorker === worker) {
+			window.surfacingGenerationWorker = null;
+		}
+		removePendingToolpaths(pendingToolpaths);
+	}
+
+	worker.onmessage = function(event) {
+		if (window.surfacingGenerationWorker !== worker) {
+			worker.terminate();
+			return;
+		}
+
+		if (event.data && event.data.log) {
+			console.log('SurfacingWorker:', event.data.message, event.data.details || '');
+			return;
+		}
+
+		window.surfacingGenerationWorker = null;
+		worker.terminate();
+
+		if (!event.data || !event.data.ok) {
+			removePendingToolpaths(pendingToolpaths);
+			notify((event.data && event.data.error) || 'Unable to generate surfacing paths', 'error');
+			return;
+		}
+
+		const result = event.data.result || { toolpaths: [], createdCount: 0 };
+		for (let i = 0; i < result.toolpaths.length && i < pendingToolpaths.length; i++) {
+			const generated = result.toolpaths[i];
+			const pendingToolpath = pendingToolpaths[i];
+			pendingToolpath.paths = generated.paths;
+			pendingToolpath.operation = generated.operation;
+			pendingToolpath.name = generated.name;
+			pendingToolpath.svgId = generated.svgId;
+			pendingToolpath.svgIds = generated.svgIds;
+			pendingToolpath.pending = false;
+			delete pendingToolpath.pendingKey;
+		}
+		for (let i = result.toolpaths.length; i < pendingToolpaths.length; i++) {
+			const index = toolpaths.indexOf(pendingToolpaths[i]);
+			if (index >= 0) toolpaths.splice(index, 1);
+		}
+		if (typeof refreshToolPathsDisplay === 'function') refreshToolPathsDisplay();
+		redraw();
+
+		if (result.createdCount === 0) {
+			notify('Unable to generate surfacing paths');
+		}
+	};
+
+	worker.onerror = function(error) {
+		if (window.surfacingGenerationWorker === worker) {
+			window.surfacingGenerationWorker = null;
+		}
+		worker.terminate();
+		removePendingToolpaths(pendingToolpaths);
+		notify((error && error.message) || 'Surfacing generation failed', 'error');
+	};
+
+	worker.postMessage({
+		wpWidth: wpWidth,
+		wpLength: wpLength,
+		radius: radius,
+		stepover: stepover,
+		angle: angle
+	});
 }
 
 /**
