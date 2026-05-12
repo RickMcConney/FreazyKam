@@ -444,27 +444,181 @@ function pushAndActivateToolpath(paths, name, operation, svgId) {
 	}
 }
 
+function collectDrillGenerationRequests(options) {
+	const requests = [];
+	const selected = options && Array.isArray(options.selected) ? options.selected : [];
+	const drillOp = options && options.drillOp ? options.drillOp : null;
+	const point = options && options.point ? options.point : null;
+
+	if (selected.length > 0 && drillOp) {
+		for (var i = 0; i < selected.length; i++) {
+			var circleInfo = drillOp.detectCircle(selected[i]);
+			if (circleInfo) {
+				requests.push({
+					kind: 'helical',
+					name: 'Helical Drill',
+					operation: 'HelicalDrill',
+					svgId: selected[i].id,
+					svgIds: [selected[i].id],
+					circle: circleInfo
+				});
+			}
+		}
+	}
+
+	if (requests.length === 0 && point) {
+		requests.push({
+			kind: 'point',
+			name: 'Drill',
+			operation: 'Drill',
+			svgId: null,
+			svgIds: [],
+			point: { x: point.x, y: point.y }
+		});
+	}
+
+	return requests;
+}
+
+function buildDrillPendingKey(request) {
+	if (!request) return 'Drill|unknown';
+	if (request.kind === 'helical') {
+		return 'Drill|Helical|' + request.svgId;
+	}
+	if (request.kind === 'point') {
+		return 'Drill|Point|' + request.point.x.toFixed(4) + '|' + request.point.y.toFixed(4);
+	}
+	return 'Drill|' + (request.kind || 'unknown');
+}
+
+function startDrillGeneration(requests) {
+	if (!Array.isArray(requests) || requests.length === 0) return false;
+	if (typeof Worker === 'undefined') {
+		notify('Web Workers are not supported in this browser', 'error');
+		return false;
+	}
+
+	const toolRadiusValue = toolRadius();
+	const depth = window.currentTool.depth;
+	const stepDown = window.currentTool.step;
+	const pendingRequests = requests.map(function(request) {
+		return {
+			request: request,
+			pendingKey: buildDrillPendingKey(request)
+		};
+	});
+	const duplicateRequest = pendingRequests.find(function(entry) {
+		return toolpaths.some(function(tp) {
+			return tp.pending === true && tp.pendingKey === entry.pendingKey;
+		});
+	});
+	if (duplicateRequest) {
+		notify('A drill generation is already pending for this selection', 'info');
+		return false;
+	}
+
+	const pendingToolpaths = pendingRequests.map(function(entry) {
+		return makePendingToolpath(entry.request.svgIds || [], entry.request.name, entry.request.operation, entry.pendingKey, {
+			svgId: entry.request.svgId || null,
+			svgIds: Array.isArray(entry.request.svgIds) ? entry.request.svgIds.slice() : []
+		});
+	});
+	if (typeof refreshToolPathsDisplay === 'function') refreshToolPathsDisplay();
+	redraw();
+
+	const worker = new Worker('js/workers/drillWorker.js');
+	drillGenerationWorker = worker;
+	window.drillGenerationWorker = worker;
+	console.log('DrillWorker main:start', {
+		requestCount: requests.length,
+		toolRadius: toolRadiusValue,
+		depth: depth,
+		stepDown: stepDown
+	});
+
+	worker.onmessage = function(event) {
+		if (drillGenerationWorker !== worker) {
+			worker.terminate();
+			return;
+		}
+
+		if (event.data && event.data.log) {
+			console.log(event.data.message, event.data.details || '');
+			return;
+		}
+
+		drillGenerationWorker = null;
+		window.drillGenerationWorker = null;
+		worker.terminate();
+
+		if (!event.data || !event.data.ok) {
+			removePendingToolpaths(pendingToolpaths);
+			notify((event.data && event.data.error) || 'Unable to generate drill paths', 'error');
+			return;
+		}
+
+		const result = event.data.result || { toolpaths: [], createdCount: 0 };
+		for (let i = 0; i < result.toolpaths.length && i < pendingToolpaths.length; i++) {
+			const generated = result.toolpaths[i];
+			const pendingToolpath = pendingToolpaths[i];
+			pendingToolpath.paths = generated.paths;
+			pendingToolpath.operation = generated.operation;
+			pendingToolpath.name = generated.name;
+			pendingToolpath.svgId = generated.svgId;
+			pendingToolpath.svgIds = generated.svgIds;
+			pendingToolpath.pending = false;
+			delete pendingToolpath.pendingKey;
+		}
+		for (let i = result.toolpaths.length; i < pendingToolpaths.length; i++) {
+			const index = toolpaths.indexOf(pendingToolpaths[i]);
+			if (index >= 0) toolpaths.splice(index, 1);
+		}
+		if (typeof refreshToolPathsDisplay === 'function') refreshToolPathsDisplay();
+		redraw();
+		if (typeof setActiveToolpaths === 'function' && result.toolpaths.length > 0) {
+			setActiveToolpaths(pendingToolpaths.slice(0, result.toolpaths.length));
+		}
+		if (result.createdCount === 0) {
+			notify('Unable to generate drill paths');
+		}
+	};
+
+	worker.onerror = function(error) {
+		if (drillGenerationWorker === worker) {
+			drillGenerationWorker = null;
+			window.drillGenerationWorker = null;
+		}
+		worker.terminate();
+		removePendingToolpaths(pendingToolpaths);
+		notify((error && error.message) || 'Drill generation failed', 'error');
+	};
+
+	worker.postMessage({
+		requests: requests,
+		toolRadius: toolRadiusValue,
+		depth: depth,
+		stepDown: stepDown
+	});
+	return true;
+}
+
 function makeHole(pt) {
 	function core() {
-		var radius = toolRadius();
-		var paths = [{ tpath: [{ x: pt.x, y: pt.y, r: radius }], path: [{ x: pt.x, y: pt.y, r: radius }] }];
-		pushAndActivateToolpath(paths, 'Drill', 'Drill', null);
+		return startDrillGeneration(collectDrillGenerationRequests({ point: pt }));
 	}
 	if (!withDrillProperties(core)) core();
 }
 
 function makeHelicalHole(circle, svgId) {
 	function core() {
-		var radius_tool = toolRadius();
-		if (circle.radius <= radius_tool) {
-			var circleDiaMM = (circle.radius * 2 / viewScale).toFixed(2);
-			var toolDiaMM = (radius_tool * 2 / viewScale).toFixed(2);
-			notify('Circle diameter (' + circleDiaMM + 'mm) is smaller than tool diameter (' + toolDiaMM + 'mm). Use a smaller end mill.', 'error');
-			return;
-		}
-		var helixPath = generateHelixPath(circle, window.currentTool.depth, window.currentTool.step, radius_tool);
-		var paths = [{ tpath: helixPath, path: helixPath }];
-		pushAndActivateToolpath(paths, 'Helical Drill', 'HelicalDrill', svgId);
+		return startDrillGeneration([{
+			kind: 'helical',
+			name: 'Helical Drill',
+			operation: 'HelicalDrill',
+			svgId: svgId || null,
+			svgIds: svgId ? [svgId] : [],
+			circle: circle
+		}]);
 	}
 	if (!withDrillProperties(core)) core();
 }

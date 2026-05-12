@@ -21,8 +21,9 @@ var undoList = [];
 var redoList = [];
 var MAX_UNDO = 50;
 var vcarveGenerationWorker = null;
+var drillGenerationWorker = null;
 
-function makePendingToolpath(svgIds, name, operation, pendingKey) {
+function makePendingToolpath(svgIds, name, operation, pendingKey, overrides) {
 	const pendingToolpath = {
 		id: 'T' + toolpathId,
 		paths: [],
@@ -38,6 +39,9 @@ function makePendingToolpath(svgIds, name, operation, pendingKey) {
 	};
 	if (window.currentToolpathProperties) {
 		pendingToolpath.toolpathProperties = { ...window.currentToolpathProperties };
+	}
+	if (overrides && typeof overrides === 'object') {
+		Object.assign(pendingToolpath, overrides);
 	}
 	toolpaths.push(pendingToolpath);
 	toolpathId++;
@@ -807,17 +811,14 @@ function doPattern() {
 }
 
 function doDrill() {
-	// If circular paths are preselected, create helical drill toolpaths directly
 	var selected = selectMgr.selectedPaths();
 	if (selected.length > 0) {
 		var drillOp = cncController.operationManager.getOperation('Drill');
 		if (drillOp) {
-			for (var i = 0; i < selected.length; i++) {
-				var circleInfo = drillOp.detectCircle(selected[i]);
-				if (circleInfo) {
-					makeHelicalHole(circleInfo, selected[i].id);
-				}
-			}
+			startDrillGeneration(collectDrillGenerationRequests({
+				selected: selected,
+				drillOp: drillOp
+			}));
 		}
 		selectMgr.unselectAll();
 	}
