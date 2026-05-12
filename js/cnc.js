@@ -2185,8 +2185,8 @@ function doVcarveCenter() {
 		notify('Select a path to VCarve');
 		return;
 	}
-	setMode("VCarve In");
-	computeWithMedialAxis(false, 'VCarve In');
+	setMode("VCarve Center");
+	computeWithMedialAxis(false, 'VCarve Center');
 }
 
 function doVcarveIn() {

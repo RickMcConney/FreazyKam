@@ -4090,8 +4090,8 @@ function getIconForPath(sp) {
 
 function getPathIcon(name) {
     if (name.includes('Circle')) return 'circle';
-    if (name.includes('Ellipse')) return 'egg';
-    if (name.includes('RoundRect')) return 'square';
+    if (name.includes('Ellipse')) return 'ellipse';
+    if (name.includes('RoundRect')) return 'squircle';
     if (name.includes('Rect')) return 'rectangle-horizontal';
     if (name.includes('Line')) return 'minus';
     if (name.includes('Text')) return 'type-outline';
@@ -4168,11 +4168,12 @@ function getOperationIcon(operation) {
     switch (operation) {
         case 'Outside': return 'circle';
         case 'Inside': return 'circle-dot';
-        case 'Center': return 'circle-off';
+        case 'Center': return 'circle-dashed';
         case 'Pocket': return 'target';
-        case 'VCarve In': return 'star';
+        case 'VCarve In': return 'astroid';
         case 'VCarve Out': return 'star';
         case 'VCarve': return 'star';
+        case 'VCarve Center': return 'sparkle';
         case 'Drill': return 'circle-plus';
         case 'HelicalDrill': return 'circle-plus';
         case 'Inlay': return 'inlay';

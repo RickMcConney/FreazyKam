@@ -1,6 +1,6 @@
 class Workpiece extends Operation {
     constructor() {
-        super('Workpiece', 'box', 'Configure your workpiece dimensions and material properties');
+        super('Workpiece', 'cuboid', 'Configure your workpiece dimensions and material properties');
 
         this.fields = {
             workpieceWidth:     { key: 'workpieceWidth',     label: 'Width (X)',      type: 'dimension', default: 300  },
