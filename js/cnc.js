@@ -22,6 +22,7 @@ var redoList = [];
 var MAX_UNDO = 50;
 var vcarveGenerationWorker = null;
 var drillGenerationWorker = null;
+var profileGenerationWorker = null;
 
 function makePendingToolpath(svgIds, name, operation, pendingKey, overrides) {
 	const pendingToolpath = {
@@ -657,106 +658,203 @@ function doSelect(id) {
 	redraw();
 }
 
+function buildProfilePendingKey(config, svgpath) {
+	return [
+		'Profile',
+		config.mode,
+		svgpath.id,
+		config.radius,
+		config.numLoops,
+		config.overCutWorld,
+		config.direction,
+		config.tolerance
+	].join('|');
+}
+
 function doProfile() {
-	if (currentTool.inside == "inside")
-		doProfileCut(false);
-	else if (currentTool.inside == "outside")
-		doProfileCut(true);
-	else
-		doCenter();
+	if (selectMgr.noSelection()) {
+		notify(currentTool.inside == "center" ? 'Select a path to center cut' : 'Select a path to Profile');
+		return;
+	}
+
+	if (typeof Worker === 'undefined') {
+		notify('Web Workers are not supported in this browser', 'error');
+		return;
+	}
+
+	var radius = vbitRadius(currentTool) * viewScale;
+	var numLoops = Math.max(1, Math.floor(currentTool.numLoops || 1));
+	var overCutWorld = (currentTool.overCut || 0) * viewScale;
+	var tolerance = getOption("tolerance") * viewScale;
+	let selectedPaths = selectMgr.selectedPaths();
+	let config;
+
+	if (currentTool.inside == "inside") {
+		config = {
+			mode: 'inside',
+			name: 'Inside',
+			radius: radius,
+			numLoops: numLoops,
+			overCutWorld: overCutWorld,
+			tolerance: tolerance,
+			direction: currentTool.direction == "climb" ? 'reverse' : 'forward'
+		};
+	} else if (currentTool.inside == "outside") {
+		config = {
+			mode: 'outside',
+			name: 'Outside',
+			radius: radius,
+			numLoops: numLoops,
+			overCutWorld: overCutWorld,
+			tolerance: tolerance,
+			direction: currentTool.direction != "climb" ? 'reverse' : 'forward'
+		};
+	} else {
+		config = {
+			mode: 'center',
+			name: 'Center',
+			radius: radius,
+			numLoops: numLoops,
+			overCutWorld: overCutWorld,
+			tolerance: tolerance,
+			direction: currentTool.direction != "climb" ? 'reverse' : 'forward'
+		};
+	}
+
+	setMode(config.name);
+
+	const pendingRequests = selectedPaths.map(function(svgpath) {
+		return {
+			svgpath: svgpath,
+			pendingKey: buildProfilePendingKey(config, svgpath),
+			payload: {
+				id: svgpath.id,
+				path: svgpath.path
+			}
+		};
+	});
+	const duplicateRequest = pendingRequests.find(function(entry) {
+		return toolpaths.some(function(tp) {
+			return tp.pending === true && tp.pendingKey === entry.pendingKey;
+		});
+	});
+	if (duplicateRequest) {
+		notify('A profile generation is already pending for this selection', 'info');
+		return;
+	}
+
+	const updateTargets = Array.isArray(window.toolpathUpdateTargets)
+		? window.toolpathUpdateTargets.slice()
+		: [];
+	const pendingToolpaths = pendingRequests.map(function(entry, index) {
+		const updateTarget = updateTargets[index] || null;
+		if (updateTarget) {
+			updateTarget.paths = [];
+			updateTarget.visible = true;
+			updateTarget.operation = 'Profile';
+			updateTarget.name = config.name;
+			updateTarget.tool = { ...currentTool };
+			updateTarget.svgId = entry.svgpath.id;
+			updateTarget.svgIds = [entry.svgpath.id];
+			updateTarget.pending = true;
+			updateTarget.pendingKey = entry.pendingKey;
+			if (window.currentToolpathProperties) {
+				updateTarget.toolpathProperties = { ...window.currentToolpathProperties };
+				if (window.currentToolpathProperties.toolpathName) {
+					updateTarget.label = window.currentToolpathProperties.toolpathName;
+				}
+			}
+			return updateTarget;
+		}
+		return makePendingToolpath([entry.svgpath.id], config.name, 'Profile', entry.pendingKey, {
+			svgId: entry.svgpath.id,
+			label: (window.currentToolpathProperties && window.currentToolpathProperties.toolpathName) || (config.name + ' ' + toolpathId)
+		});
+	});
+	if (typeof refreshToolPathsDisplay === 'function') refreshToolPathsDisplay();
+	redraw();
+
+	const worker = new Worker('js/workers/ProfileWorker.js');
+	window.profileGenerationWorker = worker;
+	console.log('[ProfileWorker] Starting profile generation', {
+		mode: config.mode,
+		selectionCount: pendingRequests.length,
+		radius: config.radius,
+		numLoops: config.numLoops,
+		overCutWorld: config.overCutWorld,
+		direction: config.direction,
+		tolerance: config.tolerance
+	});
+	notify('Generating profile paths…', 'info');
+
+	worker.onmessage = function(event) {
+		if (window.profileGenerationWorker !== worker) {
+			worker.terminate();
+			return;
+		}
+
+		if (event.data && event.data.log) {
+			console.log('[ProfileWorker]', event.data.message, event.data.details || '');
+			return;
+		}
+
+		window.profileGenerationWorker = null;
+		worker.terminate();
+
+		if (!event.data || !event.data.ok) {
+			removePendingToolpaths(pendingToolpaths);
+			notify((event.data && event.data.error) || 'Unable to generate profile paths', 'error');
+			return;
+		}
+
+		const result = event.data.result || { toolpaths: [], createdCount: 0 };
+		for (let i = 0; i < result.toolpaths.length && i < pendingToolpaths.length; i++) {
+			const generated = result.toolpaths[i];
+			const pendingToolpath = pendingToolpaths[i];
+			pendingToolpath.paths = generated.paths;
+			pendingToolpath.operation = generated.operation;
+			pendingToolpath.name = generated.name;
+			pendingToolpath.svgId = generated.svgId;
+			pendingToolpath.svgIds = generated.svgIds;
+			pendingToolpath.pending = false;
+			delete pendingToolpath.pendingKey;
+		}
+		for (let i = result.toolpaths.length; i < pendingToolpaths.length; i++) {
+			const index = toolpaths.indexOf(pendingToolpaths[i]);
+			if (index >= 0) toolpaths.splice(index, 1);
+		}
+		if (typeof refreshToolPathsDisplay === 'function') refreshToolPathsDisplay();
+		redraw();
+
+		if (result.createdCount === 0) {
+			notify('Unable to generate profile paths');
+		}
+	};
+
+	worker.onerror = function(error) {
+		if (window.profileGenerationWorker === worker) {
+			window.profileGenerationWorker = null;
+		}
+		worker.terminate();
+		removePendingToolpaths(pendingToolpaths);
+		notify((error && error.message) || 'Profile generation failed', 'error');
+	};
+
+	worker.postMessage({
+		config: config,
+		selection: pendingRequests.map(function(entry) {
+			return entry.payload;
+		}),
+		tool: { ...currentTool }
+	});
 }
 
 function doProfileCut(outside) {
-	if (selectMgr.noSelection()) {
-		notify('Select a path to Profile');
-		return;
-	}
-
-	var name = outside ? 'Outside' : 'Inside';
-	setMode(name);
-	var radius = vbitRadius(currentTool) * viewScale;
-	var numLoops = Math.max(1, Math.floor(currentTool.numLoops || 1));
-	var overCutWorld = (currentTool.overCut || 0) * viewScale;
-	// For outside: climb = normal direction, conventional = reversed
-	// For inside: climb = reversed, conventional = normal direction
-	var reverseDirection = outside
-		? (currentTool.direction != "climb")
-		: (currentTool.direction == "climb");
-
-	let selectedPaths = selectMgr.selectedPaths();
-	for (var i = 0; i < selectedPaths.length; i++) {
-		var paths = [];
-		var svgpath = selectedPaths[i];
-		var srcPath = svgpath.path;
-
-		for (var loop = numLoops - 1; loop >= 0; loop--) {
-			var offsetAmount = radius + overCutWorld + loop * radius;
-			if (offsetAmount <= 0) continue;
-
-			var offsetPaths = offsetPath(srcPath, offsetAmount, outside);
-
-			for (var p = 0; p < offsetPaths.length; p++) {
-				var opath = offsetPaths[p];
-				var subpath = subdividePath(opath, 2);
-				var circles = checkPath(subpath, radius * 0.9);
-				var tpath = clipper.JS.Lighten(circles, getOption("tolerance") * viewScale);
-
-				if (reverseDirection) {
-					paths.push({ path: reversePath(circles), tpath: reversePath(tpath) });
-				} else {
-					paths.push({ path: circles, tpath: tpath });
-				}
-			}
-		}
-		pushToolPath(paths, name, 'Profile', svgpath.id);
-	}
+	doProfile();
 }
 
 function doCenter() {
-	if (selectMgr.noSelection()) {
-		notify('Select a path to center cut');
-		return;
-	}
-
-	setMode("Center");
-	var radius = vbitRadius(currentTool) * viewScale;
-	var numLoops = Math.max(1, Math.floor(currentTool.numLoops || 1));
-	var overCutWorld = (currentTool.overCut || 0) * viewScale;
-	var name = 'Center';
-
-	let selectedPaths = selectMgr.selectedPaths();
-	for (var i = 0; i < selectedPaths.length; i++) {
-		var paths = [];
-		var svgpath = selectedPaths[i];
-		var srcPath = svgpath.path;
-
-		// Distribute loops evenly around the center path, shifted by overCut
-		// k=0 is the most inward, k=numLoops-1 is the most outward
-		for (var k = 0; k < numLoops; k++) {
-			var centerOffset = overCutWorld + (k - (numLoops - 1) / 2.0) * radius;
-
-			var loopPath, circles, tpath;
-
-			if (Math.abs(centerOffset) < 0.001) {
-				loopPath = srcPath;
-			} else {
-				var outward = centerOffset > 0;
-				var offsetResult = offsetPath(srcPath, Math.abs(centerOffset), outward);
-				loopPath = offsetResult.length > 0 ? offsetResult[0] : srcPath;
-			}
-
-			circles = addCircles(loopPath, radius);
-			tpath = loopPath;
-
-			if (currentTool.direction != "climb") {
-				paths.push({ path: reversePath(circles), tpath: reversePath(tpath) });
-			} else {
-				paths.push({ path: circles, tpath: tpath });
-			}
-		}
-
-		pushToolPath(paths, name, 'Profile', svgpath.id);
-	}
+	doProfile();
 }
 
 function doOrigin() {
@@ -2187,10 +2285,33 @@ function doPocket() {
 		return;
 	}
 
+	const updateTargets = Array.isArray(window.toolpathUpdateTargets)
+		? window.toolpathUpdateTargets.slice()
+		: [];
 	const pendingToolpaths = [];
 	for (let i = 0; i < selectionGroups.length; i++) {
 		const group = selectionGroups[i];
 		const svgIds = group.paths.map(function(path) { return path.id; });
+		const updateTarget = updateTargets[i] || null;
+		if (updateTarget) {
+			updateTarget.paths = [];
+			updateTarget.visible = true;
+			updateTarget.operation = 'Pocket';
+			updateTarget.name = name;
+			updateTarget.tool = { ...currentTool };
+			updateTarget.svgId = svgIds.length > 0 ? svgIds[0] : null;
+			updateTarget.svgIds = svgIds;
+			updateTarget.pending = true;
+			updateTarget.pendingKey = group.pendingKey;
+			if (window.currentToolpathProperties) {
+				updateTarget.toolpathProperties = { ...window.currentToolpathProperties };
+				if (window.currentToolpathProperties.toolpathName) {
+					updateTarget.label = window.currentToolpathProperties.toolpathName;
+				}
+			}
+			pendingToolpaths.push(updateTarget);
+			continue;
+		}
 		const pendingToolpath = {
 			id: 'T' + toolpathId,
 			paths: [],
@@ -2312,8 +2433,31 @@ function startVcarveGeneration(config) {
 		return;
 	}
 
+	const updateTargets = Array.isArray(window.toolpathUpdateTargets)
+		? window.toolpathUpdateTargets.slice()
+		: [];
 	const pendingToolpaths = [];
 	for (let i = 0; i < selected.length; i++) {
+		const updateTarget = updateTargets[i] || null;
+		if (updateTarget) {
+			updateTarget.paths = [];
+			updateTarget.visible = true;
+			updateTarget.operation = 'VCarve';
+			updateTarget.name = config.name;
+			updateTarget.tool = { ...currentTool };
+			updateTarget.svgId = selected[i].id;
+			updateTarget.svgIds = [selected[i].id];
+			updateTarget.pending = true;
+			updateTarget.pendingKey = pendingKey;
+			if (window.currentToolpathProperties) {
+				updateTarget.toolpathProperties = { ...window.currentToolpathProperties };
+				if (window.currentToolpathProperties.toolpathName) {
+					updateTarget.label = window.currentToolpathProperties.toolpathName;
+				}
+			}
+			pendingToolpaths.push(updateTarget);
+			continue;
+		}
 		pendingToolpaths.push(makePendingToolpath([selected[i].id], config.name, 'VCarve', pendingKey));
 	}
 	if (typeof refreshToolPathsDisplay === 'function') refreshToolPathsDisplay();
@@ -2386,6 +2530,15 @@ function startVcarveGeneration(config) {
 		selectedPaths: selected.map(function(path) {
 			return {
 				id: path.id,
+				bbox: path.bbox,
+				path: path.path
+			};
+		}),
+		svgpaths: svgpaths.map(function(path) {
+			return {
+				id: path.id,
+				visible: path.visible,
+				bbox: path.bbox,
 				path: path.path
 			};
 		}),

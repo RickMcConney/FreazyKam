@@ -1,3 +1,4 @@
+var nearbypaths = [];
 self.importScripts('../lib/clipperf.js', '../lib/jspoly.js', '../util.js', '../toolPath.js', '../vcarve.js');
 
 function workerLog(message, details) {
@@ -19,6 +20,15 @@ function clonePointWithRadius(point) {
 
 function clonePath(path) {
 	return path.map(clonePoint);
+}
+
+function cloneSvgPath(svgpath) {
+	return {
+		id: svgpath.id,
+		visible: svgpath.visible !== false,
+		bbox: svgpath.bbox ? { ...svgpath.bbox } : boundingBox(svgpath.path),
+		path: clonePath(svgpath.path)
+	};
 }
 
 function clonePathWithRadius(path) {
@@ -223,6 +233,25 @@ function generateVcarveToolpaths(payload) {
 		name: payload.name,
 		selectedCount: payload.selectedPaths.length
 	});
+
+	if (Array.isArray(payload.svgpaths) && payload.svgpaths.length > 0) {
+		svgpaths = payload.svgpaths.map(cloneSvgPath);
+		workerLog('svgpaths prepared', {
+			count: svgpaths.length
+		});
+	} else {
+		svgpaths = payload.selectedPaths.map(function(path) {
+			return cloneSvgPath({
+				id: path.id,
+				visible: true,
+				bbox: path.bbox,
+				path: path.path
+			});
+		});
+		workerLog('svgpaths fallback prepared', {
+			count: svgpaths.length
+		});
+	}
 
 	nearbypaths = payload.selectedPaths.map(function(path) {
 		return {
