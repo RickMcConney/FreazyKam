@@ -2115,6 +2115,11 @@ function doPocket() {
 		return;
 	}
 
+	if (typeof Worker === 'undefined') {
+		notify('Web Workers are not supported in this browser', 'error');
+		return;
+	}
+
 	var radius = toolRadius();
 	var stepover = 2 * radius * currentTool.stepover / 100;
 	var name = 'Pocket';
@@ -2122,51 +2127,133 @@ function doPocket() {
 	var strategy = window.currentToolpathProperties?.strategy || 'adaptive';
 	var selected = selectMgr.selectedPaths();
 	var direction = currentTool.direction || 'climb';
-	const selectionGroups = buildMachiningSelectionGroups(selected);
-	let createdCount = 0;
-
-	for (let g = 0; g < selectionGroups.length; g++) {
-		const group = selectionGroups[g];
-		let inputPaths = group.map(function(svgpath) {
-			return svgpath.path;
-		});
-		inputPaths = normalizeWindingOrder(inputPaths);
-		const selectedSvgIds = group.map(function(path) {
+	const selectionGroups = buildMachiningSelectionGroups(selected).map(function(group) {
+		const sourceIds = group.map(function(path) {
 			return path.id;
 		});
+		const pendingKey = 'Pocket|' + sourceIds.slice().sort().join(',');
+		return {
+			pendingKey: pendingKey,
+			paths: group.map(function(path) {
+				return {
+					id: path.id,
+					path: path.path
+				};
+			})
+		};
+	});
 
-		let depths = computeNestingDepths(inputPaths);
-
-		// Even-depth paths are pocket boundaries, odd-depth paths are islands.
-		// Each pocket boundary's islands are the odd-depth paths directly inside it
-		// (one nesting level deeper).
-		let pocketGroups = [];
-		for (let i = 0; i < inputPaths.length; i++) {
-			if (depths[i] % 2 !== 0) continue;
-			let outerPath = inputPaths[i];
-			let directIslands = [];
-			for (let j = 0; j < inputPaths.length; j++) {
-				if (i === j) continue;
-				if (depths[j] === depths[i] + 1 && pathIn(outerPath, inputPaths[j])) {
-					directIslands.push(inputPaths[j]);
-				}
-			}
-			let paths = generatePocketPaths(outerPath, directIslands, radius, stepover, angle, direction, 0, strategy);
-			if (paths.length > 0) pocketGroups.push(paths);
-		}
-
-		if (pocketGroups.length === 0) continue;
-
-		// Order shape groups geographically, keeping each shape's paths together
-		let allPaths = optimizeGroupOrder(pocketGroups);
-		pushToolPath(allPaths, name, 'Pocket', null, selectedSvgIds);
-		createdCount++;
-	}
-
-	if (createdCount === 0) {
-		notify('Unable to generate pocket paths');
+	const pendingGroups = selectionGroups.filter(function(group) {
+		return toolpaths.some(function(tp) {
+			return tp.pending === true && tp.pendingKey === group.pendingKey;
+		});
+	});
+	if (pendingGroups.length > 0) {
+		notify('A pocket generation is already pending for this selection', 'info');
 		return;
 	}
+
+	const pendingToolpaths = [];
+	for (let i = 0; i < selectionGroups.length; i++) {
+		const group = selectionGroups[i];
+		const svgIds = group.paths.map(function(path) { return path.id; });
+		const pendingToolpath = {
+			id: 'T' + toolpathId,
+			paths: [],
+			visible: true,
+			operation: 'Pocket',
+			name: name,
+			tool: { ...currentTool },
+			svgId: svgIds.length > 0 ? svgIds[0] : null,
+			svgIds: svgIds,
+			pending: true,
+			pendingKey: group.pendingKey,
+			label: (window.currentToolpathProperties && window.currentToolpathProperties.toolpathName) || ('Pocket ' + toolpathId)
+		};
+		if (window.currentToolpathProperties) {
+			pendingToolpath.toolpathProperties = { ...window.currentToolpathProperties };
+		}
+		toolpaths.push(pendingToolpath);
+		toolpathId++;
+		pendingToolpaths.push(pendingToolpath);
+	}
+	if (typeof refreshToolPathsDisplay === 'function') refreshToolPathsDisplay();
+	redraw();
+
+	const worker = new Worker('js/workers/pocketWorker.js');
+	window.pocketGenerationWorker = worker;
+	notify('Generating pocket paths…', 'info');
+
+	function clearPendingToolpaths() {
+		for (let i = toolpaths.length - 1; i >= 0; i--) {
+			if (pendingToolpaths.includes(toolpaths[i])) {
+				toolpaths.splice(i, 1);
+			}
+		}
+		if (typeof refreshToolPathsDisplay === 'function') refreshToolPathsDisplay();
+		redraw();
+	}
+
+	worker.onmessage = function(event) {
+		if (window.pocketGenerationWorker !== worker) {
+			worker.terminate();
+			return;
+		}
+
+		if (event.data && event.data.log) {
+			return;
+		}
+
+		window.pocketGenerationWorker = null;
+		worker.terminate();
+
+		if (!event.data || !event.data.ok) {
+			clearPendingToolpaths();
+			notify((event.data && event.data.error) || 'Unable to generate pocket paths', 'error');
+			return;
+		}
+
+		const result = event.data.result;
+		for (let i = 0; i < result.toolpaths.length && i < pendingToolpaths.length; i++) {
+			const generated = result.toolpaths[i];
+			const pendingToolpath = pendingToolpaths[i];
+			pendingToolpath.paths = generated.paths;
+			pendingToolpath.operation = generated.operation;
+			pendingToolpath.svgId = generated.svgId;
+			pendingToolpath.svgIds = generated.svgIds;
+			pendingToolpath.pending = false;
+			delete pendingToolpath.pendingKey;
+		}
+		for (let i = result.toolpaths.length; i < pendingToolpaths.length; i++) {
+			const index = toolpaths.indexOf(pendingToolpaths[i]);
+			if (index >= 0) toolpaths.splice(index, 1);
+		}
+		if (typeof refreshToolPathsDisplay === 'function') refreshToolPathsDisplay();
+		redraw();
+
+		if (result.createdCount === 0) {
+			notify('Unable to generate pocket paths');
+			return;
+		}
+	};
+
+	worker.onerror = function(error) {
+		if (window.pocketGenerationWorker === worker) {
+			window.pocketGenerationWorker = null;
+		}
+		worker.terminate();
+		clearPendingToolpaths();
+		notify((error && error.message) || 'Pocket generation failed', 'error');
+	};
+
+	worker.postMessage({
+		selectionGroups: selectionGroups,
+		radius: radius,
+		stepover: stepover,
+		angle: angle,
+		direction: direction,
+		strategy: strategy
+	});
 }
 
 function doVcarve() {

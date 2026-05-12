@@ -1136,7 +1136,8 @@ function getToolpathSourceIds(toolpath) {
 
 function getToolpathDisplayName(toolpath) {
     if (!toolpath) return '';
-    return toolpath.label || `${toolpath.name} ${toolpath.id.replace('T', '')}`;
+    const baseName = toolpath.label || `${toolpath.name} ${toolpath.id.replace('T', '')}`;
+    return toolpath.pending ? `${baseName} (pending)` : baseName;
 }
 
 function getToolpathDepthLabel(toolpath) {
@@ -1168,7 +1169,8 @@ function renderSidebarLeafItem(config) {
         visible,
         itemClass = '',
         dataset = {},
-        secondaryMeta = []
+        secondaryMeta = [],
+        pending = false
     } = config;
 
     const item = document.createElement('div');
@@ -1190,7 +1192,7 @@ function renderSidebarLeafItem(config) {
     item.title = title;
     item.setAttribute('aria-label', title);
     item.innerHTML = `
-        <i data-lucide="${icon}"></i>
+        ${pending ? '<span class="sidebar-item-spinner" aria-hidden="true"></span>' : `<i data-lucide="${icon}"></i>`}
         <div class="sidebar-item-body">
             <div class="sidebar-item-title-row">
                 <span class="sidebar-item-title">${title}</span>
@@ -1274,6 +1276,7 @@ function renderObjectSidebarGroup(config) {
             meta: toolpath.operation === 'HelicalDrill' ? 'Drill' : toolpath.operation,
             secondaryMeta,
             visible: toolpath.visible,
+            pending: toolpath.pending === true,
             itemClass: 'sidebar-toolpath-item ms-4',
             dataset: {
                 linkedObjectId: path.id,
@@ -3855,6 +3858,7 @@ function refreshToolPathsDisplay() {
                     meta: toolpath.operation === 'HelicalDrill' ? 'Drill' : toolpath.operation,
                     secondaryMeta: [getToolpathDepthLabel(toolpath)].filter(Boolean),
                     visible: toolpath.visible,
+                    pending: toolpath.pending === true,
                     itemClass: 'sidebar-toolpath-item ms-4'
                 });
                 section.appendChild(item);
@@ -3921,6 +3925,7 @@ function refreshToolPathsDisplay() {
                 meta: toolpath.operation === 'HelicalDrill' ? 'Drill' : toolpath.operation,
                 secondaryMeta: [getToolpathDepthLabel(toolpath)].filter(Boolean),
                 visible: toolpath.visible,
+                pending: toolpath.pending === true,
                 itemClass: 'sidebar-toolpath-item ms-4'
             }));
         });
