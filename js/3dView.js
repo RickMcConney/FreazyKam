@@ -1,5 +1,6 @@
 import * as THREE from './lib/three.module.js';
 import { VoxelGrid } from './voxels/VoxelGrid.js';
+import { QuadtreeVoxelGrid } from './voxels/QuadtreeVoxelGrid.js';
 import { VoxelMaterialRemover } from './voxels/VoxelMaterialRemover.js';
 
 
@@ -119,7 +120,6 @@ const CONFIG = {
   TOOL_LENGTH: 40,  // Tool visualization length
 
   // Performance
-  VOXEL_REMOVAL_RATE: 3,  // Only remove voxels every N frames
   PROFILE_FRAME_INTERVAL: 300  // Log profiling every N frames
 };
 
@@ -502,14 +502,12 @@ function createToolVisualization(toolDiameter) {
     color: 0x4a9eda,  // Blue matching SVG tool icons
     transparent: true,
     opacity: 0.85,
-    side: THREE.DoubleSide
   });
 
   const shankMaterial = new THREE.MeshPhongMaterial({
     color: 0x888888,  // Gray matching SVG tool icons
     transparent: true,
     opacity: 0.85,
-    side: THREE.DoubleSide
   });
 
   const tipMesh = new THREE.Mesh(new THREE.BufferGeometry(), tipMaterial);
@@ -1081,6 +1079,13 @@ function animate() {
   if (isPlaying) {
     toolpathAnimation.update();
 
+    // Camera follows tool when checkbox is checked
+    const followToolCheckbox = document.getElementById('3d-follow-tool');
+    if (followToolCheckbox && followToolCheckbox.checked && toolGroup && orbitControls) {
+      orbitControls.target.copy(toolGroup.position);
+      orbitControls.updateCamera();
+    }
+
     // Update 3D progress slider in overlay (now line-based, not percentage)
     const progressSlider = document.getElementById('3d-simulation-progress');
     if (progressSlider) {
@@ -1105,6 +1110,7 @@ function animate() {
     renderThreeScene();
     const renderTime = performance.now() - renderStart;
 
+    /*
     // Track timing stats
     if (!window.timingStats) {
       window.timingStats = { updateTotal: 0, renderTotal: 0, count: 0 };
@@ -1112,6 +1118,7 @@ function animate() {
     window.timingStats.updateTotal += updateTime;
     window.timingStats.renderTotal += renderTime;
     window.timingStats.count++;
+    */
 
     // Report FPS every 300 frames using wall-clock timing (includes all overhead)
     /*
@@ -1578,7 +1585,6 @@ class ToolpathAnimation {
     this.toolpathLines = [];  // Store references to line meshes for cleanup
     this.movementTiming = [];  // Array of movement timings with G-code line numbers
     this.lastSubtractionSegmentIndex = -1;  // Track last segment where we performed subtraction
-    this.subtractionStepDistance = 2;  // Subtract every N mm of movement (reduced for smoother cuts)
     this.toolCommentsInOrder = [];  // Array of tool comments in chronological order for tool switching
 
     // G-code text for line iteration
@@ -1607,8 +1613,6 @@ class ToolpathAnimation {
     this.voxelMaterialRemover = new VoxelMaterialRemover();
     this.voxelSize = CONFIG.DEFAULT_VOXEL_SIZE;  // Default voxel size in X/Y tuned for interactive performance
     this.enableVoxelRemoval = true;  // Toggle for voxel removal feature
-    this.voxelRemovalRate = CONFIG.VOXEL_REMOVAL_RATE;  // Only remove voxels every N frames to reduce per-frame cost
-    this.frameCount = 0;  // Frame counter for throttling voxel removal
 
     // PHASE 2.1: Track last voxel config to avoid unnecessary recreation
     this.lastVoxelConfig = null;
@@ -1687,6 +1691,11 @@ class ToolpathAnimation {
         return;
       }
 
+      // Save original voxel size before the auto-scaling loop below modifies it.
+      // The quadtree always uses the original fine resolution — it only places fine
+      // cells where the tool cuts, so it doesn't need the uniform-grid scaling.
+      const originalVoxelSize = this.voxelSize;
+
       // PHASE 2.1: Check if dimensions have actually changed before recreating
       const currentConfig = {
         width,
@@ -1758,12 +1767,15 @@ class ToolpathAnimation {
         let clippedWidth = clippedMaxX - clippedMinX;
         let clippedLength = clippedMaxY - clippedMinY;
         this.voxelSize = CONFIG.DEFAULT_VOXEL_SIZE;
-        let numberOfVoxels = clippedWidth * clippedLength / (this.voxelSize * this.voxelSize);
 
-    
-        while (numberOfVoxels > CONFIG.MAX_VOXELS) {
-            this.voxelSize += CONFIG.VOXEL_SIZE_INCREMENT;
-            numberOfVoxels = clippedWidth * clippedLength / (this.voxelSize * this.voxelSize);
+        // Toolpath is entirely outside the (resized) workpiece — skip bounds-based sizing
+        if (clippedWidth > 0 && clippedLength > 0) {
+        let numberOfVoxels = clippedWidth * clippedLength / (this.voxelSize * this.voxelSize);
+      
+          while (numberOfVoxels > CONFIG.MAX_VOXELS) {
+              this.voxelSize += CONFIG.VOXEL_SIZE_INCREMENT;
+              numberOfVoxels = clippedWidth * clippedLength / (this.voxelSize * this.voxelSize);
+          }
         }
 
         // Round clipped bounds UP to clean voxel boundaries to ensure all in-bounds toolpath is captured
@@ -1785,16 +1797,34 @@ class ToolpathAnimation {
       }
 
 
-      // Create new voxel grid (2D grid with height-based voxels)
-      this.voxelGrid = new VoxelGrid(
-        gridWidth,
-        gridLength,
-        gridThickness,
-        this.voxelSize,
-        gridOrigin,
-        woodColor
+      // Build adaptive quadtree voxel grid.
+      // Coarse 8mm cells fill uncut areas; fine cells (≈ originalVoxelSize) are placed
+      // only where the tool actually cuts, so we always use the original fine resolution
+      // rather than the auto-scaled value computed for the uniform grid above.
+      this.voxelSize = originalVoxelSize;  // restore before passing to quadtree
+      const qtGrid = new QuadtreeVoxelGrid(
+        gridWidth, gridLength, gridThickness,
+        originalVoxelSize, gridOrigin, woodColor
       );
 
+      // Annotate each movement with the active tool radius so buildFromMovements
+      // can sample each path segment at the correct density for that tool.
+      const defaultRadius = this.toolRadius || 1;
+      for (const move of this.movementTiming) {
+        const toolData = this.getToolForLine(move.gcodeLineNumber);
+        move.toolRadius = toolData?.diameter ? toolData.diameter / 2 : defaultRadius;
+      }
+
+      // maxToolRadius is still passed as fallback for any unannotated moves
+      let maxToolRadius = defaultRadius;
+      for (const tc of this.toolChangePoints) {
+        if (tc.toolInfo?.diameter) {
+          maxToolRadius = Math.max(maxToolRadius, tc.toolInfo.diameter / 2);
+        }
+      }
+
+      qtGrid.buildFromMovements(this.movementTiming, maxToolRadius);
+      this.voxelGrid = qtGrid;
 
       // Add voxel mesh to scene (single 2D height-based mesh)
       const voxelMesh = this.voxelGrid.getMesh();
@@ -2584,9 +2614,12 @@ class ToolpathAnimation {
   }
 
   _replayFromMovementIndexToIndex(startIndex, endIndex) {
-    // Replay material removal from one movement index to another
-    // Uses distance-based step size (half voxel size) so no voxels are missed
-    const stepDist = this.voxelGrid ? Math.max(this.voxelGrid.voxelSize, this.toolRadius * 0.25 || 0) : 0.5;
+    // Step at half the tool radius — adjacent circles overlap so no voxels are missed.
+    // Using voxelSize * 0.5 was far too fine: a 200mm move with 0.05mm steps = 4000
+    // quadtree queries, each traversing the full tree.
+    const stepDist = this.voxelGrid
+      ? Math.max(this.voxelGrid.voxelSize, this.toolRadius * 0.5)
+      : 1.0;
 
     for (let i = startIndex; i <= endIndex && i < this.movementTiming.length; i++) {
       const move = this.movementTiming[i];
@@ -2638,8 +2671,16 @@ class ToolpathAnimation {
     const baseTime = prevMovementAtStart ? prevMovementAtStart.cumulativeTime : 0;
     const targetCumulativeTime = baseTime + this.elapsedTime;
 
-    // Advance through all movements that should have completed by now
-    const stepDist = this.voxelGrid ? Math.max(this.voxelGrid.voxelSize, this.toolRadius * 0.25 || 0) : 0.5;
+    // Step at half the tool radius — adjacent circles overlap so no voxels are missed.
+    const stepDist = this.voxelGrid
+      ? Math.max(this.voxelGrid.voxelSize, this.toolRadius * 0.5)
+      : 1.0;
+
+    // Budget ~8ms for voxel removal per frame so the rAF handler stays under 16ms.
+    // When playback is fast and many moves complete in one frame we skip removal for
+    // moves beyond the budget — the animation position stays accurate regardless.
+    const REMOVAL_BUDGET_MS = 8;
+    const removalFrameStart = performance.now();
 
     while (this.currentMovementIndex < this.movementTiming.length) {
       const move = this.movementTiming[this.currentMovementIndex];
@@ -2650,7 +2691,8 @@ class ToolpathAnimation {
       }
 
       // This movement has completed - do voxel removal along its full path
-      if (move.isG1 && this.enableVoxelRemoval && this.voxelGrid && this.voxelMaterialRemover) {
+      if (move.isG1 && this.enableVoxelRemoval && this.voxelGrid && this.voxelMaterialRemover &&
+          (performance.now() - removalFrameStart) < REMOVAL_BUDGET_MS) {
         const prev = this.currentMovementIndex > 0 ? this.movementTiming[this.currentMovementIndex - 1] : null;
         const prevPos = prev ? { x: prev.x, y: prev.y, z: prev.z } : { x: 0, y: 0, z: 5 };
         try {
@@ -2841,7 +2883,7 @@ class OrbitControls {
     this.theta = 0;
 
     this.minDistance = 10;
-    this.maxDistance = 1000;
+    this.maxDistance = 3000;
     this.rotateSpeed = 0.005;
     this.zoomSpeed = 0.1;
 
