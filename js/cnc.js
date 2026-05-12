@@ -23,6 +23,7 @@ var MAX_UNDO = 50;
 var vcarveGenerationWorker = null;
 var drillGenerationWorker = null;
 var profileGenerationWorker = null;
+var inlayGenerationWorker = null;
 
 function makePendingToolpath(svgIds, name, operation, pendingKey, overrides) {
 	const pendingToolpath = {
@@ -2136,6 +2137,50 @@ function pushInlayToolpaths(pocketGroups, profileGroups, cutOutGroups, pocketing
 	window.currentTool = pocketingTool;
 }
 
+function buildInlayPendingKey(group, props, pocketingTool, finishingTool) {
+	const sortedIds = group.map(function(path) { return path.id; }).sort();
+	const inlayType = props?.inlayType || 'female';
+	const clearance = typeof props?.clearance === 'number' ? props.clearance : 0.1;
+	const cutOut = props?.cutOut ? 1 : 0;
+	const mirror = props?.mirror ? 1 : 0;
+	const angle = typeof props?.angle === 'number' ? props.angle : 0;
+	const toolSignature = [
+		pocketingTool?.id || pocketingTool?.name || 'pocket',
+		pocketingTool?.diameter,
+		pocketingTool?.depth,
+		pocketingTool?.step,
+		pocketingTool?.stepover,
+		pocketingTool?.direction,
+		finishingTool?.id || finishingTool?.name || 'finish',
+		finishingTool?.diameter,
+		finishingTool?.bit,
+		finishingTool?.angle
+	].join('|');
+	return 'Inlay|' + inlayType + '|' + sortedIds.join(',') + '|' + clearance + '|' + cutOut + '|' + mirror + '|' + angle + '|' + toolSignature;
+}
+
+function buildInlayPendingLabel(result, index, fallbackBaseLabel) {
+	if (result && result.label) return result.label;
+	return fallbackBaseLabel + (index > 0 ? ' #' + (index + 1) : '');
+}
+
+function syncPendingInlayToolpath(target, result, pendingKey, fallbackBaseLabel, index) {
+	target.paths = result.paths || [];
+	target.visible = true;
+	target.operation = result.operation || 'Inlay';
+	target.name = result.name || 'Inlay';
+	target.tool = result.tool ? { ...result.tool } : { ...currentTool };
+	target.svgId = result.svgId || (Array.isArray(result.svgIds) && result.svgIds.length > 0 ? result.svgIds[0] : null);
+	target.svgIds = Array.isArray(result.svgIds) ? result.svgIds.slice() : [];
+	target.pending = false;
+	delete target.pendingKey;
+	if (result.label) {
+		target.label = result.label;
+	} else if (target.pending === true || target.pendingKey === pendingKey) {
+		target.label = buildInlayPendingLabel(result, index, fallbackBaseLabel);
+	}
+}
+
 function doInlay() {
 	setMode("Inlay");
 	if (selectMgr.noSelection()) {
@@ -2144,100 +2189,200 @@ function doInlay() {
 	}
 
 	const props = window.currentToolpathProperties;
-	const inlayType = props?.inlayType || 'female';
-	const clearanceMM = props?.clearance || 0.1;
-	const clearance = clearanceMM * viewScale;
-	const cutOut = props?.cutOut || false;
-
-	// Get finishing tool
 	const finishingToolId = props?.finishingToolId;
 	const finishingTool = window.toolPathProperties.getToolById(finishingToolId);
 	if (!finishingTool) {
 		notify('Finishing tool not found', 'error');
 		return;
 	}
+	if (finishingTool.bit === 'VBit') {
+		notify('Inlay worker currently supports end mill finishing only', 'error');
+		return;
+	}
+	if (typeof Worker === 'undefined') {
+		notify('Web Workers are not supported in this browser', 'error');
+		return;
+	}
 
 	const pocketingTool = { ...window.currentTool };
-	const pocketRadius = pocketingTool.diameter / 2 * viewScale;
-	const finishRadius = finishingTool.diameter / 2 * viewScale;
-	const stepover = 2 * pocketRadius * pocketingTool.stepover / 100;
-	const angle = props?.angle || 0;
-	const direction = pocketingTool.direction || 'climb';
+	const selected = selectMgr.selectedPaths();
+	const selectionGroups = buildMachiningSelectionGroups(selected).map(function(group) {
+		const pendingKey = buildInlayPendingKey(group, props, pocketingTool, finishingTool);
+		return {
+			pendingKey: pendingKey,
+			paths: group.map(function(path) {
+				return {
+					id: path.id,
+					path: path.path
+				};
+			})
+		};
+	});
 
-	var selected = selectMgr.selectedPaths();
-	const selectionGroups = buildMachiningSelectionGroups(selected);
-	let generatedAny = false;
-
-	for (let g = 0; g < selectionGroups.length; g++) {
-		const group = selectionGroups[g];
-		let inputPaths = group.map(function(svgpath) {
-			return svgpath.path;
+	const pendingGroups = selectionGroups.filter(function(group) {
+		return toolpaths.some(function(tp) {
+			return tp.pending === true && tp.pendingKey === group.pendingKey;
 		});
-		const selectedSvgIds = group.map(function(path) {
-			return path.id;
+	});
+	if (pendingGroups.length > 0) {
+		notify('An inlay generation is already pending for this selection', 'info');
+		return;
+	}
+
+	const updateTargets = Array.isArray(window.toolpathUpdateTargets)
+		? window.toolpathUpdateTargets.slice()
+		: [];
+	const groupedUpdateTargets = new Map();
+	for (let i = 0; i < updateTargets.length; i++) {
+		const target = updateTargets[i];
+		const key = (Array.isArray(target?.svgIds) && target.svgIds.length > 0)
+			? target.svgIds.slice().sort().join(',')
+			: (target?.svgId ? [target.svgId].join(',') : '');
+		if (!key) continue;
+		if (!groupedUpdateTargets.has(key)) groupedUpdateTargets.set(key, []);
+		groupedUpdateTargets.get(key).push(target);
+	}
+	groupedUpdateTargets.forEach(function(targets) {
+		targets.sort(function(a, b) {
+			return (a.id || '').localeCompare(b.id || '');
 		});
-
-		// Mirror paths horizontally for male plug if mirror option is enabled
-		if (inlayType === 'male' && props?.mirror) {
-			var allBbox = boundingBox(inputPaths.flat());
-			var centerX = (allBbox.minx + allBbox.maxx) / 2;
-			inputPaths = inputPaths.map(function(path) {
-				return path.map(function(pt) {
-					return { x: 2 * centerX - pt.x, y: pt.y };
-				});
-			});
-		}
-
-		inputPaths = normalizeWindingOrder(inputPaths);
-
-		let depths = computeNestingDepths(inputPaths);
-		let allOuters = [];
-		let allIslands = [];
-		for (let i = 0; i < inputPaths.length; i++) {
-			if (depths[i] % 2 === 0) allOuters.push(inputPaths[i]);
-			else allIslands.push(inputPaths[i]);
-		}
-
-		if (allOuters.length === 0) {
-			continue;
-		}
-
-		generatedAny = true;
-
-		// V-bit finishing tool: use V-carve algorithm for sharp feature preservation
-		if (finishingTool.bit === 'VBit') {
-			doVbitInlay(inputPaths, depths, allOuters, allIslands, props, pocketingTool, finishingTool, selectedSvgIds);
-			continue;
-		}
-
-		let pocketGroups = [];
-		let profileGroups = [];
-		let cutOutGroups = [];
-		const typeName = inlayType === 'female' ? 'Socket' : 'Plug';
-
-		if (inlayType === 'female') {
-			for (let oi = 0; oi < allOuters.length; oi++) {
-				let outerPath = allOuters[oi];
-				let outerIdx = inputPaths.indexOf(outerPath);
-				let outerDepth = depths[outerIdx];
-				let islandPaths = [];
-				for (let j = 0; j < inputPaths.length; j++) {
-					if (depths[j] === outerDepth + 1 && pathIn(outerPath, inputPaths[j])) {
-						islandPaths.push(inputPaths[j]);
-					}
-				}
-				generateInlayFemalePaths(outerPath, islandPaths, pocketRadius, finishRadius, stepover, angle, direction, pocketGroups, profileGroups);
+	});
+	const groupStates = selectionGroups.map(function(group) {
+		const svgIds = group.paths.map(function(path) { return path.id; });
+		const svgIdsKey = svgIds.slice().sort().join(',');
+		const fallbackBaseLabel = (window.currentToolpathProperties && window.currentToolpathProperties.toolpathName)
+			|| ('Inlay ' + (props?.inlayType === 'male' ? 'Plug' : 'Socket'));
+		const pendingTargets = [];
+		const matchingUpdateTargets = groupedUpdateTargets.get(svgIdsKey) || [];
+		for (let i = 0; i < matchingUpdateTargets.length; i++) {
+			const updateTarget = matchingUpdateTargets[i];
+			updateTarget.paths = [];
+			updateTarget.visible = true;
+			updateTarget.operation = 'Inlay';
+			updateTarget.name = 'Inlay ' + (props?.inlayType === 'male' ? 'Plug' : 'Socket');
+			updateTarget.tool = { ...pocketingTool };
+			updateTarget.svgId = svgIds.length > 0 ? svgIds[0] : null;
+			updateTarget.svgIds = svgIds.slice();
+			updateTarget.pending = true;
+			updateTarget.pendingKey = group.pendingKey;
+			updateTarget.label = fallbackBaseLabel;
+			if (window.currentToolpathProperties) {
+				updateTarget.toolpathProperties = { ...window.currentToolpathProperties };
 			}
-		} else {
-			generateInlayMalePaths(inputPaths, depths, clearance, pocketingTool, pocketRadius, finishRadius, stepover, angle, direction, cutOut, pocketGroups, profileGroups, cutOutGroups);
+			pendingTargets.push(updateTarget);
+		}
+		if (pendingTargets.length === 0) {
+			pendingTargets.push(makePendingToolpath(svgIds.slice(), 'Inlay ' + (props?.inlayType === 'male' ? 'Plug' : 'Socket'), 'Inlay', group.pendingKey, {
+				svgId: svgIds.length > 0 ? svgIds[0] : null,
+				svgIds: svgIds.slice(),
+				label: fallbackBaseLabel
+			}));
+		}
+		return {
+			pendingKey: group.pendingKey,
+			svgIds: svgIds,
+			svgIdsKey: svgIdsKey,
+			fallbackBaseLabel: fallbackBaseLabel,
+			pendingTargets: pendingTargets
+		};
+	});
+	if (typeof refreshToolPathsDisplay === 'function') refreshToolPathsDisplay();
+	redraw();
+
+	const worker = new Worker('js/workers/InlayWorker.js');
+	inlayGenerationWorker = worker;
+	window.inlayGenerationWorker = worker;
+	console.log('InlayWorker main:start', {
+		groupCount: selectionGroups.length,
+		inlayType: props?.inlayType || 'female',
+		finishingToolBit: finishingTool.bit,
+		pendingKeys: groupStates.map(function(state) { return state.pendingKey; })
+	});
+
+	function clearPendingToolpaths() {
+		const allPendingTargets = groupStates.flatMap(function(state) { return state.pendingTargets; });
+		removePendingToolpaths(allPendingTargets);
+	}
+
+	worker.onmessage = function(event) {
+		if (inlayGenerationWorker !== worker) {
+			worker.terminate();
+			return;
 		}
 
-		pushInlayToolpaths(pocketGroups, profileGroups, cutOutGroups, pocketingTool, finishingTool, typeName, selectedSvgIds);
-	}
+		if (event.data && event.data.log) {
+			console.log(event.data.message, event.data.details || '');
+			return;
+		}
 
-	if (!generatedAny) {
-		notify('Unable to determine outer boundary for inlay');
-	}
+		inlayGenerationWorker = null;
+		window.inlayGenerationWorker = null;
+		worker.terminate();
+
+		if (!event.data || !event.data.ok) {
+			clearPendingToolpaths();
+			notify((event.data && event.data.error) || 'Unable to generate inlay paths', 'error');
+			return;
+		}
+
+		const result = event.data.result || { groups: [], createdCount: 0 };
+		for (let g = 0; g < groupStates.length; g++) {
+			const state = groupStates[g];
+			const generatedGroup = result.groups.find(function(entry) {
+				return Array.isArray(entry.svgIds)
+					&& entry.svgIds.length === state.svgIds.length
+					&& entry.svgIds.every(function(id, idx) { return id === state.svgIds[idx]; });
+			}) || null;
+			const generatedToolpaths = generatedGroup && Array.isArray(generatedGroup.toolpaths) ? generatedGroup.toolpaths : [];
+			for (let i = 0; i < generatedToolpaths.length; i++) {
+				const generated = generatedToolpaths[i];
+				let pendingTarget = state.pendingTargets[i] || null;
+				if (!pendingTarget) {
+					pendingTarget = makePendingToolpath(state.svgIds.slice(), generated.name || 'Inlay', generated.operation || 'Inlay', state.pendingKey, {
+						svgId: state.svgIds.length > 0 ? state.svgIds[0] : null,
+						svgIds: state.svgIds.slice(),
+						label: buildInlayPendingLabel(generated, i, state.fallbackBaseLabel)
+					});
+					state.pendingTargets.push(pendingTarget);
+				}
+				syncPendingInlayToolpath(pendingTarget, generated, state.pendingKey, state.fallbackBaseLabel, i);
+			}
+			for (let i = generatedToolpaths.length; i < state.pendingTargets.length; i++) {
+				const index = toolpaths.indexOf(state.pendingTargets[i]);
+				if (index >= 0) toolpaths.splice(index, 1);
+			}
+		}
+		if (typeof refreshToolPathsDisplay === 'function') refreshToolPathsDisplay();
+		redraw();
+		if (typeof setActiveToolpaths === 'function') {
+			const generatedTargets = groupStates.flatMap(function(state) {
+				return state.pendingTargets.filter(function(tp) { return tp.pending !== true; });
+			});
+			if (generatedTargets.length > 0) setActiveToolpaths(generatedTargets);
+		}
+		if (result.createdCount === 0) {
+			notify('Unable to determine outer boundary for inlay');
+		}
+	};
+
+	worker.onerror = function(error) {
+		if (inlayGenerationWorker === worker) {
+			inlayGenerationWorker = null;
+			window.inlayGenerationWorker = null;
+		}
+		worker.terminate();
+		clearPendingToolpaths();
+		notify((error && error.message) || 'Inlay generation failed', 'error');
+	};
+
+	worker.postMessage({
+		selectionGroups: selectionGroups,
+		props: props ? { ...props } : {},
+		viewScale: viewScale,
+		pocketingTool: { ...pocketingTool },
+		finishingTool: { ...finishingTool },
+		materialDepth: ((typeof getOption === 'function' ? getOption('workpieceThickness') : null) || pocketingTool.depth)
+	});
 }
 
 function doPocket() {
