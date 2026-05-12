@@ -1896,7 +1896,7 @@ function showToolPropertiesEditor(operationName) {
             }
         });
 
-        // Handle operation-specific buttons (e.g., Generate Tabs, Apply Smoothing)
+        // Handle operation-specific buttons (e.g., Generate Tabs)
         const buttons = form.querySelectorAll('button');
         buttons.forEach(button => {
             if (button.id === 'generateTabsBtn') {
@@ -1911,12 +1911,6 @@ function showToolPropertiesEditor(operationName) {
                 button.addEventListener('click', () => {
                     if (typeof operation.removeAllTabs === 'function') {
                         operation.removeAllTabs();
-                    }
-                });
-            } else if (button.id === 'applySmoothBtn') {
-                button.addEventListener('click', () => {
-                    if (typeof operation.applySmoothingToPath === 'function') {
-                        operation.applySmoothingToPath();
                     }
                 });
             }

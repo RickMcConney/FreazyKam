@@ -594,13 +594,6 @@ class PathEdit extends Select {
                 ${hasSelection ? `<br><span class="badge" style="background-color: ${hasSelectedHandles ? '#9333ea' : '#6c757d'};">${selectionMessage}</span>` : ''}
             </div>
 
-            <div class="mb-3">
-                <button type="button" class="btn btn-primary btn-sm w-100" id="applySmoothBtn" ${!hasSelection ? 'disabled' : ''}>
-                    <i data-lucide="sparkles"></i> Apply Smoothing
-                </button>
-                <div class="form-text">Click repeatedly for more smoothing (no new points added)</div>
-            </div>
-
             ${PropertiesManager.fieldHTML(this.fields.cornerStyle, this.lastCornerStyle)}
             ${PropertiesManager.fieldHTML(this.fields.radius, this.lastRadiusValue)}
 
