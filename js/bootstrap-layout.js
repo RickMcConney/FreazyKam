@@ -149,7 +149,7 @@ function getDefaultOptions() {
         { recid: 10, option: 'woodSpecies',         value: 'Pine',          desc: 'Wood Species',                                hidden: true  },
         { recid: 11, option: 'autoFeedRate',        value: false,           desc: 'Auto Calculate Feed Rates',                   hidden: false },
         { recid: 12, option: 'minFeedRate',         value: 100,             desc: 'Minimum Feed Rate (mm/min)',                  hidden: false },
-        { recid: 13, option: 'maxFeedRate',         value: 1000,            desc: 'Maximum Feed Rate (mm/min)',                  hidden: false },
+        { recid: 13, option: 'maxFeedRate',         value: 2000,            desc: 'Maximum Feed Rate (mm/min)',                  hidden: false },
         { recid: 14, option: 'originPosition',      value: 'middle-center', desc: 'Origin Position',                             hidden: true  },
         { recid: 15, option: 'gridSize',            value: 10,              desc: 'Grid Size (mm)',                              hidden: true  },
         { recid: 16, option: 'showWorkpiece',       value: true,            desc: 'Show Workpiece',                              hidden: true  },
@@ -3095,12 +3095,21 @@ function createToolRow(tool, index) {
 
     // Get display units
     const useInches = getOption('Inches');
+    const autoFeedRateEnabled = getOption('autoFeedRate');
+    const woodSpecies = getOption('woodSpecies');
 
     // Convert dimensional values for display (stored in mm, display with fractions in inch mode)
     const displayDiameter = formatDimension(tool.diameter, useInches, true);
 
     // Feed rates - convert mm/min to in/min if needed
-    const displayFeed = useInches ? Math.round(tool.feed / 25.4) : tool.feed;
+    const autoCalculatedFeed = autoFeedRateEnabled ? calculateFeedRate(tool, woodSpecies, 'Profile') : null;
+    const autoCalculatedFeedDisplay = autoCalculatedFeed === null
+        ? null
+        : (useInches ? Math.round(autoCalculatedFeed / 25.4) : autoCalculatedFeed);
+    const feedUnitLabel = useInches ? 'in/min' : 'mm/min';
+    const displayFeed = autoFeedRateEnabled
+        ? `Auto (${autoCalculatedFeedDisplay} ${feedUnitLabel})`
+        : (useInches ? Math.round(tool.feed / 25.4) : tool.feed);
     const displayZFeed = useInches ? Math.round(tool.zfeed / 25.4) : tool.zfeed;
 
     // Ranges
@@ -3110,6 +3119,9 @@ function createToolRow(tool, index) {
     const feedMax = useInches ? 40 : 1000;
     const feedMin = useInches ? 1 : 10;
     const feedStep = useInches ? 1 : 10;
+    const feedTitle = autoFeedRateEnabled && autoCalculatedFeed !== null
+        ? `Automatic (${useInches ? Math.round(autoCalculatedFeed / 25.4) : autoCalculatedFeed} ${useInches ? 'in/min' : 'mm/min'})`
+        : 'Manual XY feed rate';
 
     row.innerHTML = `
         <td>
@@ -3128,7 +3140,7 @@ function createToolRow(tool, index) {
         <td><input type="text" value="${displayDiameter}" data-field="diameter" data-unit-type="${useInches ? 'inches' : 'mm'}" class="form-control-plaintext" placeholder="${useInches ? '1/4' : '6'}"></td>
         <td><input type="number" value="${tool.flutes || 2}" data-field="flutes" min="1" max="6" step="1" data-bs-toggle="tooltip" title="Number of cutting edges"></td>
         <td><input type="number" value="${tool.rpm || 18000}" data-field="rpm" min="1000" max="30000" step="100" data-bs-toggle="tooltip" title="Spindle speed (RPM)"></td>
-        <td><input type="number" value="${displayFeed}" data-field="feed" min="${feedMin}" max="${feedMax}" step="${feedStep}" data-unit-type="${useInches ? 'inches' : 'mm'}"></td>
+        <td><input type="text" value="${displayFeed}" data-field="feed" ${autoFeedRateEnabled ? 'readonly' : ''} min="${feedMin}" max="${feedMax}" step="${feedStep}" data-unit-type="${useInches ? 'inches' : 'mm'}" title="${feedTitle}"></td>
         <td><input type="number" value="${displayZFeed}" data-field="zfeed" min="${feedMin}" max="${feedMax}" step="${feedStep}" data-unit-type="${useInches ? 'inches' : 'mm'}"></td>
         <td>
             <div class="tool-angle-actions">
