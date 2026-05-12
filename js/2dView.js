@@ -68,6 +68,78 @@ var minimapState = {
 	isDragging: false,
 	pointerId: null
 };
+var geometryCacheDirty = true;
+
+function markGeometryCacheDirty() {
+	geometryCacheDirty = true;
+}
+
+function buildScreenPolyline(path, isMultiSegment) {
+	if (!path || !path.length) {
+		return null;
+	}
+
+	var screenPoints = new Array(path.length);
+	for (var i = 0; i < path.length; i++) {
+		screenPoints[i] = {
+			x: path[i].x * zoomLevel + panX,
+			y: path[i].y * zoomLevel + panY
+		};
+	}
+
+	return {
+		points: screenPoints,
+		isMultiSegment: !!isMultiSegment
+	};
+}
+
+function updatePathScreenCache(path, force) {
+	if (!path || path.type === 'image' || !path.path || !path.path.length) {
+		return;
+	}
+
+	if (!force && !geometryCacheDirty && path._screenCacheZoom === zoomLevel && path._screenCachePanX === panX && path._screenCachePanY === panY) {
+		return;
+	}
+
+	path._screenCache = buildScreenPolyline(path.path, false);
+	path._screenCacheZoom = zoomLevel;
+	path._screenCachePanX = panX;
+	path._screenCachePanY = panY;
+}
+
+function updateToolpathScreenCache(pathEntry, force) {
+	if (!pathEntry || !pathEntry.tpath || !pathEntry.tpath.length) {
+		return;
+	}
+
+	if (!force && !geometryCacheDirty && pathEntry._screenCacheZoom === zoomLevel && pathEntry._screenCachePanX === panX && pathEntry._screenCachePanY === panY) {
+		return;
+	}
+
+	pathEntry._screenCache = buildScreenPolyline(pathEntry.tpath, pathEntry.isMultiSegment || false);
+	pathEntry._screenCacheZoom = zoomLevel;
+	pathEntry._screenCachePanX = panX;
+	pathEntry._screenCachePanY = panY;
+}
+
+function refreshVisibleGeometryCaches() {
+	var i;
+	for (i = 0; i < svgpaths.length; i++) {
+		if (svgpaths[i] && svgpaths[i].visible) {
+			updatePathScreenCache(svgpaths[i], true);
+		}
+	}
+
+	for (i = 0; i < toolpaths.length; i++) {
+		if (!toolpaths[i] || !toolpaths[i].visible || !toolpaths[i].paths) continue;
+		for (var p = 0; p < toolpaths[i].paths.length; p++) {
+			updateToolpathScreenCache(toolpaths[i].paths[p], true);
+		}
+	}
+
+	geometryCacheDirty = false;
+}
 
 // Mousewheel zoom (standard 'wheel' event works across all browsers including Safari)
 canvas.addEventListener('wheel', function (evt) {
@@ -171,6 +243,7 @@ function newZoom(delta, centerX, centerY) {
 	panX = clampedPan.panX;
 	panY = clampedPan.panY;
 	zoomLevel = newZoom;
+	markGeometryCacheDirty();
 
 	// Update properties panel if Pan tool is currently active
 	if (typeof cncController !== 'undefined' &&
@@ -416,6 +489,7 @@ function resizeCanvasToViewport() {
 	);
 	panX = clampedPan.panX;
 	panY = clampedPan.panY;
+	markGeometryCacheDirty();
 
 	return true;
 }
@@ -492,17 +566,24 @@ function drawNorms(norms) {
 }
 
 
-function drawPolyline(path, color, lineWidth, isMultiSegment) {
-	if (path.length === 1) {
-		const pt = worldToScreen(path[0].x, path[0].y);
-		const r = 4;
+function drawScreenPolyline(screenPath, color, lineWidth) {
+	if (!screenPath || !screenPath.points || !screenPath.points.length) {
+		return;
+	}
+
+	var points = screenPath.points;
+	if (points.length === 1) {
+		var singlePt = points[0];
+		var r = 4;
 		ctx.beginPath();
-		ctx.arc(pt.x, pt.y, r, 0, Math.PI * 2);
+		ctx.arc(singlePt.x, singlePt.y, r, 0, Math.PI * 2);
 		ctx.fillStyle = color;
 		ctx.fill();
 		ctx.beginPath();
-		ctx.moveTo(pt.x - r * 1.5, pt.y); ctx.lineTo(pt.x + r * 1.5, pt.y);
-		ctx.moveTo(pt.x, pt.y - r * 1.5); ctx.lineTo(pt.x, pt.y + r * 1.5);
+		ctx.moveTo(singlePt.x - r * 1.5, singlePt.y);
+		ctx.lineTo(singlePt.x + r * 1.5, singlePt.y);
+		ctx.moveTo(singlePt.x, singlePt.y - r * 1.5);
+		ctx.lineTo(singlePt.x, singlePt.y + r * 1.5);
 		ctx.strokeStyle = color;
 		ctx.lineWidth = lineWidth;
 		ctx.stroke();
@@ -512,20 +593,17 @@ function drawPolyline(path, color, lineWidth, isMultiSegment) {
 	ctx.beginPath();
 	ctx.lineCap = 'round';
 	ctx.lineJoin = 'round';
-	if (isMultiSegment) {
-		for (let i = 0; i < path.length; i += 2) {
-			var pt = worldToScreen(path[i].x, path[i].y);
-			ctx.moveTo(pt.x, pt.y);
-			if (i + 1 < path.length) {
-				var pt2 = worldToScreen(path[i + 1].x, path[i + 1].y);
-				ctx.lineTo(pt2.x, pt2.y);
+	if (screenPath.isMultiSegment) {
+		for (var i = 0; i < points.length; i += 2) {
+			ctx.moveTo(points[i].x, points[i].y);
+			if (i + 1 < points.length) {
+				ctx.lineTo(points[i + 1].x, points[i + 1].y);
 			}
 		}
 	} else {
-		for (var j = 0; j < path.length; j++) {
-			var pt = worldToScreen(path[j].x, path[j].y);
-			if (j == 0) ctx.moveTo(pt.x, pt.y);
-			else ctx.lineTo(pt.x, pt.y);
+		ctx.moveTo(points[0].x, points[0].y);
+		for (var j = 1; j < points.length; j++) {
+			ctx.lineTo(points[j].x, points[j].y);
 		}
 	}
 	ctx.lineWidth = lineWidth;
@@ -533,8 +611,13 @@ function drawPolyline(path, color, lineWidth, isMultiSegment) {
 	ctx.stroke();
 }
 
+function drawPolyline(path, color, lineWidth, isMultiSegment) {
+	drawScreenPolyline(buildScreenPolyline(path, isMultiSegment), color, lineWidth);
+}
+
 function drawSvgPath(svgpath, color, lineWidth) {
-	drawPolyline(svgpath.path, color, lineWidth, false);
+	updatePathScreenCache(svgpath);
+	drawScreenPolyline(svgpath._screenCache, color, lineWidth);
 	if (svgpath.creationProperties && svgpath.creationProperties.tabs && svgpath.creationProperties.tabs.length > 0) {
 		drawPathTabs(svgpath);
 	}
@@ -758,9 +841,12 @@ function redrawCore() {
 		staticCanvas.height = canvas.height;
 		staticCtx = staticCanvas.getContext('2d');
 		staticDirty = true;
+		markGeometryCacheDirty();
 	}
 
 	if (staticDirty) {
+		refreshVisibleGeometryCaches();
+
 		// Render static layer (paths, grid, workpiece) to offscreen canvas
 		staticCtx.globalAlpha = 1;
 		staticCtx.beginPath();
@@ -957,7 +1043,6 @@ function drawToolPaths() {
 				var path = paths[p].tpath;
 				var tpath = paths[p].tpath;
 				var operation = toolpaths[i].operation;
-				var isMultiSegment = paths[p].isMultiSegment || false;
 
 				if (operation == "Drill")
 					fillCircles(path, color);
@@ -990,9 +1075,8 @@ function drawToolPaths() {
 					ctx.restore();
 				}
 				else if (tpath) {
-					// Normal path drawing
-					var isMultiSegment = paths[p].isMultiSegment || false;
-				drawPolyline(tpath, color, lineWidth, isMultiSegment);
+					updateToolpathScreenCache(paths[p]);
+					drawScreenPolyline(paths[p]._screenCache, color, lineWidth);
 				}
 			}
 		}
