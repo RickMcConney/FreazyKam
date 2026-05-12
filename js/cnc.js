@@ -25,6 +25,7 @@ var drillGenerationWorker = null;
 var profileGenerationWorker = null;
 var inlayGenerationWorker = null;
 var surfacingGenerationWorker = null;
+var profile3dGenerationWorker = null;
 
 function makePendingToolpath(svgIds, name, operation, pendingKey, overrides) {
 	const pendingToolpath = {

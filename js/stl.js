@@ -1097,7 +1097,11 @@ function offsetContourLoops(loops, offsetMM) {
 window.do3dProfile = function() {
     const vs = window.viewScale || 10;
 
-    // Find STL model from selected svgpaths
+    if (typeof Worker === 'undefined') {
+        if (typeof window.notify === 'function') window.notify('Web Workers are not supported in this browser', 'error');
+        return;
+    }
+
     let model = null;
     let stlSvgPath = null;
     const selectedPaths = window.selectMgr ? window.selectMgr.selectedPaths() : [];
@@ -1117,251 +1121,218 @@ window.do3dProfile = function() {
         return;
     }
 
-    // Sync transform from svgpath in case it was moved/scaled
-    syncSTLFromSvgPath(model);
-    generateHeightMap(model, 0.5);
-
-    const hm = model.heightMap;
     const tool = window.currentTool;
     if (!tool) {
         if (typeof window.notify === 'function') window.notify('No tool selected', 'error');
         return;
     }
 
+    syncSTLFromSvgPath(model);
+    generateHeightMap(model, 0.5);
+
+    const hm = model.heightMap;
+    if (!hm) {
+        if (typeof window.notify === 'function') window.notify('Unable to prepare STL height map', 'error');
+        return;
+    }
+
     const props = window.currentToolpathProperties || {};
     const strategy = props.strategy || 'raster';
-    const toolDiameter = tool.diameter; // mm
+    const toolDiameter = tool.diameter;
     const toolRadius = toolDiameter / 2;
     const stepoverPct = tool.stepover || props.stepover || 15;
-    const stepover = toolDiameter * stepoverPct / 100; // mm between raster lines
-    const angle = props.angle || 0; // degrees
-    const maxDepth = props.depth || Math.abs(hm.minZ); // mm, total depth
-    const stepDown = props.step || maxDepth; // mm per pass
-    // Rest machining: previous tool diameter (0 = no rest machining)
+    const stepover = toolDiameter * stepoverPct / 100;
+    const angle = props.angle || 0;
+    const maxDepth = props.depth || Math.abs(hm.minZ);
+    const stepDown = props.step || maxDepth;
     const restToolDiameter = props.restToolDiameter || 0;
     const restToolRadius = restToolDiameter / 2;
-    const restTolerance = 0.1; // mm — skip points where finishing tool is within this of stock surface
+    const restTolerance = 0.1;
+    const svgId = stlSvgPath ? stlSvgPath.id : null;
+    const svgIds = svgId ? [svgId] : [];
+    const pendingKey = [
+        '3dProfile',
+        model.id,
+        svgId || 'none',
+        strategy,
+        tool.recid || tool.name || tool.diameter,
+        toolDiameter,
+        stepover,
+        angle,
+        maxDepth,
+        stepDown,
+        restToolDiameter,
+        model.transform.offsetX,
+        model.transform.offsetY,
+        model.transform.offsetZ,
+        model.transform.scale,
+        model.transform.scaleY,
+        model.transform.scaleZ
+    ].join('|');
 
-    const bb = model.bbox3d;
-    const numPasses = Math.max(1, Math.ceil(maxDepth / stepDown));
-    const allPaths = [];
+    const duplicateRequest = toolpaths.some(function(tp) {
+        return tp.pending === true && tp.pendingKey === pendingKey;
+    });
+    if (duplicateRequest) {
+        if (typeof window.notify === 'function') window.notify('A 3D Profile generation is already pending for this selection', 'info');
+        return;
+    }
 
-    if (strategy === 'contour') {
-        // ---- Contour (Waterline) strategy ----
-        // At each Z level, extract contour loops. Each loop that is NEW at this
-        // Z (its outline extends beyond the previous Z's contours into uncut stock)
-        // needs step-down passes from Z=0 to this Z. Loops that existed at the
-        // previous Z only need one pass at this Z (the previous pass already
-        // cleared to the previous Z depth).
-        //
-        // All paths at the same cut-Z are grouped together before stepping deeper.
-
-        // Phase 1: Extract contours at each Z, tag each loop with its start Z
-        const loopEntries = []; // { loop, startZ, targetZ }
-        let prevOffsetLoops = [];
-
-        for (let pass = 0; pass < numPasses; pass++) {
-            const zLevel = Math.max(-(pass + 1) * stepDown, -maxDepth);
-            const rawLoops = extractContourLoops(model, zLevel);
-            if (rawLoops.length === 0) continue;
-
-            const offsetLoops = offsetContourLoops(rawLoops, toolRadius);
-            const useLoops = (offsetLoops.length > 0 ? offsetLoops : rawLoops)
-                .filter(l => l.length >= 3);
-            if (useLoops.length === 0) continue;
-
-            for (const loop of useLoops) {
-                // Check if this loop's outline is significantly larger than
-                // any previous loop. Compare bounding boxes — if a previous
-                // loop has a similar bbox, the shape hasn't grown and the
-                // previous pass already cleared stock along this path.
-                const lbb = loopBBox(loop);
-                let hasNewArea = prevOffsetLoops.length === 0;
-                if (!hasNewArea) {
-                    // Check if any previous loop has a matching bbox
-                    // Use tight tolerance so even small growth is detected as new area
-                    const tolerance = 0.5; // mm
-                    const matched = prevOffsetLoops.some(pl => {
-                        const pbb = loopBBox(pl);
-                        return Math.abs(lbb.minx - pbb.minx) < tolerance &&
-                               Math.abs(lbb.miny - pbb.miny) < tolerance &&
-                               Math.abs(lbb.maxx - pbb.maxx) < tolerance &&
-                               Math.abs(lbb.maxy - pbb.maxy) < tolerance;
-                    });
-                    hasNewArea = !matched;
-                }
-
-                // New/grown loops need step-downs from Z=0; same-shape loops from previous Z
-                const prevZ = pass > 0 ? Math.max(-pass * stepDown, -maxDepth) : 0;
-                const startZ = hasNewArea ? 0 : prevZ;
-                loopEntries.push({ loop, startZ, targetZ: zLevel });
-            }
-
-            prevOffsetLoops = useLoops;
-        }
-
-        // Phase 2: Generate (loop, cutZ) pairs and sort by cutZ shallowest first
-        const cutPairs = [];
-        for (const entry of loopEntries) {
-            const depth = entry.startZ - entry.targetZ;
-            const stepsNeeded = Math.max(1, Math.ceil(depth / stepDown));
-            for (let s = 1; s <= stepsNeeded; s++) {
-                const cutZ = Math.max(entry.startZ - s * stepDown, entry.targetZ);
-                cutPairs.push({ loop: entry.loop, cutZ });
+    const updateTargets = Array.isArray(window.toolpathUpdateTargets)
+        ? window.toolpathUpdateTargets.slice()
+        : [];
+    const pendingToolpaths = [];
+    const updateTarget = updateTargets[0] || null;
+    if (updateTarget) {
+        updateTarget.paths = [];
+        updateTarget.visible = true;
+        updateTarget.operation = '3dProfile';
+        updateTarget.name = '3dProfile';
+        updateTarget.tool = { ...tool };
+        updateTarget.svgId = svgId;
+        updateTarget.svgIds = svgIds.slice();
+        updateTarget.pending = true;
+        updateTarget.pendingKey = pendingKey;
+        if (window.currentToolpathProperties) {
+            updateTarget.toolpathProperties = { ...window.currentToolpathProperties };
+            if (window.currentToolpathProperties.toolpathName) {
+                updateTarget.label = window.currentToolpathProperties.toolpathName;
             }
         }
-
-        cutPairs.sort((a, b) => b.cutZ - a.cutZ);
-
-        for (const cp of cutPairs) {
-            const tpath = cp.loop.map(p => ({
-                x: p.x * vs,
-                y: p.y * vs,
-                z: cp.cutZ
-            }));
-            const first = tpath[0], last = tpath[tpath.length - 1];
-            if (Math.abs(first.x - last.x) > 0.01 || Math.abs(first.y - last.y) > 0.01) {
-                tpath.push({ x: first.x, y: first.y, z: cp.cutZ });
-            }
-            allPaths.push({ tpath: tpath, passStart: true });
-        }
-
-        if (allPaths.length === 0) {
-            if (typeof window.notify === 'function') window.notify('No contour toolpath generated — check STL model and tool settings', 'error');
-            return;
-        }
-
+        pendingToolpaths.push(updateTarget);
     } else {
-        // ---- Raster strategy ----
-        // Sample interval along raster lines: use height map resolution
-        // or half the tool diameter, whichever is larger (avoids excessive points)
-        const sampleInterval = Math.max(hm.cellSize, toolDiameter / 2); // mm
-
-        if (stepover <= 0 || sampleInterval <= 0) {
-            if (typeof window.notify === 'function') window.notify('Invalid stepover or tool diameter', 'error');
-            return;
-        }
-
-        const angleRad = angle * Math.PI / 180;
-        const cosA = Math.cos(angleRad);
-        const sinA = Math.sin(angleRad);
-
-        // Center of the STL bounding box in mm
-        const cx = (bb.min.x + bb.max.x) / 2;
-        const cy = (bb.min.y + bb.max.y) / 2;
-
-        // Expand bounding box by tool radius so the tool edge reaches the STL boundary
-        const expandedBB = {
-            minX: bb.min.x - toolRadius,
-            maxX: bb.max.x + toolRadius,
-            minY: bb.min.y - toolRadius,
-            maxY: bb.max.y + toolRadius
-        };
-
-        // Rotate the bounding box corners by -angle to find the extent in rotated frame
-        const corners = [
-            { x: expandedBB.minX, y: expandedBB.minY },
-            { x: expandedBB.maxX, y: expandedBB.minY },
-            { x: expandedBB.maxX, y: expandedBB.maxY },
-            { x: expandedBB.minX, y: expandedBB.maxY }
-        ];
-
-        const rotCorners = corners.map(p => ({
-            x: cosA * (p.x - cx) + sinA * (p.y - cy) + cx,
-            y: -sinA * (p.x - cx) + cosA * (p.y - cy) + cy
+        pendingToolpaths.push(makePendingToolpath(svgIds.slice(), '3dProfile', '3dProfile', pendingKey, {
+            svgId: svgId,
+            svgIds: svgIds.slice(),
+            tool: { ...tool }
         }));
+    }
+    if (typeof refreshToolPathsDisplay === 'function') refreshToolPathsDisplay();
+    if (typeof window.redraw === 'function') window.redraw();
 
-        const rMinX = Math.min(...rotCorners.map(p => p.x));
-        const rMaxX = Math.max(...rotCorners.map(p => p.x));
-        const rMinY = Math.min(...rotCorners.map(p => p.y));
-        const rMaxY = Math.max(...rotCorners.map(p => p.y));
+    const worker = new Worker('js/workers/3dProfileWorker.js');
+    profile3dGenerationWorker = worker;
+    window.profile3dGenerationWorker = worker;
+    console.log('3D ProfileWorker: queued', {
+        pendingKey,
+        strategy,
+        modelId: model.id,
+        svgId,
+        toolDiameter,
+        stepover,
+        angle,
+        maxDepth,
+        stepDown,
+        restToolDiameter
+    });
+    if (typeof window.notify === 'function') window.notify('Generating 3D Profile paths…', 'info');
 
-        let lineIndex = 0;
+    function clearPendingToolpaths() {
+        removePendingToolpaths(pendingToolpaths);
+    }
 
-        for (let pass = 0; pass < numPasses; pass++) {
-            // Z clamp for this pass: how deep we're allowed to go (negative value)
-            // Final pass has no clamp (follows actual surface)
-            const passMinZ = (pass < numPasses - 1) ? -(pass + 1) * stepDown : -maxDepth;
-            let firstLineInPass = true;
-
-            for (let y = rMinY; y <= rMaxY; y += stepover) {
-                // Collect all sample points for this raster line (with NaN markers)
-                const rawPts = [];
-
-                for (let x = rMinX; x <= rMaxX; x += sampleInterval) {
-                    const worldX = cosA * (x - cx) - sinA * (y - cy) + cx;
-                    const worldY = sinA * (x - cx) + cosA * (y - cy) + cy;
-
-                    let zc = dropCutter(hm, worldX, worldY, toolRadius);
-
-                    if (isNaN(zc)) {
-                        rawPts.push(null); // NaN marker
-                    } else {
-                        let tipZ = zc - toolRadius;
-                        tipZ = Math.max(tipZ, passMinZ);
-
-                        // Rest machining: skip points where the previous (larger) tool already cleared
-                        if (restToolRadius > 0) {
-                            const stockZc = dropCutter(hm, worldX, worldY, restToolRadius);
-                            if (!isNaN(stockZc)) {
-                                const stockTipZ = Math.max(stockZc - restToolRadius, passMinZ);
-                                if (tipZ >= stockTipZ - restTolerance) {
-                                    rawPts.push(null); // Air — skip this point
-                                    continue;
-                                }
-                            }
-                        }
-
-                        rawPts.push({ x: worldX, y: worldY, z: tipZ });
-                    }
-                }
-
-                // Zigzag: reverse odd lines
-                if (lineIndex % 2 !== 0) rawPts.reverse();
-
-                // Split into segments at NaN gaps and push
-                let segment = [];
-                for (let i = 0; i < rawPts.length; i++) {
-                    if (rawPts[i] === null) {
-                        if (segment.length > 1) {
-                            const tpath = segment.map(p => ({
-                                x: p.x * vs,
-                                y: p.y * vs,
-                                z: p.z
-                            }));
-                            allPaths.push({ tpath: tpath, passStart: firstLineInPass });
-                            firstLineInPass = false;
-                        }
-                        segment = [];
-                    } else {
-                        segment.push(rawPts[i]);
-                    }
-                }
-                // Flush last segment
-                if (segment.length > 1) {
-                    const tpath = segment.map(p => ({
-                        x: p.x * vs,
-                        y: p.y * vs,
-                        z: p.z
-                    }));
-                    allPaths.push({ tpath: tpath, passStart: firstLineInPass });
-                    firstLineInPass = false;
-                }
-                lineIndex++;
-            }
-        }
-
-        if (allPaths.length === 0) {
-            if (typeof window.notify === 'function') window.notify('No toolpath generated — check STL model and tool settings', 'error');
+    worker.onmessage = function(event) {
+        if (profile3dGenerationWorker !== worker) {
+            worker.terminate();
             return;
         }
 
-        console.log('3D Profile (raster): generated', allPaths.length, 'raster lines',
-            restToolDiameter > 0 ? '(rest machining, prev tool: ' + restToolDiameter + 'mm)' : '(full cut)');
-    }
+        if (event.data && event.data.log) {
+            console.log(event.data.message, event.data.details || '');
+            return;
+        }
 
-    if (typeof window.pushToolPath === 'function') {
-        const svgId = stlSvgPath ? stlSvgPath.id : null;
-        window.pushToolPath(allPaths, '3dProfile', '3dProfile', svgId, svgId ? [svgId] : null);
-    }
+        profile3dGenerationWorker = null;
+        window.profile3dGenerationWorker = null;
+        worker.terminate();
+
+        if (!event.data || !event.data.ok) {
+            clearPendingToolpaths();
+            if (typeof window.notify === 'function') {
+                window.notify((event.data && event.data.error) || 'Unable to generate 3D Profile paths', 'error');
+            }
+            return;
+        }
+
+        const result = event.data.result || { toolpaths: [], createdCount: 0 };
+        for (let i = 0; i < result.toolpaths.length && i < pendingToolpaths.length; i++) {
+            const generated = result.toolpaths[i];
+            const pendingToolpath = pendingToolpaths[i];
+            pendingToolpath.paths = generated.paths;
+            pendingToolpath.operation = generated.operation;
+            pendingToolpath.name = generated.name;
+            pendingToolpath.svgId = generated.svgId;
+            pendingToolpath.svgIds = generated.svgIds;
+            pendingToolpath.pending = false;
+            delete pendingToolpath.pendingKey;
+        }
+        for (let i = result.toolpaths.length; i < pendingToolpaths.length; i++) {
+            const index = toolpaths.indexOf(pendingToolpaths[i]);
+            if (index >= 0) toolpaths.splice(index, 1);
+        }
+        if (typeof refreshToolPathsDisplay === 'function') refreshToolPathsDisplay();
+        if (typeof window.redraw === 'function') window.redraw();
+
+        if (result.createdCount === 0) {
+            if (typeof window.notify === 'function') {
+                window.notify(strategy === 'contour'
+                    ? 'No contour toolpath generated — check STL model and tool settings'
+                    : 'No toolpath generated — check STL model and tool settings', 'error');
+            }
+            return;
+        }
+
+        console.log('3D ProfileWorker: completed', {
+            pendingKey,
+            createdCount: result.createdCount,
+            toolpathCount: result.toolpaths.length
+        });
+    };
+
+    worker.onerror = function(error) {
+        if (profile3dGenerationWorker === worker) {
+            profile3dGenerationWorker = null;
+            window.profile3dGenerationWorker = null;
+        }
+        worker.terminate();
+        clearPendingToolpaths();
+        if (typeof window.notify === 'function') {
+            window.notify((error && error.message) || '3D Profile generation failed', 'error');
+        }
+    };
+
+    worker.postMessage({
+        strategy: strategy,
+        viewScale: vs,
+        toolDiameter: toolDiameter,
+        toolRadius: toolRadius,
+        stepover: stepover,
+        angle: angle,
+        maxDepth: maxDepth,
+        stepDown: stepDown,
+        restToolDiameter: restToolDiameter,
+        restToolRadius: restToolRadius,
+        restTolerance: restTolerance,
+        svgId: svgId,
+        svgIds: svgIds.slice(),
+        heightMap: {
+            originX: hm.originX,
+            originY: hm.originY,
+            cellSize: hm.cellSize,
+            width: hm.width,
+            height: hm.height,
+            minZ: hm.minZ,
+            maxZ: hm.maxZ,
+            data: Array.from(hm.data)
+        },
+        model: {
+            id: model.id,
+            bbox3d: {
+                min: { ...model.bbox3d.min },
+                max: { ...model.bbox3d.max }
+            },
+            transform: { ...model.transform },
+            geometryPositions: Array.from(model.geometry.attributes.position.array)
+        }
+    });
 };
