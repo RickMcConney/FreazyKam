@@ -20,6 +20,39 @@ var norms = [];
 var undoList = [];
 var redoList = [];
 var MAX_UNDO = 50;
+var vcarveGenerationWorker = null;
+
+function makePendingToolpath(svgIds, name, operation, pendingKey) {
+	const pendingToolpath = {
+		id: 'T' + toolpathId,
+		paths: [],
+		visible: true,
+		operation: operation,
+		name: name,
+		tool: { ...currentTool },
+		svgId: svgIds.length > 0 ? svgIds[0] : null,
+		svgIds: svgIds,
+		pending: true,
+		pendingKey: pendingKey,
+		label: (window.currentToolpathProperties && window.currentToolpathProperties.toolpathName) || (name + ' ' + toolpathId)
+	};
+	if (window.currentToolpathProperties) {
+		pendingToolpath.toolpathProperties = { ...window.currentToolpathProperties };
+	}
+	toolpaths.push(pendingToolpath);
+	toolpathId++;
+	return pendingToolpath;
+}
+
+function removePendingToolpaths(pendingToolpaths) {
+	for (let i = toolpaths.length - 1; i >= 0; i--) {
+		if (pendingToolpaths.includes(toolpaths[i])) {
+			toolpaths.splice(i, 1);
+		}
+	}
+	if (typeof refreshToolPathsDisplay === 'function') refreshToolPathsDisplay();
+	redraw();
+}
 
 
 var scaleFactor = 4;
@@ -2256,6 +2289,111 @@ function doPocket() {
 	});
 }
 
+function startVcarveGeneration(config) {
+	if (typeof Worker === 'undefined') {
+		notify('Web Workers are not supported in this browser', 'error');
+		return;
+	}
+
+	var selected = selectMgr.selectedPaths();
+	if (!selected || selected.length === 0) {
+		notify('Select a path to VCarve');
+		return;
+	}
+
+	const sortedIds = selected.map(function(path) { return path.id; }).sort();
+	const pendingKey = 'VCarve|' + config.mode + '|' + sortedIds.join(',');
+	const hasPending = toolpaths.some(function(tp) {
+		return tp.pending === true && tp.pendingKey === pendingKey;
+	});
+	if (hasPending) {
+		notify('A VCarve generation is already pending for this selection', 'info');
+		return;
+	}
+
+	const pendingToolpaths = [];
+	for (let i = 0; i < selected.length; i++) {
+		pendingToolpaths.push(makePendingToolpath([selected[i].id], config.name, 'VCarve', pendingKey));
+	}
+	if (typeof refreshToolPathsDisplay === 'function') refreshToolPathsDisplay();
+	redraw();
+
+	const worker = new Worker('js/workers/vcarveWorker.js');
+	vcarveGenerationWorker = worker;
+	window.vcarveGenerationWorker = worker;
+	notify('Generating VCarve paths…', 'info');
+
+	worker.onmessage = function(event) {
+		if (vcarveGenerationWorker !== worker) {
+			worker.terminate();
+			return;
+		}
+
+		if (event.data && event.data.log) {
+			console.log(event.data.message, event.data.details || '');
+			return;
+		}
+
+		vcarveGenerationWorker = null;
+		window.vcarveGenerationWorker = null;
+		worker.terminate();
+
+		if (!event.data || !event.data.ok) {
+			removePendingToolpaths(pendingToolpaths);
+			notify((event.data && event.data.error) || 'Unable to generate VCarve paths', 'error');
+			return;
+		}
+
+		const result = event.data.result || { toolpaths: [], createdCount: 0 };
+		for (let i = 0; i < result.toolpaths.length && i < pendingToolpaths.length; i++) {
+			const generated = result.toolpaths[i];
+			const pendingToolpath = pendingToolpaths[i];
+			pendingToolpath.paths = generated.paths;
+			pendingToolpath.operation = generated.operation;
+			pendingToolpath.name = generated.name;
+			pendingToolpath.svgId = generated.svgId;
+			pendingToolpath.svgIds = generated.svgIds;
+			pendingToolpath.pending = false;
+			delete pendingToolpath.pendingKey;
+		}
+		for (let i = result.toolpaths.length; i < pendingToolpaths.length; i++) {
+			const index = toolpaths.indexOf(pendingToolpaths[i]);
+			if (index >= 0) toolpaths.splice(index, 1);
+		}
+		if (typeof refreshToolPathsDisplay === 'function') refreshToolPathsDisplay();
+		redraw();
+
+		if (result.createdCount === 0) {
+			notify('Unable to generate VCarve paths');
+		}
+	};
+
+	worker.onerror = function(error) {
+		if (vcarveGenerationWorker === worker) {
+			vcarveGenerationWorker = null;
+			window.vcarveGenerationWorker = null;
+		}
+		worker.terminate();
+		removePendingToolpaths(pendingToolpaths);
+		notify((error && error.message) || 'VCarve generation failed', 'error');
+	};
+
+	worker.postMessage({
+		mode: config.mode,
+		name: config.name,
+		outside: config.outside,
+		selectedPaths: selected.map(function(path) {
+			return {
+				id: path.id,
+				path: path.path
+			};
+		}),
+		tool: { ...currentTool },
+		viewScale: viewScale,
+		tolerance: getOption('tolerance')
+	});
+}
+
 function doVcarve() {
 	if (currentTool.inside == 'inside') {
 		doVcarveIn();
@@ -2273,7 +2411,7 @@ function doVcarveCenter() {
 		return;
 	}
 	setMode("VCarve Center");
-	computeWithMedialAxis(false, 'VCarve Center');
+	startVcarveGeneration({ mode: 'center', name: 'VCarve Center', outside: false });
 }
 
 function doVcarveIn() {
@@ -2282,7 +2420,7 @@ function doVcarveIn() {
 		return;
 	}
 	setMode("VCarve In");
-	computeVcarve(false, 'VCarve In');
+	startVcarveGeneration({ mode: 'inside', name: 'VCarve In', outside: false });
 }
 
 function doVcarveOut() {
@@ -2291,7 +2429,7 @@ function doVcarveOut() {
 		return;
 	}
 	setMode("VCarve Out");
-	computeVcarve(true, 'VCarve Out');
+	startVcarveGeneration({ mode: 'outside', name: 'VCarve Out', outside: true });
 }
 
 var link = document.createElement('a');
