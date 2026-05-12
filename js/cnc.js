@@ -779,15 +779,6 @@ function doProfile() {
 
 	const worker = new Worker('js/workers/ProfileWorker.js');
 	window.profileGenerationWorker = worker;
-	console.log('[ProfileWorker] Starting profile generation', {
-		mode: config.mode,
-		selectionCount: pendingRequests.length,
-		radius: config.radius,
-		numLoops: config.numLoops,
-		overCutWorld: config.overCutWorld,
-		direction: config.direction,
-		tolerance: config.tolerance
-	});
 	notify('Generating profile paths…', 'info');
 
 	worker.onmessage = function(event) {

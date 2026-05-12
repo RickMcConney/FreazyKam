@@ -1,15 +1,6 @@
 var nearbypaths = [];
 self.importScripts('../lib/clipperf.js', '../util.js', '../toolPath.js');
 
-function workerLog(message, details) {
-	self.postMessage({
-		ok: true,
-		log: true,
-		message: message,
-		details: details || null
-	});
-}
-
 function clonePath(path) {
 	return path.map(function(point) {
 		return { x: point.x, y: point.y };
@@ -23,13 +14,6 @@ function buildProfileCutPaths(srcPath, config) {
 	for (var loop = config.numLoops - 1; loop >= 0; loop--) {
 		var offsetAmount = config.radius + config.overCutWorld + loop * config.radius;
 		if (offsetAmount <= 0) continue;
-
-		workerLog('ProfileWorker offsetPath', {
-			mode: config.mode,
-			loop: loop,
-			offsetAmount: offsetAmount,
-			outside: config.mode === 'outside'
-		});
 		var offsetPaths = offsetPath(srcPath, offsetAmount, config.mode === 'outside');
 
 		for (var p = 0; p < offsetPaths.length; p++) {
@@ -59,11 +43,6 @@ function buildCenterPaths(srcPath, config) {
 			loopPath = clonePath(srcPath);
 		} else {
 			var outward = centerOffset > 0;
-			workerLog('ProfileWorker centerOffsetPath', {
-				loop: k,
-				centerOffset: centerOffset,
-				outward: outward
-			});
 			var offsetResult = offsetPath(srcPath, Math.abs(centerOffset), outward);
 			loopPath = offsetResult.length > 0 ? offsetResult[0] : clonePath(srcPath);
 		}
@@ -93,32 +72,10 @@ function generateProfileToolpaths(payload) {
 			path: clonePath(item.path)
 		};
 	});
-	workerLog('ProfileWorker nearbypaths prepared', {
-		count: nearbypaths.length
-	});
-
-	workerLog('ProfileWorker started', {
-		mode: config.mode,
-		selectionCount: selection.length,
-		radius: config.radius,
-		numLoops: config.numLoops,
-		overCutWorld: config.overCutWorld,
-		direction: config.direction,
-		tolerance: config.tolerance,
-		toolBit: tool && tool.bit,
-		toolDiameter: tool && tool.diameter
-	});
 
 	for (var i = 0; i < selection.length; i++) {
 		var item = selection[i];
 		var srcPath = clonePath(item.path);
-		workerLog('ProfileWorker processing selection', {
-			index: i,
-			svgId: item.id,
-			pointCount: srcPath.length,
-			mode: config.mode
-		});
-
 		var generatedPaths = config.mode === 'center'
 			? buildCenterPaths(srcPath, config)
 			: buildProfileCutPaths(srcPath, config);
@@ -133,17 +90,7 @@ function generateProfileToolpaths(payload) {
 			});
 			createdCount++;
 		}
-		workerLog('ProfileWorker selection completed', {
-			index: i,
-			svgId: item.id,
-			generatedPathCount: generatedPaths.length
-		});
 	}
-
-	workerLog('ProfileWorker completed', {
-		createdCount: createdCount,
-		toolpathCount: toolpaths.length
-	});
 
 	return {
 		createdCount: createdCount,

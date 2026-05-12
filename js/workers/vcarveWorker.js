@@ -1,15 +1,6 @@
 var nearbypaths = [];
 self.importScripts('../lib/clipperf.js', '../lib/jspoly.js', '../util.js', '../toolPath.js', '../vcarve.js');
 
-function workerLog(message, details) {
-	self.postMessage({
-		ok: true,
-		log: true,
-		message: 'VCarveWorker ' + message,
-		details: details || null
-	});
-}
-
 function clonePoint(point) {
 	return { x: point.x, y: point.y };
 }
@@ -115,11 +106,6 @@ function buildCenterVcarveToolpaths(payload) {
 	var toolpaths = [];
 	for (var n = 0; n < ordered.length; n++) {
 		var item = ordered[n];
-		workerLog('center:medialAxis:start', {
-			index: n,
-			svgId: item.id,
-			holeCount: item.holes.length
-		});
 		var maxRadius = vbitRadius(payload.tool) * payload.viewScale;
 		var segments = JSPoly.construct_medial_axis(
 			item.path,
@@ -153,12 +139,6 @@ function buildCenterVcarveToolpaths(payload) {
 			operation: 'VCarve',
 			svgId: item.id,
 			svgIds: [item.id].concat(item.holeSvgIds)
-		});
-		workerLog('center:medialAxis:done', {
-			index: n,
-			svgId: item.id,
-			segmentCount: segments.length,
-			toolpathPointCount: tpath.length
 		});
 	}
 
@@ -210,13 +190,6 @@ function buildProfileVcarveToolpaths(payload) {
 			svgId: svgpath.id,
 			svgIds: [svgpath.id]
 		});
-		workerLog('profile:done', {
-			index: i,
-			svgId: svgpath.id,
-			normCount: localNorms.length,
-			circleCount: circles.length,
-			toolpathPointCount: finalTpath.length
-		});
 	}
 
 	return {
@@ -228,17 +201,8 @@ function buildProfileVcarveToolpaths(payload) {
 }
 
 function generateVcarveToolpaths(payload) {
-	workerLog('started', {
-		mode: payload.mode,
-		name: payload.name,
-		selectedCount: payload.selectedPaths.length
-	});
-
 	if (Array.isArray(payload.svgpaths) && payload.svgpaths.length > 0) {
 		svgpaths = payload.svgpaths.map(cloneSvgPath);
-		workerLog('svgpaths prepared', {
-			count: svgpaths.length
-		});
 	} else {
 		svgpaths = payload.selectedPaths.map(function(path) {
 			return cloneSvgPath({
@@ -247,9 +211,6 @@ function generateVcarveToolpaths(payload) {
 				bbox: path.bbox,
 				path: path.path
 			});
-		});
-		workerLog('svgpaths fallback prepared', {
-			count: svgpaths.length
 		});
 	}
 

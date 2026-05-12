@@ -1,14 +1,5 @@
 self.importScripts('../util.js');
 
-function workerLog(message, details) {
-	self.postMessage({
-		ok: true,
-		log: true,
-		message: message,
-		details: details || null
-	});
-}
-
 function clipLineToRect(p1, p2, xMin, yMin, xMax, yMax) {
 	const dx = p2.x - p1.x;
 	const dy = p2.y - p1.y;
@@ -56,14 +47,6 @@ function generateSurfacingToolpaths(payload) {
 		{ x: xMin, y: yMax }
 	];
 
-	workerLog('SurfacingWorker:start', {
-		wpWidth: wpWidth,
-		wpLength: wpLength,
-		radius: radius,
-		stepover: stepover,
-		angle: angle
-	});
-
 	const rotated = angle !== 0
 		? clipCorners.map(function(point) {
 			return rotatePoint(point, cx, cy, -angle * Math.PI / 180);
@@ -76,7 +59,6 @@ function generateSurfacingToolpaths(payload) {
 	const maxY = Math.max.apply(null, rotated.map(function(point) { return point.y; }));
 
 	const paths = [];
-	let lineIndex = 0;
 	const rad = angle * Math.PI / 180;
 
 	for (let y = minY; ; y += stepover) {
@@ -93,23 +75,10 @@ function generateSurfacingToolpaths(payload) {
 		if (clipped) {
 			const tpath = lineIndex % 2 === 0 ? clipped : [clipped[1], clipped[0]];
 			paths.push({ tpath: tpath });
-			lineIndex++;
-			if (lineIndex === 1 || lineIndex % 100 === 0) {
-				workerLog('SurfacingWorker:progress', {
-					generatedLines: lineIndex,
-					currentY: ly,
-					maxY: maxY
-				});
-			}
 		}
 
 		if (ly >= maxY) break;
 	}
-
-	workerLog('SurfacingWorker:done', {
-		generatedLines: lineIndex,
-		toolpathCount: paths.length
-	});
 
 	return {
 		createdCount: paths.length > 0 ? 1 : 0,

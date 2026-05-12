@@ -1,14 +1,5 @@
 self.importScripts('../lib/clipperf.js');
 
-function workerLog(message, details) {
-	self.postMessage({
-		ok: true,
-		log: true,
-		message: message,
-		details: details || null
-	});
-}
-
 function sampleHeightMap(hm, xMM, yMM) {
 	const fx = (xMM - hm.originX) / hm.cellSize;
 	const fy = (yMM - hm.originY) / hm.cellSize;
@@ -103,7 +94,6 @@ function extractContourLoops(model, zLevel) {
 	}
 
 	if (segments.length === 0) {
-		workerLog('3D ProfileWorker:contour:emptySlice', { zLevel: zLevel });
 		return [];
 	}
 
@@ -191,11 +181,6 @@ function extractContourLoops(model, zLevel) {
 		if (loop.length >= 3) loops.push(loop);
 	}
 
-	workerLog('3D ProfileWorker:contour:loops', {
-		zLevel: zLevel,
-		segmentCount: segments.length,
-		loopCount: loops.length
-	});
 	return loops;
 }
 
@@ -282,12 +267,6 @@ function generateContourPaths(payload) {
 		}
 
 		prevOffsetLoops = useLoops;
-		workerLog('3D ProfileWorker:contour:pass', {
-			pass: pass,
-			zLevel: zLevel,
-			loopCount: useLoops.length,
-			storedEntries: loopEntries.length
-		});
 	}
 
 	const cutPairs = [];
@@ -314,11 +293,6 @@ function generateContourPaths(payload) {
 		}
 		allPaths.push({ tpath: tpath, passStart: true });
 	}
-
-	workerLog('3D ProfileWorker:contour:done', {
-		cutPairCount: cutPairs.length,
-		toolpathCount: allPaths.length
-	});
 	return allPaths;
 }
 
@@ -371,14 +345,6 @@ function generateRasterPaths(payload) {
 	const rMinY = Math.min.apply(null, rotCorners.map(function(p) { return p.y; }));
 	const rMaxY = Math.max.apply(null, rotCorners.map(function(p) { return p.y; }));
 	let lineIndex = 0;
-
-	workerLog('3D ProfileWorker:raster:start', {
-		sampleInterval: sampleInterval,
-		stepover: stepover,
-		angle: angle,
-		numPasses: numPasses,
-		restToolDiameter: restToolDiameter
-	});
 
 	for (let pass = 0; pass < numPasses; pass++) {
 		const passMinZ = pass < numPasses - 1 ? -(pass + 1) * stepDown : -maxDepth;
@@ -442,20 +408,8 @@ function generateRasterPaths(payload) {
 			}
 			lineIndex++;
 		}
-
-		workerLog('3D ProfileWorker:raster:pass', {
-			pass: pass,
-			passMinZ: passMinZ,
-			lineIndex: lineIndex,
-			passSegmentCount: passSegmentCount,
-			totalToolpaths: allPaths.length
-		});
 	}
 
-	workerLog('3D ProfileWorker:raster:done', {
-		toolpathCount: allPaths.length,
-		restMode: restToolDiameter > 0 ? 'rest' : 'full'
-	});
 	return allPaths;
 }
 
@@ -486,21 +440,7 @@ function generate3dProfileToolpaths(payload) {
 self.onmessage = function(event) {
 	try {
 		const payload = event.data || {};
-		workerLog('3D ProfileWorker:start', {
-			strategy: payload.strategy,
-			toolDiameter: payload.toolDiameter,
-			toolRadius: payload.toolRadius,
-			stepover: payload.stepover,
-			angle: payload.angle,
-			maxDepth: payload.maxDepth,
-			stepDown: payload.stepDown,
-			svgId: payload.svgId || null
-		});
 		const result = generate3dProfileToolpaths(payload);
-		workerLog('3D ProfileWorker:complete', {
-			createdCount: result.createdCount,
-			toolpathCount: result.toolpaths.length
-		});
 		self.postMessage({ ok: true, result: result });
 	} catch (error) {
 		self.postMessage({

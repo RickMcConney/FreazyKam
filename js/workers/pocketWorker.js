@@ -2,15 +2,6 @@ self.importScripts('../lib/clipperf.js', '../util.js', '../toolPath.js');
 
 const POCKET_WORKER_MAX_POINTS = 2000;
 
-function workerLog(message, details) {
-	self.postMessage({
-		ok: true,
-		log: true,
-		message: message,
-		details: details || null
-	});
-}
-
 function simplifyClosedPathForPocket(path, maxPoints) {
 	if (!Array.isArray(path) || path.length <= maxPoints) return path;
 	const isClosed = path.length > 2 && path[0].x === path[path.length - 1].x && path[0].y === path[path.length - 1].y;
@@ -34,16 +25,7 @@ function simplifyClosedPathForPocket(path, maxPoints) {
 }
 
 function preparePocketInputPath(path, label) {
-	const simplified = simplifyClosedPathForPocket(path, POCKET_WORKER_MAX_POINTS);
-	if (simplified !== path) {
-		workerLog('Pocket path simplified', {
-			label: label,
-			originalPointCount: path.length,
-			simplifiedPointCount: simplified.length,
-			maxPoints: POCKET_WORKER_MAX_POINTS
-		});
-	}
-	return simplified;
+	return simplifyClosedPathForPocket(path, POCKET_WORKER_MAX_POINTS);
 }
 
 function computePathPerimeter(path) {
@@ -88,66 +70,24 @@ function generateConcentricContours(outerPath, islandPaths, stepover, pocketRadi
 	let minArea = stepover * stepover * 0.1;
 	let level = 0;
 
-	workerLog('generateConcentricContours:start', {
-		initialOuterPointCount: outerPath.length,
-		islandCount: islandPaths.length,
-		stepover: stepover,
-		pocketRadius: pocketRadius
-	});
-
 	while (currentOuters.length > 0) {
-		workerLog('generateConcentricContours:level', {
-			level: level,
-			currentOuterCount: currentOuters.length
-		});
 		let nextOuters = [];
 		for (let outerIndex = 0; outerIndex < currentOuters.length; outerIndex++) {
 			let outer = currentOuters[outerIndex];
 			contours.push(outer);
 			contourLevels.push(level);
-			workerLog('generateConcentricContours:offset', {
-				level: level,
-				outerIndex: outerIndex,
-				pointCount: outer.length
-			});
 			let co = new clipper.ClipperOffset(20, 0.025);
 			co.AddPath(outer, ClipperLib.JoinType.jtMiter, ClipperLib.EndType.etClosedPolygon);
 			let result = [];
 			co.Execute(result, -stepover);
-			workerLog('generateConcentricContours:offsetResult', {
-				level: level,
-				outerIndex: outerIndex,
-				resultCount: result.length
-			});
 
 			let validFragments = subtractIslandsAndFilter(result, islandPaths, minArea);
-			workerLog('generateConcentricContours:validFragments', {
-				level: level,
-				outerIndex: outerIndex,
-				fragmentCount: validFragments.length
-			});
-
 			if (validFragments.length === 0 && pocketRadius > 0 && stepover > pocketRadius) {
-				workerLog('generateConcentricContours:fillAttempt', {
-					level: level,
-					outerIndex: outerIndex,
-					fillOffset: pocketRadius
-				});
 				let fillCo = new clipper.ClipperOffset(20, 0.025);
 				fillCo.AddPath(outer, ClipperLib.JoinType.jtMiter, ClipperLib.EndType.etClosedPolygon);
 				let fillResult = [];
 				fillCo.Execute(fillResult, -pocketRadius);
-				workerLog('generateConcentricContours:fillResult', {
-					level: level,
-					outerIndex: outerIndex,
-					resultCount: fillResult.length
-				});
 				validFragments.push(...subtractIslandsAndFilter(fillResult, islandPaths, minArea));
-				workerLog('generateConcentricContours:fillFragments', {
-					level: level,
-					outerIndex: outerIndex,
-					fragmentCount: validFragments.length
-				});
 			}
 
 			nextOuters.push(...validFragments);
@@ -155,10 +95,6 @@ function generateConcentricContours(outerPath, islandPaths, stepover, pocketRadi
 		currentOuters = nextOuters;
 		level++;
 	}
-	workerLog('generateConcentricContours:done', {
-		levelCount: level,
-		contourCount: contours.length
-	});
 	return { contours, contourLevels, levelCount: level };
 }
 
@@ -462,24 +398,10 @@ function generatePocketToolpaths(payload) {
 	let createdCount = 0;
 	const toolpaths = [];
 
-	workerLog('Pocket worker started', {
-		groupCount: selectionGroups.length,
-		radius: radius,
-		stepover: stepover,
-		angle: angle,
-		direction: direction,
-		strategy: strategy
-	});
-
 	for (let g = 0; g < selectionGroups.length; g++) {
 		const group = selectionGroups[g];
 		let inputPaths = group.paths.map(function(path, pathIndex) {
 			return preparePocketInputPath(path.path, 'group-' + g + '-path-' + pathIndex);
-		});
-		workerLog('Processing pocket group', {
-			groupIndex: g,
-			pathCount: inputPaths.length,
-			svgIds: group.paths.map(function(path) { return path.id; })
 		});
 		inputPaths = normalizeWindingOrder(inputPaths);
 		const selectedSvgIds = group.paths.map(function(path) {
@@ -498,35 +420,14 @@ function generatePocketToolpaths(payload) {
 					directIslands.push(inputPaths[j]);
 				}
 			}
-			workerLog('Generating sub-pocket', {
-				groupIndex: g,
-				outerIndex: i,
-				depth: depths[i],
-				outerPointCount: outerPath.length,
-				islandCount: directIslands.length
-			});
 			let paths = generatePocketPaths(outerPath, directIslands, radius, stepover, angle, direction, 0, strategy);
-			workerLog('Sub-pocket generated', {
-				groupIndex: g,
-				outerIndex: i,
-				generatedPathCount: paths.length
-			});
 			if (paths.length > 0) pocketGroups.push(paths);
 		}
 
 		if (pocketGroups.length === 0) {
-			workerLog('Pocket group produced no paths', {
-				groupIndex: g,
-				svgIds: selectedSvgIds
-			});
 			continue;
 		}
 		let allPaths = optimizeGroupOrder(pocketGroups);
-		workerLog('Pocket group completed', {
-			groupIndex: g,
-			groupPocketCount: pocketGroups.length,
-			flattenedPathCount: allPaths.length
-		});
 		toolpaths.push({
 			paths: allPaths,
 			name: 'Pocket',
@@ -536,11 +437,6 @@ function generatePocketToolpaths(payload) {
 		});
 		createdCount++;
 	}
-
-	workerLog('Pocket worker completed', {
-		createdCount: createdCount,
-		toolpathCount: toolpaths.length
-	});
 
 	return { createdCount, toolpaths };
 }

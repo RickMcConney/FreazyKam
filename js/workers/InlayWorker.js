@@ -18,15 +18,6 @@ function roundConvexCorners(path, radius) {
 	return offsetOut[0];
 }
 
-function workerLog(message, details) {
-	self.postMessage({
-		ok: true,
-		log: true,
-		message: 'InlayWorker ' + message,
-		details: details || null
-	});
-}
-
 function computeNestingDepths(inputPaths) {
 	let depths = [];
 	for (let i = 0; i < inputPaths.length; i++) {
@@ -267,16 +258,6 @@ function generateInlayToolpaths(payload) {
 	const createdGroups = [];
 	let createdCount = 0;
 
-	workerLog('start', {
-		groupCount: selectionGroups.length,
-		inlayType: inlayType,
-		pocketRadius: pocketRadius,
-		finishRadius: finishRadius,
-		stepover: stepover,
-		angle: angle,
-		direction: direction
-	});
-
 	for (let g = 0; g < selectionGroups.length; g++) {
 		const group = selectionGroups[g];
 		let inputPaths = group.paths.map(function(path) {
@@ -284,11 +265,6 @@ function generateInlayToolpaths(payload) {
 		});
 		const selectedSvgIds = group.paths.map(function(path) {
 			return path.id;
-		});
-		workerLog('group:start', {
-			groupIndex: g,
-			svgIds: selectedSvgIds,
-			pathCount: inputPaths.length
 		});
 
 		if (inlayType === 'male' && props?.mirror) {
@@ -298,10 +274,6 @@ function generateInlayToolpaths(payload) {
 				return path.map(function(pt) {
 					return { x: 2 * centerX - pt.x, y: pt.y };
 				});
-			});
-			workerLog('group:mirrored', {
-				groupIndex: g,
-				centerX: centerX
 			});
 		}
 
@@ -315,10 +287,6 @@ function generateInlayToolpaths(payload) {
 		}
 
 		if (allOuters.length === 0) {
-			workerLog('group:skipped-no-outer', {
-				groupIndex: g,
-				svgIds: selectedSvgIds
-			});
 			continue;
 		}
 
@@ -345,14 +313,6 @@ function generateInlayToolpaths(payload) {
 		}
 
 		const toolpaths = buildInlayToolpathEntries(pocketGroups, profileGroups, cutOutGroups, pocketingTool, finishingTool, typeName, selectedSvgIds);
-		workerLog('group:done', {
-			groupIndex: g,
-			svgIds: selectedSvgIds,
-			resultCount: toolpaths.length,
-			pocketGroupCount: pocketGroups.length,
-			profileGroupCount: profileGroups.length,
-			cutOutGroupCount: cutOutGroups.length
-		});
 		createdGroups.push({
 			groupIndex: g,
 			svgIds: selectedSvgIds,
@@ -360,11 +320,6 @@ function generateInlayToolpaths(payload) {
 		});
 		if (toolpaths.length > 0) createdCount++;
 	}
-
-	workerLog('done', {
-		createdCount: createdCount,
-		groupResultCount: createdGroups.length
-	});
 	return {
 		createdCount: createdCount,
 		groups: createdGroups

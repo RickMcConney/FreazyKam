@@ -1,12 +1,3 @@
-function workerLog(message, details) {
-	self.postMessage({
-		ok: true,
-		log: true,
-		message: 'DrillWorker ' + message,
-		details: details || null
-	});
-}
-
 function generateArcPoints(points, cx, cy, r1, r2, z1, z2, numPoints, angleOffset, ppr, toolRadius, startAt1) {
 	var start = startAt1 ? 1 : 0;
 	for (var i = start; i <= numPoints; i++) {
@@ -91,13 +82,6 @@ self.onmessage = function(event) {
 		var depth = payload.depth;
 		var stepDown = payload.stepDown;
 
-		workerLog('start', {
-			requestCount: requests.length,
-			toolRadius: toolRadius,
-			depth: depth,
-			stepDown: stepDown
-		});
-
 		var toolpaths = [];
 		var createdCount = 0;
 
@@ -106,11 +90,6 @@ self.onmessage = function(event) {
 			if (!request) continue;
 
 			if (request.kind === 'point') {
-				workerLog('point', {
-					index: i,
-					x: request.point && request.point.x,
-					y: request.point && request.point.y
-				});
 				toolpaths.push({
 					name: 'Drill',
 					operation: 'Drill',
@@ -126,11 +105,6 @@ self.onmessage = function(event) {
 			}
 
 			if (request.kind === 'helical') {
-				workerLog('helical', {
-					index: i,
-					svgId: request.svgId,
-					radius: request.circle && request.circle.radius
-				});
 				if (!request.circle || request.circle.radius <= toolRadius) {
 					throw new Error('Circle diameter is smaller than tool diameter. Use a smaller end mill.');
 				}
@@ -145,10 +119,6 @@ self.onmessage = function(event) {
 				createdCount++;
 			}
 		}
-
-		workerLog('done', {
-			createdCount: createdCount
-		});
 
 		self.postMessage({
 			ok: true,
