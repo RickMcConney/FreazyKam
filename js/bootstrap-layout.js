@@ -1736,6 +1736,11 @@ const stopDragging = () => {
     window.addEventListener('pointerup', stopDragging);
     window.addEventListener('pointercancel', stopDragging);
     window.addEventListener('resize', clampPopupPosition);
+    document.addEventListener('keydown', (event) => {
+        if (event.key !== 'Escape') return;
+        if (elements.popup.style.display === 'none' || getComputedStyle(elements.popup).display === 'none') return;
+        elements.close?.click();
+    });
  
     elements.close?.addEventListener('click', () => showToolsList());
  
