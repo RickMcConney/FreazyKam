@@ -726,7 +726,7 @@ function renderShapeToolsGroup() {
     groupHeader.title = 'Create basic shapes';
     groupHeader.innerHTML = `
         <span class="d-flex align-items-center gap-2">
-            <i data-lucide="pentagon"></i>Shape
+            <i data-lucide="pentagon"></i><span>Shape</span>
         </span>
         <i data-lucide="chevron-down" class="collapse-chevron"></i>`;
 
@@ -739,8 +739,10 @@ function renderShapeToolsGroup() {
         item.className = 'sidebar-item ms-4';
         item.dataset.operation = shape.value;
         item.dataset.shapeOperation = 'true';
+        item.dataset.bsToggle = 'tooltip';
+        item.dataset.bsPlacement = 'right';
         item.title = shape.tooltip;
-        item.innerHTML = `<i data-lucide="${shape.icon}"></i>${shape.label}`;
+        item.innerHTML = `<i data-lucide="${shape.icon}"></i><span>${shape.label}</span>`;
         collapseContainer.appendChild(item);
     });
 
@@ -780,7 +782,7 @@ function renderModifyToolsGroup() {
     groupHeader.title = 'Modify existing paths';
     groupHeader.innerHTML = `
         <span class="d-flex align-items-center gap-2">
-            <i data-lucide="wand-sparkles"></i>Modify
+            <i data-lucide="wand-sparkles"></i><span>Modify</span>
         </span>
         <i data-lucide="chevron-down" class="collapse-chevron"></i>`;
 
@@ -793,8 +795,10 @@ function renderModifyToolsGroup() {
         item.className = 'sidebar-item ms-4';
         item.dataset.operation = tool.value;
         item.dataset.modifyOperation = 'true';
+        item.dataset.bsToggle = 'tooltip';
+        item.dataset.bsPlacement = 'right';
         item.title = tool.tooltip;
-        item.innerHTML = `<i data-lucide="${tool.icon}"></i>${tool.label}`;
+        item.innerHTML = `<i data-lucide="${tool.icon}"></i><span>${tool.label}</span>`;
         collapseContainer.appendChild(item);
     });
 
@@ -995,16 +999,44 @@ function updateSnapButton() {
 
 
 // Sidebar creation
+function updateSidebarCompactMode() {
+    const sidebar = document.getElementById('sidebar');
+    if (!sidebar) return;
+
+    const width = parseInt(window.getComputedStyle(sidebar).width, 10) || sidebar.offsetWidth || 0;
+    const isIconOnly = width < 175;
+    const isTabsIconOnly = width >= 175 && width < 260;
+
+    sidebar.classList.toggle('is-icon-only', isIconOnly);
+    sidebar.classList.toggle('is-tabs-icon-only', isTabsIconOnly);
+
+    const compactCollapses = [
+        { toggle: '[data-shape-tools-toggle]', target: '#shape-tools-collapse' },
+        { toggle: '[data-modify-tools-toggle]', target: '#modify-tools-collapse' }
+    ];
+
+    compactCollapses.forEach(({ toggle, target }) => {
+        const toggleNode = sidebar.querySelector(toggle);
+        const collapseNode = sidebar.querySelector(target);
+        if (!toggleNode || !collapseNode) return;
+
+        if (isIconOnly) {
+            collapseNode.classList.add('show');
+            toggleNode.setAttribute('aria-expanded', 'true');
+        }
+    });
+}
+
 function createSidebar() {
     const sidebar = document.getElementById('sidebar');
     sidebar.innerHTML = `
         <!-- Tab Navigation (fixed at top) -->
         <nav class="nav nav-tabs border-bottom flex-shrink-0" id="sidebar-tabs" role="tablist">
-            <button class="nav-link active" id="draw-tools-tab" data-bs-toggle="tab" data-bs-target="#draw-tools" type="button" role="tab">
-                <i data-lucide="drafting-compass"></i> Draw Tools
+            <button class="nav-link active" id="draw-tools-tab" data-bs-toggle="tab" data-bs-target="#draw-tools" type="button" role="tab" title="Draw Tools" aria-label="Draw Tools">
+                <i data-lucide="drafting-compass"></i><span>Draw Tools</span>
             </button>
-            <button class="nav-link" id="operations-tab" data-bs-toggle="tab" data-bs-target="#operations" type="button" role="tab">
-                <i data-lucide="cog"></i> Operations
+            <button class="nav-link" id="operations-tab" data-bs-toggle="tab" data-bs-target="#operations" type="button" role="tab" title="Operations" aria-label="Operations">
+                <i data-lucide="cog"></i><span>Operations</span>
             </button>
         </nav>
 
@@ -1037,26 +1069,26 @@ function createSidebar() {
             <div class="tab-pane fade h-100" id="operations" role="tabpanel">
                 <div id="operations-list" class="p-3">
                     <div class="sidebar-item" data-operation="Drill" data-bs-toggle="tooltip" data-bs-placement="right" title="Drill holes at selected points">
-                        <i data-lucide="circle-plus"></i>Drill
+                        <i data-lucide="circle-plus"></i><span>Drill</span>
                     </div>
                     <div class="sidebar-item" data-operation="Profile" data-bs-toggle="tooltip" data-bs-placement="right" title="Cut inside or outside the selected path">
-                        <i data-lucide="circle"></i>Profile
+                        <i data-lucide="circle"></i><span>Profile</span>
                     </div>
 
                     <div class="sidebar-item" data-operation="Pocket" data-bs-toggle="tooltip" data-bs-placement="right" title="Remove material inside the path">
-                        <i data-lucide="target"></i>Pocket
+                        <i data-lucide="target"></i><span>Pocket</span>
                     </div>
                     <div class="sidebar-item" data-operation="VCarve" data-bs-toggle="tooltip" data-bs-placement="right" title="V-carve inside or outside the path">
-                        <i data-lucide="star"></i>V-Carve
+                        <i data-lucide="star"></i><span>V-Carve</span>
                     </div>
                     <div class="sidebar-item" data-operation="Inlay" data-bs-toggle="tooltip" data-bs-placement="right" title="Create male plug or female socket for inlay work">
-                        <i data-lucide="inlay"></i>Inlay
+                        <i data-lucide="inlay"></i><span>Inlay</span>
                     </div>
                     <div class="sidebar-item" data-operation="Surfacing" data-bs-toggle="tooltip" data-bs-placement="right" title="Surface the entire workpiece with parallel passes">
-                        <i data-lucide="align-justify"></i>Surfacing
+                        <i data-lucide="align-justify"></i><span>Surfacing</span>
                     </div>
                     <div class="sidebar-item" data-operation="3dProfile" data-bs-toggle="tooltip" data-bs-placement="right" title="3D raster toolpath following STL surface with ball nose bit">
-                        <i data-lucide="mountain"></i>3D Profile
+                        <i data-lucide="mountain"></i><span>3D Profile</span>
                     </div>
                 </div>
                 <!-- Operation Properties Editor (rendered inside floating popup) -->
@@ -1091,6 +1123,7 @@ function createSidebar() {
     setupSidebarEventHandlers(sidebar);
     setupSidebarTabHandlers();
     setupCanvasTabHandlers();
+    updateSidebarCompactMode();
 }
 
 function getToolpathSourceIds(toolpath) {
@@ -1154,6 +1187,8 @@ function renderSidebarLeafItem(config) {
         metaParts.push(`<span class="sidebar-item-meta-chip">${part}</span>`);
     });
 
+    item.title = title;
+    item.setAttribute('aria-label', title);
     item.innerHTML = `
         <i data-lucide="${icon}"></i>
         <div class="sidebar-item-body">
@@ -1201,6 +1236,8 @@ function renderObjectSidebarGroup(config) {
     if (path.visible === false) header.classList.add('is-hidden');
 
     const headerBadgesMarkup = headerBadges.filter(Boolean).map(badge => `<span class="sidebar-item-meta-chip">${badge}</span>`).join('');
+    header.title = title;
+    header.setAttribute('aria-label', title);
     header.innerHTML = `
         <div class="sidebar-object-header-main d-flex align-items-start">
             <i data-lucide="${headerIcon}"></i>
@@ -4023,7 +4060,7 @@ function addOperation(name, icon, tooltip, displayName = name) {
     if (icon != null) {
         document.getElementById('draw-tools-list').innerHTML += `
         <div class="sidebar-item" data-operation=${name} data-bs-toggle="tooltip" data-bs-placement="right" title="${tooltip}">
-         <i data-lucide=${icon}></i>${displayName}
+         <i data-lucide=${icon}></i><span>${displayName}</span>
          </div>`
     }
 
@@ -4353,11 +4390,12 @@ function initializeResizeHandles() {
             if (!isResizingSidebar) return;
 
             const newWidth = startWidth + (e.clientX - startX);
-            const minWidth = 200;
+            const minWidth = 101;
             const maxWidth = window.innerWidth * 0.5;
 
             if (newWidth >= minWidth && newWidth <= maxWidth) {
                 sidebar.style.width = newWidth + 'px';
+                updateSidebarCompactMode();
             }
         });
 
