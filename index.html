@@ -64,6 +64,22 @@
             display: block;
         }
 
+        #canvas-minimap {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            cursor: pointer;
+            z-index: 10;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+            opacity: 0.9;
+        }
+
+        #canvas-minimap:hover {
+            opacity: 1;
+        }
+
         #tool-panel {
             flex: 1;
             min-height: 0;
@@ -172,6 +188,7 @@
                             <!-- 2D View Tab -->
                             <div class="tab-pane fade show active h-100 position-relative" id="2d-view" role="tabpanel" aria-labelledby="2d-tab">
                                 <canvas id="canvas" width="2000" height="2000" style="width: 100%; height: 100%; display: block;"></canvas>
+                                <canvas id="canvas-minimap" width="160" height="120"></canvas>
                                 <!-- 2D Simulation Controls Overlay -->
                                 <div id="simulation-overlay-2d" class="simulation-overlay d-none">
                                     <div id="2d-simulation-controls"></div>
@@ -200,7 +217,7 @@
                         <div id="status"
                             class="bg-light border-top p-2 text-muted d-flex align-items-center justify-content-between">
                             <span>Tool: Select</span>
-                            <span class="small">Ver 2026-05-11</span>
+                            <span class="small">Ver 2026-05-12</span>
                         </div>
                     </div>
                 </div>
