@@ -2371,7 +2371,7 @@ function updateDrillToolpath(activeToolpaths, selectedTool, data) {
 }
 
 function regenerateToolpathFromSvg(operationName, activeToolpaths, selectedTool, data) {
-    const svgPathsToRegenerate = [];
+    let svgPathsToRegenerate = [];
     for (const toolpath of activeToolpaths) {
         if (toolpath.svgIds && Array.isArray(toolpath.svgIds)) {
             toolpath.svgIds.forEach(id => {
@@ -2384,10 +2384,26 @@ function regenerateToolpathFromSvg(operationName, activeToolpaths, selectedTool,
         }
     }
 
+    const selectedSvgPaths = svgpaths.filter(path => path.selected === true);
+    if (selectedSvgPaths.length > 0) {
+        svgPathsToRegenerate = selectedSvgPaths.slice();
+        activeToolpaths = activeToolpaths.filter(toolpath => {
+            const toolpathSourceIds = toolpath.svgIds || (toolpath.svgId ? [toolpath.svgId] : []);
+            return toolpathSourceIds.some(id => selectedSvgPaths.some(path => path.id === id));
+        });
+    }
+
     if (svgPathsToRegenerate.length === 0) {
         notify('Original paths not found', 'error');
         return;
     }
+
+    const seenSvgPathIds = new Set();
+    svgPathsToRegenerate = svgPathsToRegenerate.filter(path => {
+        if (!path || seenSvgPathIds.has(path.id)) return false;
+        seenSvgPathIds.add(path.id);
+        return true;
+    });
 
     // For VCarve on text, expand selection to include all paths in the same
     // text group so hole detection works (e.g. letter "e", "o", "i").
@@ -3879,7 +3895,8 @@ function refreshToolPathsDisplay() {
         linkedToolpaths.forEach(toolpath => assignedToolpathIds.add(toolpath.id));
 
         const badges = [];
-        if (group.paths.length > 1) badges.push(`${group.paths.length} paths`);
+        const showPathCountBadge = group.kind !== 'text' && group.paths.length > 1;
+        if (showPathCountBadge) badges.push(`${group.paths.length} paths`);
         badges.push(`${linkedToolpaths.length} toolpath${linkedToolpaths.length !== 1 ? 's' : ''}`);
         if (group.path.visible === false) badges.push('Hidden');
 

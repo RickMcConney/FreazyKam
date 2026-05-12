@@ -337,6 +337,11 @@ class Select extends Operation {
         var mouse = this.normalizeEvent(canvas, evt);
         const mouseHit = this.normalizeEventWorld(canvas, evt);
         const wasDragging = Select.state == Select.DRAGGING;
+        const floatingPopup = document.getElementById('floating-properties-popup');
+        const floatingWindow = document.getElementById('floating-properties-window');
+        const isFloatingPopupOpen = floatingPopup
+            && getComputedStyle(floatingPopup).display !== 'none'
+            && floatingPopup.style.display !== 'none';
         this.mouseDown = false;
 
         // Only toggle selection if we stayed in IDLE (never crossed 8px threshold)
@@ -345,6 +350,15 @@ class Select extends Operation {
             // Use the path captured at mouse down (which includes highlighted paths)
             // Fall back to closestPath for clicks near edges
             let path = this.potentialDragPath || closestPath(mouseHit, false);
+
+            if (!path && isFloatingPopupOpen && floatingWindow && !floatingWindow.contains(evt.target)) {
+                showToolsList();
+                this.potentialDragPath = null;
+                Select.state = Select.IDLE;
+                this.showSelection();
+                return;
+            }
+
             this.toggleSelection(path, evt);
         }
 
