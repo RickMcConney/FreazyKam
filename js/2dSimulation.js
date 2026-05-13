@@ -1326,5 +1326,5 @@ function formatTimeMMSS(seconds) {
  * @param {number} speed - Speed multiplier (1.0 = normal, 2.0 = 2x, etc)
  */
 function updateSimulation2DSpeed(speed) {
-    simulation2D.speed = Math.max(0.5, Math.min(10, speed)); // Clamp between 0.5x and 10x
+    simulation2D.speed = Math.max(0.5, Math.min(50, speed)); // Clamp between 0.5x and 50x
 }
