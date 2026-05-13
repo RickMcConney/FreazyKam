@@ -396,34 +396,6 @@ Built-in canvas panning (not an Operation):
   - Both hidden when Tools tab active
 - Controls use Bootstrap grid layout (`row g-2`, `col-auto`) for responsive horizontal layout
 
-## AI Integration (Gemini)
-
-**Implementation:** `js/operations/Gemini.js`
-
-The Gemini operation provides AI-powered SVG generation:
-- Uses Google's Gemini API (requires API key stored in localStorage)
-- Configurable model selection (flash-lite, flash, pro variants)
-- Generates stroke-based SVG suitable for CNC from text prompts
-- Automatic parsing and import of generated SVG into workspace
-
-**Key Functions:**
-- `callGeminiApi(prompt, apiKey)` - Sends request to Gemini API
-- `applyGemini()` - Processes API response and imports SVG via `newParseSvgContent()`
-
-**Prompt Engineering:**
-- Optimized for line-based technical drawings (no fills)
-- Requests detailed contours with proper line clipping
-- Default model: `gemini-2.5-pro` (configurable in code)
-
-### Changing the Gemini Model
-Edit `js/operations/Gemini.js` line 4:
-```javascript
-var model = 'gemini-2.5-pro';  // or 'gemini-2.5-flash', 'gemini-2.5-flash-lite'
-```
-
-### Modifying the AI Prompt
-The prompt template is in `js/operations/Gemini.js` in the `callGeminiApi()` function. Adjust the `request` variable to change how SVG generation behaves.
-
 ## Help System
 
 **Implementation:** `js/StepWiseHelpSystem.js`
