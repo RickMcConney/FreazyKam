@@ -185,7 +185,7 @@ function flushSimulation3DUI(force) {
     const percent = totalGcodeLines > 0
       ? Math.round(((currentLineNumber + 1) / totalGcodeLines) * 100)
       : 0;
-    ui.progressDisplay.textContent = `Line ${currentLineNumber + 1} (${percent}%)`;
+    ui.progressDisplay.textContent = `${currentLineNumber + 1}/${totalGcodeLines} (${percent}%)`;
   }
 
   if (ui.simTimeElem) {

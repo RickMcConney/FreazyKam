@@ -34,10 +34,10 @@ function createSimulationMetric(label, valueNode, unitText) {
 
 function createSimulationDivider() {
     const divider = document.createElement('hspacer');
-    divider.style.width = '1px';
-    divider.style.height = '20px';
-    divider.style.margin = '0 8px';
-    divider.style.backgroundColor = 'var(--bs-secondary)';
+    divider.style.width = '0.5px';
+    divider.style.height = '14px';
+    divider.style.margin = '0 6px';
+    divider.style.backgroundColor = 'rgba(108, 117, 125, 0.35)';
     return divider;
 }
 
@@ -268,8 +268,11 @@ function ensure3DSimulationControls() {
     }
 
     const fragment = document.createDocumentFragment();
-    const row = document.createElement('div');
-    row.className = 'row g-2 w-100';
+    const controlsRow = document.createElement('div');
+    controlsRow.className = 'row g-2 w-100 align-items-center';
+
+    const metricsRow = document.createElement('div');
+    metricsRow.className = 'row gx-4 gy-2 w-100 align-items-center mt-1';
 
     const buttonsCol = document.createElement('div');
     buttonsCol.className = 'col-auto';
@@ -297,7 +300,7 @@ function ensure3DSimulationControls() {
     buttonsCol.appendChild(startBtn);
     buttonsCol.appendChild(pauseBtn);
     buttonsCol.appendChild(stopBtn);
-    row.appendChild(buttonsCol);
+    controlsRow.appendChild(buttonsCol);
 
     const speedCol = document.createElement('div');
     speedCol.className = 'col-auto d-flex align-items-center gap-2';
@@ -324,7 +327,7 @@ function ensure3DSimulationControls() {
     speedCol.appendChild(speedLabel);
     speedCol.appendChild(speedInput);
     speedCol.appendChild(speedDisplay);
-    row.appendChild(speedCol);
+    controlsRow.appendChild(speedCol);
 
     const axesControl = create3DVisibilityControl('3d-show-axes', 'Axes', true);
     const toolpathControl = create3DVisibilityControl('3d-show-toolpath', 'Toolpath', true);
@@ -332,11 +335,11 @@ function ensure3DSimulationControls() {
     const stlControl = create3DVisibilityControl('3d-show-stl', 'STL Model', true);
     const followToolControl = create3DVisibilityControl('3d-follow-tool', 'Follow Tool', false);
 
-    row.appendChild(axesControl.wrapper);
-    row.appendChild(toolpathControl.wrapper);
-    row.appendChild(workpieceControl.wrapper);
-    row.appendChild(stlControl.wrapper);
-    row.appendChild(followToolControl.wrapper);
+    controlsRow.appendChild(axesControl.wrapper);
+    controlsRow.appendChild(toolpathControl.wrapper);
+    controlsRow.appendChild(workpieceControl.wrapper);
+    controlsRow.appendChild(stlControl.wrapper);
+    controlsRow.appendChild(followToolControl.wrapper);
 
     const progressCol = document.createElement('div');
     progressCol.className = 'col-auto d-flex align-items-center gap-2';
@@ -359,23 +362,24 @@ function ensure3DSimulationControls() {
     const progressDisplay = document.createElement('span');
     progressDisplay.id = '3d-progress-display';
     progressDisplay.className = 'small';
-    progressDisplay.textContent = 'Line 0 (0%)';
+    progressDisplay.textContent = '0/0 (0%)';
 
     progressCol.appendChild(progressLabel);
     progressCol.appendChild(progressInput);
-    progressCol.appendChild(progressDisplay);
-    row.appendChild(progressCol);
+    controlsRow.appendChild(progressCol);
+
+    metricsRow.appendChild(createSimulationMetric('Line:', progressDisplay));
 
     const stepDisplay = document.createElement('span');
     stepDisplay.id = '3d-step-display';
     stepDisplay.className = 'small';
     stepDisplay.textContent = '0 / 0';
-    row.appendChild(createSimulationMetric('G-code:', stepDisplay));
+    metricsRow.appendChild(createSimulationMetric('G-code:', stepDisplay));
 
     const feedValue = document.createElement('span');
     feedValue.id = '3d-feed-rate-display';
     feedValue.textContent = '0';
-    row.appendChild(createSimulationMetric('Feed:', feedValue, ' mm/min'));
+    metricsRow.appendChild(createSimulationMetric('Feed:', feedValue, ' mm/min'));
 
     const timeValue = document.createElement('span');
     const simulationTime = document.createElement('span');
@@ -387,9 +391,10 @@ function ensure3DSimulationControls() {
     timeValue.appendChild(simulationTime);
     timeValue.appendChild(document.createTextNode(' / '));
     timeValue.appendChild(totalTime);
-    row.appendChild(createSimulationMetric('Time:', timeValue));
+    metricsRow.appendChild(createSimulationMetric('Time:', timeValue));
 
-    fragment.appendChild(row);
+    fragment.appendChild(controlsRow);
+    fragment.appendChild(metricsRow);
     overlayControls.replaceChildren(fragment);
 
     startBtn.addEventListener('click', () => {
