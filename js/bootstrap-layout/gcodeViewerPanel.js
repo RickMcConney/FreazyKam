@@ -10,6 +10,29 @@
 // Global GcodeView instance and state
 var gcodeView = null;
 var previousActiveSidebarTab = null;
+var gcodeViewerPanelRefs = null;
+
+function ensureGcodeViewerPanelRefs() {
+    if (
+        gcodeViewerPanelRefs &&
+        gcodeViewerPanelRefs.viewer &&
+        gcodeViewerPanelRefs.sidebarTabs &&
+        gcodeViewerPanelRefs.sidebarContent &&
+        gcodeViewerPanelRefs.viewer.isConnected &&
+        gcodeViewerPanelRefs.sidebarTabs.isConnected &&
+        gcodeViewerPanelRefs.sidebarContent.isConnected
+    ) {
+        return gcodeViewerPanelRefs;
+    }
+
+    gcodeViewerPanelRefs = {
+        viewer: document.getElementById('gcode-viewer'),
+        sidebarTabs: document.getElementById('sidebar-tabs'),
+        sidebarContent: document.getElementById('sidebar-content')
+    };
+
+    return gcodeViewerPanelRefs;
+}
 
 // Initialize G-code View
 function initializeGcodeView() {
@@ -17,9 +40,14 @@ function initializeGcodeView() {
     gcodeView = new GcodeView('gcode-viewer-container');
 
     // Initially hide the G-code viewer
-    const viewer = document.getElementById('gcode-viewer');
+    const refs = ensureGcodeViewerPanelRefs();
+    const viewer = refs.viewer;
     if (viewer) {
         viewer.style.display = 'none';
+        viewer.style.visibility = 'hidden';
+        viewer.style.height = '0';
+        viewer.style.overflow = 'hidden';
+        viewer.classList.remove('h-100');
     }
 }
 
@@ -27,22 +55,24 @@ function initializeGcodeView() {
 function showGcodeViewerPanel() {
     if (!gcodeView) return;
 
+    const refs = ensureGcodeViewerPanelRefs();
+
     // Save the currently active sidebar tab
     previousActiveSidebarTab = document.querySelector('#sidebar-tabs .nav-link.active');
 
     // Hide the sidebar tab navigation and content
-    const sidebarTabs = document.getElementById('sidebar-tabs');
+    const sidebarTabs = refs.sidebarTabs;
     if (sidebarTabs) {
         sidebarTabs.style.display = 'none';
     }
 
-    const sidebarContent = document.getElementById('sidebar-content');
+    const sidebarContent = refs.sidebarContent;
     if (sidebarContent) {
         sidebarContent.style.display = 'none';
     }
 
     // Show the G-code viewer
-    const viewer = document.getElementById('gcode-viewer');
+    const viewer = refs.viewer;
     if (viewer) {
         viewer.style.display = '';
         viewer.style.visibility = 'visible';
@@ -58,10 +88,12 @@ function showGcodeViewerPanel() {
 function hideGcodeViewerPanel() {
     if (!gcodeView) return;
 
+    const refs = ensureGcodeViewerPanelRefs();
+
     gcodeView.clear();
 
     // Hide the G-code viewer
-    const viewer = document.getElementById('gcode-viewer');
+    const viewer = refs.viewer;
     if (viewer) {
         viewer.classList.remove('h-100');
         viewer.style.display = 'none';
@@ -71,12 +103,12 @@ function hideGcodeViewerPanel() {
     }
 
     // Show the sidebar tab navigation and content
-    const sidebarTabs = document.getElementById('sidebar-tabs');
+    const sidebarTabs = refs.sidebarTabs;
     if (sidebarTabs) {
         sidebarTabs.style.display = '';
     }
 
-    const sidebarContent = document.getElementById('sidebar-content');
+    const sidebarContent = refs.sidebarContent;
     if (sidebarContent) {
         sidebarContent.style.display = '';
     }

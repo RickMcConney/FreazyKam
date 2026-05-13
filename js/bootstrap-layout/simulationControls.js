@@ -2,87 +2,216 @@
 // Extracted from js/bootstrap-layout.js. Loaded as a global-scope script
 // (no ES6 modules) — see CLAUDE.md for the script-order constraint.
 
-function create2DSimulationControls() {
+var simulationControls2DRefs = null;
+var simulationControls3DRefs = null;
+
+function createIconNode(iconName) {
+    const icon = document.createElement('i');
+    icon.setAttribute('data-lucide', iconName);
+    return icon;
+}
+
+function createSimulationMetric(label, valueNode, unitText) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'col-auto d-flex align-items-center gap-2';
+
+    const labelNode = document.createElement('span');
+    labelNode.className = 'small';
+    labelNode.textContent = label;
+
+    const valueWrapper = document.createElement('span');
+    valueWrapper.className = 'small';
+    valueWrapper.appendChild(valueNode);
+    if (unitText) {
+        valueWrapper.appendChild(document.createTextNode(unitText));
+    }
+
+    wrapper.appendChild(labelNode);
+    wrapper.appendChild(valueWrapper);
+
+    return wrapper;
+}
+
+function createSimulationDivider() {
+    const divider = document.createElement('hspacer');
+    divider.style.width = '1px';
+    divider.style.height = '20px';
+    divider.style.margin = '0 8px';
+    divider.style.backgroundColor = 'var(--bs-secondary)';
+    return divider;
+}
+
+function ensure2DSimulationControls() {
     const overlayControls = document.getElementById('2d-simulation-controls');
-    overlayControls.innerHTML = `
-        <div class="row g-2 w-100">
-            <div class="col-auto">
-                <button type="button" class="btn btn-outline-primary btn-sm" id="start-simulation">
-                    <i data-lucide="play"></i>
-                </button>
-                <button type="button" class="btn btn-outline-secondary btn-sm" id="pause-simulation" disabled>
-                    <i data-lucide="pause"></i>
-                </button>
-                <button type="button" class="btn btn-outline-secondary btn-sm" id="stop-simulation" disabled>
-                    <i data-lucide="octagon-x"></i>
-                </button>
-            </div>
+    if (!overlayControls) {
+        return null;
+    }
 
-            <div class="col-auto d-flex align-items-center gap-2">
-                <span class="small">Speed:</span>
-                <input type="range" class="form-range form-range-sm" id="simulation-speed" min="1" max="50" step="0.5" value="5" style="width: 60px;">
-                <span id="speed-display" class="small">5x</span>
-            </div>
+    if (simulationControls2DRefs && simulationControls2DRefs.container === overlayControls) {
+        return simulationControls2DRefs;
+    }
 
-            <div class="col-auto d-flex align-items-center gap-2">
-                <hspacer style="width: 1px; height: 20px; margin: 0 8px; background-color: var(--bs-secondary);"></hspacer>
-                <span class="small">Progress:</span>
-                <input type="range" class="form-range form-range-sm" id="simulation-step" min="0" max="100" step="1" value="0" style="width: 150px;">
-            </div>
+    const fragment = document.createDocumentFragment();
+    const row = document.createElement('div');
+    row.className = 'row g-2 w-100';
 
-            <div class="col-auto d-flex align-items-center gap-2">
-                <span class="small">G-code:</span>
-                <span id="2d-step-display" class="small">0 / 0</span>
-            </div>
+    const buttonsCol = document.createElement('div');
+    buttonsCol.className = 'col-auto';
 
-            <div class="col-auto d-flex align-items-center gap-2">
-                <span class="small">Feed:</span>
-                <span class="small"><span id="2d-feed-rate-display">0</span> mm/min</span>
-            </div>
+    const startBtn = document.createElement('button');
+    startBtn.type = 'button';
+    startBtn.className = 'btn btn-outline-primary btn-sm';
+    startBtn.id = 'start-simulation';
+    startBtn.appendChild(createIconNode('play'));
 
-            <div class="col-auto d-flex align-items-center gap-2">
-                <span class="small">Time:</span>
-                <span class="small"><span id="2d-simulation-time">0:00</span> / <span id="2d-total-time">0:00</span></span>
-            </div>
+    const pauseBtn = document.createElement('button');
+    pauseBtn.type = 'button';
+    pauseBtn.className = 'btn btn-outline-secondary btn-sm';
+    pauseBtn.id = 'pause-simulation';
+    pauseBtn.disabled = true;
+    pauseBtn.appendChild(createIconNode('pause'));
 
-            <div class="col-auto d-flex align-items-center gap-2">
-                <span class="small">Z:</span>
-                <span class="small"><span id="2d-z-depth-display">0.00</span> mm</span>
-            </div>
-        </div>
-    `;
+    const stopBtn = document.createElement('button');
+    stopBtn.type = 'button';
+    stopBtn.className = 'btn btn-outline-secondary btn-sm';
+    stopBtn.id = 'stop-simulation';
+    stopBtn.disabled = true;
+    stopBtn.appendChild(createIconNode('octagon-x'));
 
-    // Add simulation control event handlers
-    const startBtn = document.getElementById('start-simulation');
-    const pauseBtn = document.getElementById('pause-simulation');
-    const stopBtn = document.getElementById('stop-simulation');
+    buttonsCol.appendChild(startBtn);
+    buttonsCol.appendChild(pauseBtn);
+    buttonsCol.appendChild(stopBtn);
+    row.appendChild(buttonsCol);
 
-    if (startBtn && typeof startSimulation2D === 'function') {
+    const speedCol = document.createElement('div');
+    speedCol.className = 'col-auto d-flex align-items-center gap-2';
+
+    const speedLabel = document.createElement('span');
+    speedLabel.className = 'small';
+    speedLabel.textContent = 'Speed:';
+
+    const speedInput = document.createElement('input');
+    speedInput.type = 'range';
+    speedInput.className = 'form-range form-range-sm';
+    speedInput.id = 'simulation-speed';
+    speedInput.min = '1';
+    speedInput.max = '50';
+    speedInput.step = '0.5';
+    speedInput.value = '5';
+    speedInput.style.width = '60px';
+
+    const speedDisplay = document.createElement('span');
+    speedDisplay.id = 'speed-display';
+    speedDisplay.className = 'small';
+    speedDisplay.textContent = '5x';
+
+    speedCol.appendChild(speedLabel);
+    speedCol.appendChild(speedInput);
+    speedCol.appendChild(speedDisplay);
+    row.appendChild(speedCol);
+
+    const progressCol = document.createElement('div');
+    progressCol.className = 'col-auto d-flex align-items-center gap-2';
+    progressCol.appendChild(createSimulationDivider());
+
+    const progressLabel = document.createElement('span');
+    progressLabel.className = 'small';
+    progressLabel.textContent = 'Progress:';
+
+    const progressInput = document.createElement('input');
+    progressInput.type = 'range';
+    progressInput.className = 'form-range form-range-sm';
+    progressInput.id = 'simulation-step';
+    progressInput.min = '0';
+    progressInput.max = '100';
+    progressInput.step = '1';
+    progressInput.value = '0';
+    progressInput.style.width = '150px';
+
+    progressCol.appendChild(progressLabel);
+    progressCol.appendChild(progressInput);
+    row.appendChild(progressCol);
+
+    const stepDisplay = document.createElement('span');
+    stepDisplay.id = '2d-step-display';
+    stepDisplay.className = 'small';
+    stepDisplay.textContent = '0 / 0';
+    row.appendChild(createSimulationMetric('G-code:', stepDisplay));
+
+    const feedValue = document.createElement('span');
+    feedValue.id = '2d-feed-rate-display';
+    feedValue.textContent = '0';
+    row.appendChild(createSimulationMetric('Feed:', feedValue, ' mm/min'));
+
+    const timeValue = document.createElement('span');
+    const simulationTime = document.createElement('span');
+    simulationTime.id = '2d-simulation-time';
+    simulationTime.textContent = '0:00';
+    const totalTime = document.createElement('span');
+    totalTime.id = '2d-total-time';
+    totalTime.textContent = '0:00';
+    timeValue.appendChild(simulationTime);
+    timeValue.appendChild(document.createTextNode(' / '));
+    timeValue.appendChild(totalTime);
+    row.appendChild(createSimulationMetric('Time:', timeValue));
+
+    const zDepthValue = document.createElement('span');
+    zDepthValue.id = '2d-z-depth-display';
+    zDepthValue.textContent = '0.00';
+    row.appendChild(createSimulationMetric('Z:', zDepthValue, ' mm'));
+
+    fragment.appendChild(row);
+    overlayControls.replaceChildren(fragment);
+
+    if (typeof startSimulation2D === 'function') {
         startBtn.addEventListener('click', startSimulation2D);
     }
-    if (pauseBtn && typeof pauseSimulation2D === 'function') {
+    if (typeof pauseSimulation2D === 'function') {
         pauseBtn.addEventListener('click', pauseSimulation2D);
     }
-    if (stopBtn && typeof stopSimulation2D === 'function') {
+    if (typeof stopSimulation2D === 'function') {
         stopBtn.addEventListener('click', stopSimulation2D);
     }
 
-    // Simulation speed control
-    document.getElementById('simulation-speed').addEventListener('input', function (e) {
+    speedInput.addEventListener('input', function (e) {
         const speed = parseFloat(e.target.value);
-        document.getElementById('speed-display').textContent = speed + 'x';
+        speedDisplay.textContent = speed + 'x';
         if (typeof updateSimulation2DSpeed === 'function') {
             updateSimulation2DSpeed(speed);
         }
     });
 
-    // Simulation step control (progress slider) - seek to G-code line
-    document.getElementById('simulation-step').addEventListener('input', function (e) {
-        const lineIndex = parseInt(e.target.value);  // 0-indexed from slider (array index is line number)
+    progressInput.addEventListener('input', function (e) {
+        const lineIndex = parseInt(e.target.value, 10);
         if (typeof setSimulation2DLineNumber === 'function') {
-            setSimulation2DLineNumber(lineIndex);  // Pass 0-based line number directly
+            setSimulation2DLineNumber(lineIndex);
         }
     });
+
+    simulationControls2DRefs = {
+        container: overlayControls,
+        startBtn: startBtn,
+        pauseBtn: pauseBtn,
+        stopBtn: stopBtn,
+        speedInput: speedInput,
+        speedDisplay: speedDisplay,
+        progressInput: progressInput,
+        stepDisplay: stepDisplay,
+        feedValue: feedValue,
+        simulationTime: simulationTime,
+        totalTime: totalTime,
+        zDepthValue: zDepthValue
+    };
+
+    if (typeof lucide !== 'undefined' && typeof lucide.createIcons === 'function') {
+        lucide.createIcons();
+    }
+
+    return simulationControls2DRefs;
+}
+
+function create2DSimulationControls() {
+    ensure2DSimulationControls();
 }
 
 function update3DSimulationOverlayLayout() {
@@ -97,106 +226,188 @@ function update3DSimulationOverlayLayout() {
     container.style.height = overlayHeight > 0 ? `calc(100% - ${overlayHeight}px)` : '100%';
 }
 
-function create3DSimulationControls() {
+function create3DVisibilityControl(id, labelText, checked) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'col-auto d-flex align-items-center gap-2';
+
+    const label = document.createElement('label');
+    label.className = 'form-check-label small';
+    label.style.display = 'flex';
+    label.style.alignItems = 'center';
+    label.style.gap = '6px';
+    label.style.cursor = 'pointer';
+    label.style.margin = '0';
+
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.className = 'form-check-input';
+    input.id = id;
+    input.checked = checked;
+    input.style.margin = '0';
+    input.style.cursor = 'pointer';
+
+    const text = document.createElement('span');
+    text.textContent = labelText;
+
+    label.appendChild(input);
+    label.appendChild(text);
+    wrapper.appendChild(label);
+
+    return { wrapper: wrapper, input: input };
+}
+
+function ensure3DSimulationControls() {
     const overlayControls = document.getElementById('3d-simulation-controls');
-    overlayControls.innerHTML = `
-        <div class="row g-2 w-100">
-            <div class="col-auto">
-                <button type="button" class="btn btn-outline-primary btn-sm" id="3d-start-simulation">
-                    <i data-lucide="play"></i>
-                </button>
-                <button type="button" class="btn btn-outline-secondary btn-sm" id="3d-pause-simulation" disabled>
-                    <i data-lucide="pause"></i>
-                </button>
-                <button type="button" class="btn btn-outline-secondary btn-sm" id="3d-stop-simulation" disabled>
-                    <i data-lucide="octagon-x"></i>
-                </button>
-            </div>
+    if (!overlayControls) {
+        return null;
+    }
 
-            <div class="col-auto d-flex align-items-center gap-2">
-                <span class="small">Speed:</span>
-                <input type="range" class="form-range form-range-sm" id="3d-simulation-speed" min="1" max="50" step="0.5" value="4" style="width: 60px;">
-                <span id="3d-speed-display" class="small">4x</span>
-            </div>
+    if (simulationControls3DRefs && simulationControls3DRefs.container === overlayControls) {
+        update3DSimulationOverlayLayout();
+        return simulationControls3DRefs;
+    }
 
-            <div class="col-auto d-flex align-items-center gap-2">
-                <label class="form-check-label small" style="display: flex; align-items: center; gap: 6px; cursor: pointer; margin: 0;">
-                    <input type="checkbox" class="form-check-input" id="3d-show-axes" checked style="margin: 0; cursor: pointer;">
-                    <span>Axes</span>
-                </label>
-            </div>
+    const fragment = document.createDocumentFragment();
+    const row = document.createElement('div');
+    row.className = 'row g-2 w-100';
 
-            <div class="col-auto d-flex align-items-center gap-2">
-                <label class="form-check-label small" style="display: flex; align-items: center; gap: 6px; cursor: pointer; margin: 0;">
-                    <input type="checkbox" class="form-check-input" id="3d-show-toolpath" checked style="margin: 0; cursor: pointer;">
-                    <span>Toolpath</span>
-                </label>
-            </div>
+    const buttonsCol = document.createElement('div');
+    buttonsCol.className = 'col-auto';
 
-            <div class="col-auto d-flex align-items-center gap-2">
-                <label class="form-check-label small" style="display: flex; align-items: center; gap: 6px; cursor: pointer; margin: 0;">
-                    <input type="checkbox" class="form-check-input" id="3d-show-workpiece" checked style="margin: 0; cursor: pointer;">
-                    <span>Workpiece</span>
-                </label>
-            </div>
+    const startBtn = document.createElement('button');
+    startBtn.type = 'button';
+    startBtn.className = 'btn btn-outline-primary btn-sm';
+    startBtn.id = '3d-start-simulation';
+    startBtn.appendChild(createIconNode('play'));
 
-            <div class="col-auto d-flex align-items-center gap-2">
-                <label class="form-check-label small" style="display: flex; align-items: center; gap: 6px; cursor: pointer; margin: 0;">
-                    <input type="checkbox" class="form-check-input" id="3d-show-stl" checked style="margin: 0; cursor: pointer;">
-                    <span>STL Model</span>
-                </label>
-            </div>
+    const pauseBtn = document.createElement('button');
+    pauseBtn.type = 'button';
+    pauseBtn.className = 'btn btn-outline-secondary btn-sm';
+    pauseBtn.id = '3d-pause-simulation';
+    pauseBtn.disabled = true;
+    pauseBtn.appendChild(createIconNode('pause'));
 
-            <div class="col-auto d-flex align-items-center gap-2">
-                <label class="form-check-label small" style="display: flex; align-items: center; gap: 6px; cursor: pointer; margin: 0;">
-                    <input type="checkbox" class="form-check-input" id="3d-follow-tool" style="margin: 0; cursor: pointer;">
-                    <span>Follow Tool</span>
-                </label>
-            </div>
+    const stopBtn = document.createElement('button');
+    stopBtn.type = 'button';
+    stopBtn.className = 'btn btn-outline-secondary btn-sm';
+    stopBtn.id = '3d-stop-simulation';
+    stopBtn.disabled = true;
+    stopBtn.appendChild(createIconNode('octagon-x'));
 
-            <div class="col-auto d-flex align-items-center gap-2">
-            <hspacer style="width: 1px; height: 20px; margin: 0 8px; background-color: var(--bs-secondary);"></hspacer>
-                <span class="small">Progress:</span>
-                <input type="range" class="form-range form-range-sm" id="3d-simulation-progress" min="0" max="1" step="1" value="0" style="width: 150px;">
-                <span id="3d-progress-display" class="small">Line 0 (0%)</span>
-            </div>
+    buttonsCol.appendChild(startBtn);
+    buttonsCol.appendChild(pauseBtn);
+    buttonsCol.appendChild(stopBtn);
+    row.appendChild(buttonsCol);
 
-            <div class="col-auto d-flex align-items-center gap-2">
-                <span class="small">G-code:</span>
-                <span id="3d-step-display" class="small">0 / 0</span>
-            </div>
+    const speedCol = document.createElement('div');
+    speedCol.className = 'col-auto d-flex align-items-center gap-2';
 
+    const speedLabel = document.createElement('span');
+    speedLabel.className = 'small';
+    speedLabel.textContent = 'Speed:';
 
-            <div class="col-auto d-flex align-items-center gap-2">
-                <span class="small">Feed:</span>
-                <span class="small"><span id="3d-feed-rate-display">0</span> mm/min</span>
-            </div>
+    const speedInput = document.createElement('input');
+    speedInput.type = 'range';
+    speedInput.className = 'form-range form-range-sm';
+    speedInput.id = '3d-simulation-speed';
+    speedInput.min = '1';
+    speedInput.max = '50';
+    speedInput.step = '0.5';
+    speedInput.value = '4';
+    speedInput.style.width = '60px';
 
-            <div class="col-auto d-flex align-items-center gap-2">
-                <span class="small">Time:</span>
-                <span class="small"><span id="3d-simulation-time">0:00</span> / <span id="3d-total-time">0:00</span></span>
-            </div>
-        </div>
-    `;
+    const speedDisplay = document.createElement('span');
+    speedDisplay.id = '3d-speed-display';
+    speedDisplay.className = 'small';
+    speedDisplay.textContent = '4x';
 
-    // Wire up 3D controls
-    document.getElementById('3d-start-simulation').addEventListener('click', () => {
+    speedCol.appendChild(speedLabel);
+    speedCol.appendChild(speedInput);
+    speedCol.appendChild(speedDisplay);
+    row.appendChild(speedCol);
+
+    const axesControl = create3DVisibilityControl('3d-show-axes', 'Axes', true);
+    const toolpathControl = create3DVisibilityControl('3d-show-toolpath', 'Toolpath', true);
+    const workpieceControl = create3DVisibilityControl('3d-show-workpiece', 'Workpiece', true);
+    const stlControl = create3DVisibilityControl('3d-show-stl', 'STL Model', true);
+    const followToolControl = create3DVisibilityControl('3d-follow-tool', 'Follow Tool', false);
+
+    row.appendChild(axesControl.wrapper);
+    row.appendChild(toolpathControl.wrapper);
+    row.appendChild(workpieceControl.wrapper);
+    row.appendChild(stlControl.wrapper);
+    row.appendChild(followToolControl.wrapper);
+
+    const progressCol = document.createElement('div');
+    progressCol.className = 'col-auto d-flex align-items-center gap-2';
+    progressCol.appendChild(createSimulationDivider());
+
+    const progressLabel = document.createElement('span');
+    progressLabel.className = 'small';
+    progressLabel.textContent = 'Progress:';
+
+    const progressInput = document.createElement('input');
+    progressInput.type = 'range';
+    progressInput.className = 'form-range form-range-sm';
+    progressInput.id = '3d-simulation-progress';
+    progressInput.min = '0';
+    progressInput.max = '1';
+    progressInput.step = '1';
+    progressInput.value = '0';
+    progressInput.style.width = '150px';
+
+    const progressDisplay = document.createElement('span');
+    progressDisplay.id = '3d-progress-display';
+    progressDisplay.className = 'small';
+    progressDisplay.textContent = 'Line 0 (0%)';
+
+    progressCol.appendChild(progressLabel);
+    progressCol.appendChild(progressInput);
+    progressCol.appendChild(progressDisplay);
+    row.appendChild(progressCol);
+
+    const stepDisplay = document.createElement('span');
+    stepDisplay.id = '3d-step-display';
+    stepDisplay.className = 'small';
+    stepDisplay.textContent = '0 / 0';
+    row.appendChild(createSimulationMetric('G-code:', stepDisplay));
+
+    const feedValue = document.createElement('span');
+    feedValue.id = '3d-feed-rate-display';
+    feedValue.textContent = '0';
+    row.appendChild(createSimulationMetric('Feed:', feedValue, ' mm/min'));
+
+    const timeValue = document.createElement('span');
+    const simulationTime = document.createElement('span');
+    simulationTime.id = '3d-simulation-time';
+    simulationTime.textContent = '0:00';
+    const totalTime = document.createElement('span');
+    totalTime.id = '3d-total-time';
+    totalTime.textContent = '0:00';
+    timeValue.appendChild(simulationTime);
+    timeValue.appendChild(document.createTextNode(' / '));
+    timeValue.appendChild(totalTime);
+    row.appendChild(createSimulationMetric('Time:', timeValue));
+
+    fragment.appendChild(row);
+    overlayControls.replaceChildren(fragment);
+
+    startBtn.addEventListener('click', () => {
         if (typeof startSimulation3D === 'function') {
             startSimulation3D();
         }
     });
 
-    document.getElementById('3d-pause-simulation').addEventListener('click', () => {
+    pauseBtn.addEventListener('click', () => {
         if (typeof pauseSimulation3D === 'function') {
             pauseSimulation3D();
         }
     });
 
-    document.getElementById('3d-stop-simulation').addEventListener('click', () => {
+    stopBtn.addEventListener('click', () => {
         if (typeof stopSimulation3D === 'function') {
             stopSimulation3D();
         }
-        // Switch back to 2D view (matches 2D stop button behavior)
         const tab2D = document.getElementById('2d-tab');
         if (tab2D) {
             const bsTab = bootstrap.Tab.getOrCreateInstance(tab2D);
@@ -204,47 +415,64 @@ function create3DSimulationControls() {
         }
     });
 
-    // Speed control
-    document.getElementById('3d-simulation-speed').addEventListener('input', function (e) {
+    speedInput.addEventListener('input', function (e) {
         const speed = parseFloat(e.target.value);
-        document.getElementById('3d-speed-display').textContent = speed.toFixed(1) + 'x';
+        speedDisplay.textContent = speed.toFixed(1) + 'x';
         if (typeof updateSimulation3DSpeed === 'function') {
             updateSimulation3DSpeed(speed);
         }
     });
 
-    // Progress control - now line-based instead of percentage-based
-    document.getElementById('3d-simulation-progress').addEventListener('input', function (e) {
-        const lineNumber = parseInt(e.target.value);
+    progressInput.addEventListener('input', function (e) {
+        const lineNumber = parseInt(e.target.value, 10);
         if (typeof setSimulation3DProgress === 'function') {
             setSimulation3DProgress(lineNumber);
         }
     });
 
-    // Visibility checkboxes
-    document.getElementById('3d-show-axes').addEventListener('change', function (e) {
+    axesControl.input.addEventListener('change', function (e) {
         if (typeof setAxesVisibility3D === 'function') {
             setAxesVisibility3D(e.target.checked);
         }
     });
 
-    document.getElementById('3d-show-toolpath').addEventListener('change', function (e) {
+    toolpathControl.input.addEventListener('change', function (e) {
         if (typeof setToolpathVisibility3D === 'function') {
             setToolpathVisibility3D(e.target.checked);
         }
     });
 
-    document.getElementById('3d-show-workpiece').addEventListener('change', function (e) {
+    workpieceControl.input.addEventListener('change', function (e) {
         if (typeof setWorkpieceVisibility3D === 'function') {
             setWorkpieceVisibility3D(e.target.checked);
         }
     });
 
-    document.getElementById('3d-show-stl').addEventListener('change', function (e) {
+    stlControl.input.addEventListener('change', function (e) {
         if (typeof setSTLVisibility3D === 'function') {
             setSTLVisibility3D(e.target.checked);
         }
     });
+
+    simulationControls3DRefs = {
+        container: overlayControls,
+        startBtn: startBtn,
+        pauseBtn: pauseBtn,
+        stopBtn: stopBtn,
+        speedInput: speedInput,
+        speedDisplay: speedDisplay,
+        progressInput: progressInput,
+        progressDisplay: progressDisplay,
+        stepDisplay: stepDisplay,
+        feedValue: feedValue,
+        simulationTime: simulationTime,
+        totalTime: totalTime,
+        showAxes: axesControl.input,
+        showToolpath: toolpathControl.input,
+        showWorkpiece: workpieceControl.input,
+        showStl: stlControl.input,
+        followTool: followToolControl.input
+    };
 
     update3DSimulationOverlayLayout();
 
@@ -265,5 +493,14 @@ function create3DSimulationControls() {
         }
     }
 
+    if (typeof lucide !== 'undefined' && typeof lucide.createIcons === 'function') {
+        lucide.createIcons();
+    }
+
     window.update3DSimulationOverlayLayout = update3DSimulationOverlayLayout;
+    return simulationControls3DRefs;
+}
+
+function create3DSimulationControls() {
+    ensure3DSimulationControls();
 }

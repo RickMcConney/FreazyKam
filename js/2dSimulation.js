@@ -40,8 +40,26 @@ var simulation2D = {
     // Throttled UI updates
     lastDisplayUpdateTime: 0,
     lastHighlightedGcodeLine: -1,
-    displayUpdateIntervalMs: 80
+    displayUpdateIntervalMs: 80,
+    uiElements: null
 };
+
+function getSimulation2DUIElements() {
+    if (simulation2D.uiElements) {
+        return simulation2D.uiElements;
+    }
+
+    simulation2D.uiElements = {
+        lineDisplay: document.getElementById('2d-step-display'),
+        feedDisplay: document.getElementById('2d-feed-rate-display'),
+        timeElapsedDisplay: document.getElementById('2d-simulation-time'),
+        timeTotalDisplay: document.getElementById('2d-total-time'),
+        progressSlider: document.getElementById('simulation-step'),
+        zDepthDisplay: document.getElementById('2d-z-depth-display')
+    };
+
+    return simulation2D.uiElements;
+}
 
 function resetSimulation2DUIThrottle() {
     simulation2D.lastDisplayUpdateTime = 0;
@@ -994,7 +1012,6 @@ function startSimulation2D() {
     const startBtn = document.getElementById('start-simulation');
     const pauseBtn = document.getElementById('pause-simulation');
     const stopBtn = document.getElementById('stop-simulation');
-    const progressSlider = document.getElementById('simulation-step');
 
     if (startBtn) startBtn.disabled = true;
     if (pauseBtn) {
@@ -1008,6 +1025,7 @@ function startSimulation2D() {
         lucide.createIcons();
     }
 
+    getSimulation2DUIElements();
     runSimulation2D();
 }
 
@@ -1123,17 +1141,18 @@ function stopSimulation2D() {
     simulation2D.gcodeLines = [];
 
     // Reset status line displays to zero
-    const stepDisplay = document.getElementById('2d-step-display');
+    const ui = getSimulation2DUIElements();
+    const stepDisplay = ui.lineDisplay;
     if (stepDisplay) stepDisplay.textContent = '0 / 0';
-    const feedDisplay = document.getElementById('2d-feed-rate-display');
+    const feedDisplay = ui.feedDisplay;
     if (feedDisplay) feedDisplay.textContent = '0';
-    const timeElapsed = document.getElementById('2d-simulation-time');
+    const timeElapsed = ui.timeElapsedDisplay;
     if (timeElapsed) timeElapsed.textContent = '0:00';
-    const timeTotal = document.getElementById('2d-total-time');
+    const timeTotal = ui.timeTotalDisplay;
     if (timeTotal) timeTotal.textContent = '0:00';
-    const zDepth = document.getElementById('2d-z-depth-display');
+    const zDepth = ui.zDepthDisplay;
     if (zDepth) zDepth.textContent = '0.00';
-    const progressSlider = document.getElementById('simulation-step');
+    const progressSlider = ui.progressSlider;
     if (progressSlider) { progressSlider.value = 0; progressSlider.max = 100; }
 
     if (typeof gcodeView !== 'undefined' && gcodeView) {
@@ -1231,8 +1250,10 @@ function setSimulation2DLineNumber(targetLineNum) {
  * Update the control display with current simulation state
  */
 function updateSimulation2DDisplay() {
+    const ui = getSimulation2DUIElements();
+
     // Update line number display — show G-code line numbers, not movement indices
-    const lineDisplay = document.getElementById('2d-step-display');
+    const lineDisplay = ui.lineDisplay;
     if (lineDisplay && simulation2D.movements && simulation2D.movements.length > 0) {
         // Map movement index back to G-code line number for display
         const currentLineNum = simulation2D.lineMap
@@ -1248,15 +1269,15 @@ function updateSimulation2DDisplay() {
     // Update feed rate (from current precomputed point)
     if (simulation2D.currentLineIndex < simulation2D.precomputedPoints.length) {
         const point = simulation2D.precomputedPoints[simulation2D.currentLineIndex];
-        const feedDisplay = document.getElementById('2d-feed-rate-display');
+        const feedDisplay = ui.feedDisplay;
         if (feedDisplay && point && point.feedRate) {
             feedDisplay.textContent = `${point.feedRate.toFixed(0)}`;
         }
     }
 
     // Update time displays
-    const timeElapsedDisplay = document.getElementById('2d-simulation-time');
-    const timeTotalDisplay = document.getElementById('2d-total-time');
+    const timeElapsedDisplay = ui.timeElapsedDisplay;
+    const timeTotalDisplay = ui.timeTotalDisplay;
 
     if (timeElapsedDisplay) {
         timeElapsedDisplay.textContent = formatTimeMMSS(simulation2D.totalElapsedTime);
@@ -1268,7 +1289,7 @@ function updateSimulation2DDisplay() {
     }
 
     // Update progress slider if present — map movement index to G-code line number
-    const progressSlider = document.getElementById('simulation-step');
+    const progressSlider = ui.progressSlider;
     if (progressSlider && simulation2D.movements && simulation2D.movements.length > 0) {
         const gcodeLineCount = simulation2D.gcodeLines ? simulation2D.gcodeLines.length : simulation2D.movements.length;
         const currentGcodeLine = simulation2D.lineMap
@@ -1279,7 +1300,7 @@ function updateSimulation2DDisplay() {
     }
 
     // Update Z depth display (interpolated within current segment)
-    const zDepthDisplay = document.getElementById('2d-z-depth-display');
+    const zDepthDisplay = ui.zDepthDisplay;
     if (zDepthDisplay && simulation2D.currentLineIndex < simulation2D.precomputedPoints.length) {
         const point = simulation2D.precomputedPoints[simulation2D.currentLineIndex];
         if (point) {

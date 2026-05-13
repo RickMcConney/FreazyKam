@@ -16,6 +16,9 @@ class GcodeView {
         this._viewport = null;             // Scrollable viewport div
         this._content = null;              // Inner content div (sized to full height)
         this._linesContainer = null;       // Container for visible line divs
+        this._pendingLineNumber = null;    // Coalesce highlight updates within the same frame
+        this._lineUpdateFrameId = null;    // requestAnimationFrame id for pending highlight flush
+        this._lineClickHandlers = [];      // Stable click handlers per line index
     }
 
     /**
@@ -40,7 +43,31 @@ class GcodeView {
      * @param {number} lineNumber - G-code line number (0-based)
      */
     setCurrentLine(lineNumber) {
-        if (lineNumber === this.currentLineNumber) {
+        if (lineNumber === this.currentLineNumber && this._pendingLineNumber === null) {
+            return;
+        }
+
+        if (lineNumber === this._pendingLineNumber) {
+            return;
+        }
+
+        this._pendingLineNumber = lineNumber;
+
+        if (this._lineUpdateFrameId !== null) {
+            return;
+        }
+
+        this._lineUpdateFrameId = requestAnimationFrame(() => {
+            this._lineUpdateFrameId = null;
+            this._flushCurrentLineUpdate();
+        });
+    }
+
+    _flushCurrentLineUpdate() {
+        const lineNumber = this._pendingLineNumber;
+        this._pendingLineNumber = null;
+
+        if (lineNumber === null || lineNumber === this.currentLineNumber) {
             return;
         }
 
@@ -63,7 +90,10 @@ class GcodeView {
                 return;
             }
             // _renderVisibleLines will be called by the scroll event
+            return;
         }
+
+        this._updateHighlight(oldLine, lineNumber);
     }
 
     show() {
@@ -79,12 +109,19 @@ class GcodeView {
     }
 
     clear() {
+        if (this._lineUpdateFrameId !== null) {
+            cancelAnimationFrame(this._lineUpdateFrameId);
+            this._lineUpdateFrameId = null;
+        }
+
         if (this.container) {
-            this.container.innerHTML = '';
+            this.container.replaceChildren();
         }
         this.lineTexts = [];
         this.currentLineNumber = -1;
+        this._pendingLineNumber = null;
         this.renderedElements = [];
+        this._lineClickHandlers = [];
         this._viewport = null;
         this._content = null;
         this._linesContainer = null;
@@ -98,7 +135,7 @@ class GcodeView {
     _buildVirtualizedDOM() {
         if (!this.container) return;
 
-        this.container.innerHTML = '';
+        this.container.replaceChildren();
         this.renderedElements = [];
         this.visibleStart = -1;
         this.visibleEnd = -1;
@@ -158,40 +195,57 @@ class GcodeView {
         this.visibleStart = newStart;
         this.visibleEnd = newEnd;
 
-        // Rebuild visible lines
+        const nextRenderedElements = [];
         const fragment = document.createDocumentFragment();
-        this.renderedElements = [];
 
         for (let i = newStart; i < newEnd; i++) {
-            const div = document.createElement('div');
-            div.className = 'gcode-line';
-            if (i === this.currentLineNumber) {
-                div.className += ' active-gcode-line';
+            let div = this.renderedElements[i];
+            if (!div) {
+                div = this._createLineElement(i);
+            } else {
+                this._syncLineElement(div, i);
             }
-            div.style.top = `${i * this.lineHeight}px`;
-            div.style.height = `${this.lineHeight}px`;
-            div.style.lineHeight = `${this.lineHeight}px`;
-
-            const lineNum = document.createElement('span');
-            lineNum.className = 'gcode-line-number';
-            lineNum.textContent = (i + 1) + ': ';
-
-            const codeText = document.createElement('span');
-            codeText.className = 'gcode-line-code';
-            codeText.textContent = this.lineTexts[i].trim() || '(empty)';
-
-            div.appendChild(lineNum);
-            div.appendChild(codeText);
-
-            // Click handler for seeking
-            div.addEventListener('click', () => this._handleLineClick(i));
 
             fragment.appendChild(div);
-            this.renderedElements[i] = div;
+            nextRenderedElements[i] = div;
         }
 
-        this._linesContainer.innerHTML = '';
-        this._linesContainer.appendChild(fragment);
+        this.renderedElements = nextRenderedElements;
+        this._linesContainer.replaceChildren(fragment);
+    }
+
+    _createLineElement(index) {
+        const div = document.createElement('div');
+        div.className = 'gcode-line';
+
+        const lineNum = document.createElement('span');
+        lineNum.className = 'gcode-line-number';
+
+        const codeText = document.createElement('span');
+        codeText.className = 'gcode-line-code';
+
+        div.appendChild(lineNum);
+        div.appendChild(codeText);
+
+        if (!this._lineClickHandlers[index]) {
+            this._lineClickHandlers[index] = () => this._handleLineClick(index);
+        }
+        div.addEventListener('click', this._lineClickHandlers[index]);
+
+        div._lineNumNode = lineNum;
+        div._codeTextNode = codeText;
+
+        this._syncLineElement(div, index);
+        return div;
+    }
+
+    _syncLineElement(div, index) {
+        div.classList.toggle('active-gcode-line', index === this.currentLineNumber);
+        div.style.top = `${index * this.lineHeight}px`;
+        div.style.height = `${this.lineHeight}px`;
+        div.style.lineHeight = `${this.lineHeight}px`;
+        div._lineNumNode.textContent = (index + 1) + ': ';
+        div._codeTextNode.textContent = this.lineTexts[index].trim() || '(empty)';
     }
 
     /**

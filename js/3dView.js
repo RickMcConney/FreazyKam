@@ -35,6 +35,15 @@ let animationLoopActive = false;  // Flag to control whether animation loop shou
 let deferredSTLVisibilitySyncId = null;  // Timeout for reapplying STL checkbox after meshes load
 let renderRequested = false;  // Track pending on-demand renders
 let resizeObserver3D = null;  // Track active ResizeObserver instance
+let threeLoadingUI = null;
+let threeViewLoadToken = 0;
+let simulation3DUIElements = null;
+let simulation3DUIState = {
+  lastUpdateTime: 0,
+  updateIntervalMs: 80,
+  pendingFrameId: null,
+  lastHighlightedLine: -1
+};
 
 // Simple profiling: wall-clock timing with frame counter
 let profileFrameCount = 0;
@@ -43,6 +52,174 @@ let profileStartTime = performance.now();
 // Voxel removal profiling: simple frame counter for removal operations
 let voxelRemovalFrameCount = 0;
 let voxelRemovalTotalTime = 0;
+
+function getThreeLoadingUI() {
+  if (threeLoadingUI) {
+    return threeLoadingUI;
+  }
+
+  threeLoadingUI = {
+    overlay: document.getElementById('3d-loading-overlay'),
+    message: document.getElementById('3d-loading-message')
+  };
+
+  return threeLoadingUI;
+}
+
+function setThreeLoadingState(isLoading, message = 'Chargement de la vue 3D...') {
+  const ui = getThreeLoadingUI();
+  if (!ui.overlay) {
+    return;
+  }
+
+  if (ui.message) {
+    ui.message.textContent = message;
+  }
+
+  ui.overlay.classList.toggle('d-none', !isLoading);
+}
+
+function waitForNextFrame() {
+  return new Promise((resolve) => requestAnimationFrame(resolve));
+}
+
+function isThreeViewLoadCurrent(loadToken) {
+  return loadToken === threeViewLoadToken && animationLoopActive;
+}
+
+function startThreeViewLoad() {
+  const loadToken = ++threeViewLoadToken;
+  setThreeLoadingState(true, 'Chargement de la vue 3D...');
+
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      if (!isThreeViewLoadCurrent(loadToken)) {
+        return;
+      }
+
+      initThree(loadToken).catch((error) => {
+        if (!isThreeViewLoadCurrent(loadToken)) {
+          return;
+        }
+        console.error('3D view initialization failed:', error);
+        if (typeof gcodeView !== 'undefined' && gcodeView && typeof showGcodeViewerPanel === 'function') {
+          showGcodeViewerPanel();
+        }
+        setThreeLoadingState(false);
+      });
+    });
+  });
+}
+
+function getSimulation3DUIElements() {
+  if (simulation3DUIElements) {
+    return simulation3DUIElements;
+  }
+
+  simulation3DUIElements = {
+    startBtn: document.getElementById('3d-start-simulation'),
+    pauseBtn: document.getElementById('3d-pause-simulation'),
+    stopBtn: document.getElementById('3d-stop-simulation'),
+    lineDisplay: document.getElementById('3d-step-display'),
+    feedRateDisplay: document.getElementById('3d-feed-rate-display'),
+    progressSlider: document.getElementById('3d-simulation-progress'),
+    progressDisplay: document.getElementById('3d-progress-display'),
+    simTimeElem: document.getElementById('3d-simulation-time'),
+    totalTimeElem: document.getElementById('3d-total-time'),
+    followToolCheckbox: document.getElementById('3d-follow-tool')
+  };
+
+  return simulation3DUIElements;
+}
+
+function resetSimulation3DUIThrottle() {
+  simulation3DUIState.lastUpdateTime = 0;
+  simulation3DUIState.lastHighlightedLine = -1;
+  if (simulation3DUIState.pendingFrameId !== null) {
+    cancelAnimationFrame(simulation3DUIState.pendingFrameId);
+    simulation3DUIState.pendingFrameId = null;
+  }
+}
+
+function syncSimulation3DGcodeView(force) {
+  if (!toolpathAnimation || typeof gcodeView === 'undefined' || !gcodeView) {
+    return;
+  }
+
+  const lineNumber = toolpathAnimation.currentGcodeLineNumber;
+  if (force || lineNumber !== simulation3DUIState.lastHighlightedLine) {
+    gcodeView.setCurrentLine(lineNumber);
+    simulation3DUIState.lastHighlightedLine = lineNumber;
+  }
+}
+
+function flushSimulation3DUI(force) {
+  simulation3DUIState.pendingFrameId = null;
+  if (!toolpathAnimation) {
+    return;
+  }
+
+  const now = performance.now();
+  if (!force && (now - simulation3DUIState.lastUpdateTime) < simulation3DUIState.updateIntervalMs) {
+    return;
+  }
+
+  const ui = getSimulation3DUIElements();
+  const currentLineNumber = toolpathAnimation.currentGcodeLineNumber;
+  const totalGcodeLines = toolpathAnimation.totalGcodeLines;
+
+  if (ui.lineDisplay) {
+    ui.lineDisplay.textContent = `${currentLineNumber + 1} / ${totalGcodeLines}`;
+  }
+
+  if (ui.feedRateDisplay) {
+    ui.feedRateDisplay.textContent = `${Math.round(toolpathAnimation.currentFeedRate)}`;
+  }
+
+  if (ui.progressSlider && totalGcodeLines >= 0) {
+    ui.progressSlider.max = totalGcodeLines - 1;
+    ui.progressSlider.value = currentLineNumber;
+  }
+
+  if (ui.progressDisplay) {
+    const percent = totalGcodeLines > 0
+      ? Math.round(((currentLineNumber + 1) / totalGcodeLines) * 100)
+      : 0;
+    ui.progressDisplay.textContent = `Line ${currentLineNumber + 1} (${percent}%)`;
+  }
+
+  if (ui.simTimeElem) {
+    const prevMovement = toolpathAnimation.currentMovementIndex > 0
+      ? toolpathAnimation.movementTiming[toolpathAnimation.currentMovementIndex - 1]
+      : null;
+    const prevMovementEndTime = prevMovement ? prevMovement.cumulativeTime : 0;
+    const cumulativeElapsedTime = prevMovementEndTime + toolpathAnimation.elapsedTime;
+    ui.simTimeElem.textContent = formatTime(cumulativeElapsedTime);
+  }
+
+  if (ui.totalTimeElem) {
+    ui.totalTimeElem.textContent = formatTime(toolpathAnimation.totalAnimationTime);
+  }
+
+  simulation3DUIState.lastUpdateTime = now;
+}
+
+function scheduleSimulation3DUI(force) {
+  syncSimulation3DGcodeView(force);
+
+  if (force) {
+    flushSimulation3DUI(true);
+    return;
+  }
+
+  if (simulation3DUIState.pendingFrameId !== null) {
+    return;
+  }
+
+  simulation3DUIState.pendingFrameId = requestAnimationFrame(() => {
+    flushSimulation3DUI(false);
+  });
+}
 
 // ============ CONFIGURATION CONSTANTS ============
 const CONFIG = {
@@ -257,17 +434,21 @@ document.addEventListener('DOMContentLoaded', setupTabListener);
 function setupTabListener() {
   const tab3dElement = document.getElementById('3d-tab');
   if (tab3dElement) {
+    tab3dElement.addEventListener('show.bs.tab', () => {
+      setThreeLoadingState(true, 'Chargement de la vue 3D...');
+    });
+
     tab3dElement.addEventListener('shown.bs.tab', () => {
       // Enable animation loop and reinitialize when tab is shown
       animationLoopActive = true;
-      initThree();
-      sync3DVisibilityControls({ deferSTL: true });
-      requestThreeRender();
+      startThreeViewLoad();
     });
 
     tab3dElement.addEventListener('hidden.bs.tab', () => {
       // Disable animation loop when switching to 2D view
+      threeViewLoadToken++;
       animationLoopActive = false;
+      setThreeLoadingState(false);
       renderRequested = false;
       if (animationFrameId !== null) {
         cancelAnimationFrame(animationFrameId);
@@ -318,7 +499,7 @@ function refreshToolpath() {
   sync3DVisibilityControls();
 }
 
-function initThree() {
+async function initThree(loadToken = threeViewLoadToken) {
   const container = document.getElementById('3d-canvas-container');
   if (!container) {
     console.error('3D canvas container not found');
@@ -442,11 +623,33 @@ function initThree() {
   // Simulation controls are now created by bootstrap-layout.js overlay system
   // No need to create them here
 
+  requestThreeRender();
+
+  if (!window._cachedGcode && !window._importedGcode && window.toolpaths && window.toolpaths.length > 0 && typeof toGcode === 'function') {
+    setThreeLoadingState(true, 'Generation du G-code...');
+    await waitForNextFrame();
+  }
+
   // Load toolpaths from generated G-code or imported G-code file
   const gcode = window._cachedGcode || window._importedGcode || (window.toolpaths && window.toolpaths.length > 0 && typeof toGcode === 'function' ? toGcode() : null);
   window._cachedGcode = null;
+  if (!isThreeViewLoadCurrent(loadToken)) {
+    return;
+  }
+
   if (gcode) {
-    toolpathAnimation.loadFromGcode(gcode);
+    if (typeof gcodeView !== 'undefined' && gcodeView) {
+      gcodeView.populate(gcode);
+      if (typeof showGcodeViewerPanel === 'function') {
+        showGcodeViewerPanel();
+      }
+    }
+
+    setThreeLoadingState(true, 'Preparation de la simulation 3D...');
+    await toolpathAnimation.loadFromGcodeAsync(gcode);
+    if (!isThreeViewLoadCurrent(loadToken)) {
+      return;
+    }
   } else {
     console.warn('No toolpaths found - create some in the 2D view first');
     // Still create voxel grid so workpiece appearance is consistent (solid voxels vs bare mesh)
@@ -455,6 +658,10 @@ function initThree() {
     }
   }
 
+  sync3DVisibilityControls({ deferSTL: true });
+  updateSimulation3DUI();
+  updateSimulation3DDisplays();
+  setThreeLoadingState(false);
   requestThreeRender();
 
   // Handle window resize (only add listener once to prevent duplicates)
@@ -929,12 +1136,6 @@ window.startSimulation3D = function() {
 
     toolpathAnimation.play();
 
-    // Update 3D total time display when starting
-    const totalTimeElem = document.getElementById('3d-total-time');
-    if (totalTimeElem) {
-      totalTimeElem.textContent = formatTime(toolpathAnimation.totalAnimationTime);
-    }
-
     updateSimulation3DUI();
     if (animationFrameId === null) {
       animationFrameId = requestAnimationFrame(animate);
@@ -970,12 +1171,6 @@ window.setSimulation3DProgress = function(lineNumber) {
   if (toolpathAnimation) {
     // Seek animation to this line
     toolpathAnimation.seekToLineNumber(lineNumber);
-    // Update viewer to match
-    if (typeof gcodeView !== 'undefined' && gcodeView) {
-      gcodeView.setCurrentLine(lineNumber);
-    }
-    // Update 3D display when slider is dragged
-    updateSimulation3DDisplays();
     // Update button states after seeking (wasStopped flag was reset)
     updateSimulation3DUI();
     requestThreeRender();
@@ -996,58 +1191,14 @@ function formatTime(seconds) {
  * Update 3D simulation display elements
  */
 function updateSimulation3DDisplays() {
-  if (!toolpathAnimation) return;
-
-  const lineDisplay = document.getElementById('3d-step-display');
-  const feedRateDisplay = document.getElementById('3d-feed-rate-display');
-  const progressSlider = document.getElementById('3d-simulation-progress');
-  const progressDisplay = document.getElementById('3d-progress-display');
-  const simTimeElem = document.getElementById('3d-simulation-time');
-  const totalTimeElem = document.getElementById('3d-total-time');
-
-  if (lineDisplay) {
-    // Display 1-indexed line number (add 1 to convert from 0-indexed)
-    lineDisplay.textContent = `${toolpathAnimation.currentGcodeLineNumber + 1} / ${toolpathAnimation.totalGcodeLines}`;
-  }
-
-  if (feedRateDisplay) {
-    feedRateDisplay.textContent = `${Math.round(toolpathAnimation.currentFeedRate)}`;
-  }
-
-  if (progressSlider && toolpathAnimation.totalGcodeLines >= 0) {
-    progressSlider.max = toolpathAnimation.totalGcodeLines - 1;  // max is last line index (0-indexed)
-    progressSlider.value = toolpathAnimation.currentGcodeLineNumber;
-  }
-
-  if (progressDisplay) {
-    // Calculate percent based on 1-indexed position
-    const percent = toolpathAnimation.totalGcodeLines > 0
-      ? Math.round(((toolpathAnimation.currentGcodeLineNumber + 1) / toolpathAnimation.totalGcodeLines) * 100)
-      : 0;
-    // Display 1-indexed line number
-    progressDisplay.textContent = `Line ${toolpathAnimation.currentGcodeLineNumber + 1} (${percent}%)`;
-  }
-
-  if (simTimeElem) {
-    // O(1) lookup: previous movement's cumulative time + current elapsed within movement
-    const prevMovement = toolpathAnimation.currentMovementIndex > 0
-      ? toolpathAnimation.movementTiming[toolpathAnimation.currentMovementIndex - 1]
-      : null;
-    const prevMovementEndTime = prevMovement ? prevMovement.cumulativeTime : 0;
-    const cumulativeElapsedTime = prevMovementEndTime + toolpathAnimation.elapsedTime;
-
-    simTimeElem.textContent = formatTime(cumulativeElapsedTime);
-  }
-
-  if (totalTimeElem) {
-    totalTimeElem.textContent = formatTime(toolpathAnimation.totalAnimationTime);
-  }
+  scheduleSimulation3DUI(true);
 }
 
 function updateSimulation3DUI() {
-  const startBtn = document.getElementById('3d-start-simulation');
-  const pauseBtn = document.getElementById('3d-pause-simulation');
-  const stopBtn = document.getElementById('3d-stop-simulation');
+  const ui = getSimulation3DUIElements();
+  const startBtn = ui.startBtn;
+  const pauseBtn = ui.pauseBtn;
+  const stopBtn = ui.stopBtn;
 
   if (!startBtn || !pauseBtn || !stopBtn) return;
 
@@ -1065,7 +1216,7 @@ function updateSimulation3DUI() {
   }
 
   // Update all displays including progress slider
-  updateSimulation3DDisplays();
+  scheduleSimulation3DUI(true);
 }
 
 function animate() {
@@ -1094,22 +1245,14 @@ function animate() {
     toolpathAnimation.update();
 
     // Camera follows tool when checkbox is checked
-    const followToolCheckbox = document.getElementById('3d-follow-tool');
+    const followToolCheckbox = getSimulation3DUIElements().followToolCheckbox;
     if (followToolCheckbox && followToolCheckbox.checked && toolGroup && orbitControls) {
       orbitControls.target.copy(toolGroup.position);
       orbitControls.updateCamera();
     }
 
-    // Update 3D progress slider in overlay (now line-based, not percentage)
-    const progressSlider = document.getElementById('3d-simulation-progress');
-    if (progressSlider) {
-      progressSlider.value = toolpathAnimation.currentGcodeLineNumber;
-      const lineDisplay = (toolpathAnimation.currentGcodeLineNumber + 1) + ' / ' + toolpathAnimation.totalGcodeLines;
-      document.getElementById('3d-progress-display').textContent = lineDisplay;
-    }
-
-    // Update 3D display during animation
-    updateSimulation3DDisplays();
+    // Update 3D display during animation via a single throttled UI flush.
+    scheduleSimulation3DUI(false);
 
     // If animation has completed this frame, update UI to re-enable play button
     if (!toolpathAnimation.isPlaying) {
@@ -1643,6 +1786,8 @@ class ToolpathAnimation {
     this.voxelRemovalRate = 1;
     this._gcodePreprocessWorker = null;
     this._gcodePreprocessRequestId = 0;
+    resetSimulation3DUIThrottle();
+    getSimulation3DUIElements();
   }
 
   clearToolpath() {
@@ -2108,7 +2253,7 @@ class ToolpathAnimation {
 
 
     // Update progress slider range for line-based animation
-    const progressSlider = document.getElementById('3d-simulation-progress');
+    const progressSlider = getSimulation3DUIElements().progressSlider;
     if (progressSlider) {
       progressSlider.min = 1;
       progressSlider.max = this.totalGcodeLines;
@@ -2442,7 +2587,7 @@ class ToolpathAnimation {
 
     // Update G-code viewer highlight when progress slider moves
     if (!skipViewerUpdate && typeof gcodeView !== 'undefined' && gcodeView) {
-      gcodeView.setCurrentLine(this.currentGcodeLineNumber);
+      syncSimulation3DGcodeView(true);
     }
 
     // Batch update GPU: commit all material removal calculations in one render batch
@@ -2606,9 +2751,7 @@ class ToolpathAnimation {
     }
 
     // Sync gcode viewer - now cheap thanks to virtualized DOM (only ~50 elements rendered)
-    if (typeof gcodeView !== 'undefined' && gcodeView) {
-      gcodeView.setCurrentLine(this.currentGcodeLineNumber);
-    }
+    syncSimulation3DGcodeView(false);
   }
 
   updateToolPositionAtCoordinates(toolX, toolY, toolZ, isG1, gcodeLineNumber) {

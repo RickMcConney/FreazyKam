@@ -189,6 +189,12 @@
                             <!-- 3D View Tab -->
                             <div class="tab-pane fade h-100 position-relative" id="3d-view" role="tabpanel" aria-labelledby="3d-tab">
                                 <div id="3d-canvas-container" style="width: 100%; height: 100%;"></div>
+                                <div id="3d-loading-overlay" class="three-loading-overlay d-none" aria-live="polite" aria-busy="true">
+                                    <div class="three-loading-card">
+                                        <div class="three-loading-spinner" aria-hidden="true"></div>
+                                        <div id="3d-loading-message" class="three-loading-message">Chargement de la vue 3D...</div>
+                                    </div>
+                                </div>
                                 <!-- 3D Simulation Controls Overlay -->
                                 <div id="simulation-overlay-3d" class="simulation-overlay d-none">
                                     <div id="3d-simulation-controls"></div>

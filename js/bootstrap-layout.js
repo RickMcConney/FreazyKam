@@ -1609,17 +1609,8 @@ function setupCanvasTabHandlers() {
             hideFloatingPropertiesPopup();
 
             if (typeof gcodeView !== 'undefined' && gcodeView) {
-                let gcode;
-                if (window._importedGcode) {
-                    gcode = window._importedGcode;
-                } else if (typeof toGcode === 'function') {
-                    gcode = toGcode();
-                }
-                if (gcode) {
-                    window._cachedGcode = gcode;
-                    gcodeView.populate(gcode);
-                    if (typeof showGcodeViewerPanel === 'function') showGcodeViewerPanel();
-                }
+                gcodeView.clear();
+                if (typeof showGcodeViewerPanel === 'function') showGcodeViewerPanel();
             }
 
             const overlay2D = document.getElementById('simulation-overlay-2d');
@@ -3072,36 +3063,165 @@ function createGrblPanel(targetId) {
     `;
 }
 
-// Render tools table
-function renderToolsTable() {
-    const tbody = document.getElementById('tool-table-body');
-    if (!tbody) return;
-    tbody.innerHTML = '';
+function createBootstrapLayoutIconNode(iconName) {
+    const icon = document.createElement('i');
+    icon.setAttribute('data-lucide', iconName);
+    return icon;
+}
 
-    tools.forEach((tool, index) => {
-        const row = createToolRow(tool, index);
-        tbody.appendChild(row);
-    });
-
-    if (tools.length > 0 && !currentTool) {
-        selectTool(0);
+function setInputValueIfNeeded(input, value) {
+    const normalizedValue = value == null ? '' : String(value);
+    if (input.value !== normalizedValue) {
+        input.value = normalizedValue;
     }
 }
 
 function createToolRow(tool, index) {
     const row = document.createElement('tr');
-    row.dataset.toolIndex = index;
-    row.dataset.recid = tool.recid;
 
-    // Get display units
+    const iconCell = document.createElement('td');
+    const iconImg = document.createElement('img');
+    iconImg.width = 80;
+    iconImg.height = 32;
+    iconImg.setAttribute('data-bs-toggle', 'tooltip');
+    iconCell.appendChild(iconImg);
+
+    const nameCell = document.createElement('td');
+    const nameInput = document.createElement('input');
+    nameInput.type = 'text';
+    nameInput.dataset.field = 'name';
+    nameInput.className = 'form-control-plaintext';
+    nameCell.appendChild(nameInput);
+
+    const bitCell = document.createElement('td');
+    const bitSelect = document.createElement('select');
+    bitSelect.dataset.field = 'bit';
+    bitSelect.className = 'form-select form-select-sm';
+    ['End Mill', 'Ball Nose', 'VBit', 'Drill'].forEach(optionValue => {
+        const option = document.createElement('option');
+        option.value = optionValue;
+        option.textContent = optionValue;
+        bitSelect.appendChild(option);
+    });
+    bitCell.appendChild(bitSelect);
+
+    const diameterCell = document.createElement('td');
+    const diameterInput = document.createElement('input');
+    diameterInput.type = 'text';
+    diameterInput.dataset.field = 'diameter';
+    diameterInput.className = 'form-control-plaintext';
+    diameterCell.appendChild(diameterInput);
+
+    const flutesCell = document.createElement('td');
+    const flutesInput = document.createElement('input');
+    flutesInput.type = 'number';
+    flutesInput.dataset.field = 'flutes';
+    flutesInput.min = '1';
+    flutesInput.max = '6';
+    flutesInput.step = '1';
+    flutesInput.setAttribute('data-bs-toggle', 'tooltip');
+    flutesInput.title = 'Number of cutting edges';
+    flutesCell.appendChild(flutesInput);
+
+    const rpmCell = document.createElement('td');
+    const rpmInput = document.createElement('input');
+    rpmInput.type = 'number';
+    rpmInput.dataset.field = 'rpm';
+    rpmInput.min = '1000';
+    rpmInput.max = '30000';
+    rpmInput.step = '100';
+    rpmInput.setAttribute('data-bs-toggle', 'tooltip');
+    rpmInput.title = 'Spindle speed (RPM)';
+    rpmCell.appendChild(rpmInput);
+
+    const feedCell = document.createElement('td');
+    const feedInput = document.createElement('input');
+    feedInput.type = 'text';
+    feedInput.dataset.field = 'feed';
+    feedCell.appendChild(feedInput);
+
+    const zfeedCell = document.createElement('td');
+    const zfeedInput = document.createElement('input');
+    zfeedInput.type = 'number';
+    zfeedInput.dataset.field = 'zfeed';
+    zfeedCell.appendChild(zfeedInput);
+
+    const angleCell = document.createElement('td');
+    const angleActions = document.createElement('div');
+    angleActions.className = 'tool-angle-actions';
+
+    const angleInput = document.createElement('input');
+    angleInput.type = 'number';
+    angleInput.dataset.field = 'angle';
+    angleInput.min = '0';
+    angleInput.max = '90';
+    angleInput.step = '5';
+
+    const deleteButton = document.createElement('button');
+    deleteButton.type = 'button';
+    deleteButton.className = 'btn btn-outline-danger btn-sm tool-row-delete';
+    deleteButton.setAttribute('data-bs-toggle', 'tooltip');
+    deleteButton.title = 'Delete this tool';
+    deleteButton.appendChild(createBootstrapLayoutIconNode('trash-2'));
+
+    angleActions.appendChild(angleInput);
+    angleActions.appendChild(deleteButton);
+    angleCell.appendChild(angleActions);
+
+    row.appendChild(iconCell);
+    row.appendChild(nameCell);
+    row.appendChild(bitCell);
+    row.appendChild(diameterCell);
+    row.appendChild(flutesCell);
+    row.appendChild(rpmCell);
+    row.appendChild(feedCell);
+    row.appendChild(zfeedCell);
+    row.appendChild(angleCell);
+
+    row._toolRefs = {
+        iconImg,
+        nameInput,
+        bitSelect,
+        diameterInput,
+        flutesInput,
+        rpmInput,
+        feedInput,
+        zfeedInput,
+        angleInput,
+        deleteButton
+    };
+
+    row.addEventListener('click', function (e) {
+        if (e.target.closest('input, select, button')) {
+            return;
+        }
+        selectTool(parseInt(row.dataset.toolIndex, 10));
+    });
+
+    row.addEventListener('change', function (e) {
+        const input = e.target.closest('input, select');
+        if (!input || !input.dataset.field) return;
+        updateTool(parseInt(row.dataset.toolIndex, 10), input.dataset.field, input.value);
+    });
+
+    deleteButton.addEventListener('click', function (e) {
+        e.stopPropagation();
+        deleteTool(parseInt(row.dataset.toolIndex, 10));
+    });
+
+    syncToolRow(row, tool, index);
+    return row;
+}
+
+function syncToolRow(row, tool, index) {
+    if (!row || !tool || !row._toolRefs) return;
+
+    const refs = row._toolRefs;
     const useInches = getOption('Inches');
     const autoFeedRateEnabled = getOption('autoFeedRate');
     const woodSpecies = getOption('woodSpecies');
 
-    // Convert dimensional values for display (stored in mm, display with fractions in inch mode)
     const displayDiameter = formatDimension(tool.diameter, useInches, true);
-
-    // Feed rates - convert mm/min to in/min if needed
     const autoCalculatedFeed = autoFeedRateEnabled ? calculateFeedRate(tool, woodSpecies, 'Profile') : null;
     const autoCalculatedFeedDisplay = autoCalculatedFeed === null
         ? null
@@ -3112,10 +3232,6 @@ function createToolRow(tool, index) {
         : (useInches ? Math.round(tool.feed / 25.4) : tool.feed);
     const displayZFeed = useInches ? Math.round(tool.zfeed / 25.4) : tool.zfeed;
 
-    // Ranges
-    const diameterMax = useInches ? 1 : 25;
-    const diameterMin = useInches ? 0.01 : 0.1;
-    const diameterStep = useInches ? 0.001 : 0.1;
     const feedMax = useInches ? 40 : 1000;
     const feedMin = useInches ? 1 : 10;
     const feedStep = useInches ? 1 : 10;
@@ -3123,62 +3239,92 @@ function createToolRow(tool, index) {
         ? `Automatic (${useInches ? Math.round(autoCalculatedFeed / 25.4) : autoCalculatedFeed} ${useInches ? 'in/min' : 'mm/min'})`
         : 'Manual XY feed rate';
 
-    row.innerHTML = `
-        <td>
-            <img src="icons/${getToolIcon(tool.bit)}" alt="${tool.bit}" width="80" height="32" data-bs-toggle="tooltip" title="${tool.bit}">
-        </td>
-        <td><input type="text" value="${tool.name}" data-field="name" class="form-control-plaintext"></td>
-        <td>
-            <select data-field="bit" class="form-select form-select-sm">
-                <option value="End Mill" ${tool.bit === 'End Mill' ? 'selected' : ''}>End Mill</option>
-                <option value="Ball Nose" ${tool.bit === 'Ball Nose' ? 'selected' : ''}>Ball Nose</option>
-                <option value="VBit" ${tool.bit === 'VBit' ? 'selected' : ''}>VBit</option>
-                <option value="Drill" ${tool.bit === 'Drill' ? 'selected' : ''}>Drill</option>
-            </select>
-        </td>
+    row.dataset.toolIndex = index;
+    row.dataset.recid = tool.recid;
+    row.classList.toggle('selected', currentTool && currentTool.recid === tool.recid);
 
-        <td><input type="text" value="${displayDiameter}" data-field="diameter" data-unit-type="${useInches ? 'inches' : 'mm'}" class="form-control-plaintext" placeholder="${useInches ? '1/4' : '6'}"></td>
-        <td><input type="number" value="${tool.flutes || 2}" data-field="flutes" min="1" max="6" step="1" data-bs-toggle="tooltip" title="Number of cutting edges"></td>
-        <td><input type="number" value="${tool.rpm || 18000}" data-field="rpm" min="1000" max="30000" step="100" data-bs-toggle="tooltip" title="Spindle speed (RPM)"></td>
-        <td><input type="text" value="${displayFeed}" data-field="feed" ${autoFeedRateEnabled ? 'readonly' : ''} min="${feedMin}" max="${feedMax}" step="${feedStep}" data-unit-type="${useInches ? 'inches' : 'mm'}" title="${feedTitle}"></td>
-        <td><input type="number" value="${displayZFeed}" data-field="zfeed" min="${feedMin}" max="${feedMax}" step="${feedStep}" data-unit-type="${useInches ? 'inches' : 'mm'}"></td>
-        <td>
-            <div class="tool-angle-actions">
-                <input type="number" value="${tool.angle}" data-field="angle" min="0" max="90" step="5">
-                <button type="button" class="btn btn-outline-danger btn-sm tool-row-delete" data-bs-toggle="tooltip" title="Delete this tool">
-                    <i data-lucide="trash-2"></i>
-                </button>
-            </div>
-        </td>
-    `;
+    refs.iconImg.src = `icons/${getToolIcon(tool.bit)}`;
+    refs.iconImg.alt = tool.bit;
+    refs.iconImg.title = tool.bit;
 
-    // Add event handlers for row selection and editing
-    row.addEventListener('click', () => selectTool(index));
+    setInputValueIfNeeded(refs.nameInput, tool.name);
+    setInputValueIfNeeded(refs.bitSelect, tool.bit);
+    setInputValueIfNeeded(refs.diameterInput, displayDiameter);
+    refs.diameterInput.dataset.unitType = useInches ? 'inches' : 'mm';
+    refs.diameterInput.placeholder = useInches ? '1/4' : '6';
 
-    // Add change handlers for inline editing
-    row.querySelectorAll('input, select').forEach(input => {
-        input.addEventListener('change', (e) => updateTool(index, e.target.dataset.field, e.target.value));
-    });
+    setInputValueIfNeeded(refs.flutesInput, tool.flutes || 2);
+    setInputValueIfNeeded(refs.rpmInput, tool.rpm || 18000);
 
-    // Update tool icon when bit type changes
-    row.querySelector('[data-field="bit"]').addEventListener('change', (e) => {
-        const img = row.querySelector('img');
-        if (img) {
-            img.src = 'icons/' + getToolIcon(e.target.value);
-            img.alt = e.target.value;
-            img.title = e.target.value;
+    setInputValueIfNeeded(refs.feedInput, displayFeed);
+    refs.feedInput.readOnly = autoFeedRateEnabled;
+    refs.feedInput.min = String(feedMin);
+    refs.feedInput.max = String(feedMax);
+    refs.feedInput.step = String(feedStep);
+    refs.feedInput.dataset.unitType = useInches ? 'inches' : 'mm';
+    refs.feedInput.title = feedTitle;
+
+    setInputValueIfNeeded(refs.zfeedInput, displayZFeed);
+    refs.zfeedInput.min = String(feedMin);
+    refs.zfeedInput.max = String(feedMax);
+    refs.zfeedInput.step = String(feedStep);
+    refs.zfeedInput.dataset.unitType = useInches ? 'inches' : 'mm';
+
+    setInputValueIfNeeded(refs.angleInput, tool.angle);
+}
+
+function syncToolTableUnits() {
+    const unitLabel = getUnitLabel();
+    const unitElem = document.getElementById('tool-table-unit');
+    const feedUnitElem = document.getElementById('tool-table-feed-unit');
+    const zfeedUnitElem = document.getElementById('tool-table-zfeed-unit');
+    if (unitElem) unitElem.textContent = unitLabel;
+    if (feedUnitElem) feedUnitElem.textContent = `${unitLabel}/min`;
+    if (zfeedUnitElem) zfeedUnitElem.textContent = `${unitLabel}/min`;
+}
+
+function updateRenderedToolRow(index) {
+    const tool = tools[index];
+    if (!tool) return;
+
+    const row = document.querySelector(`#tool-table-body tr[data-recid="${tool.recid}"]`);
+    if (row) {
+        syncToolRow(row, tool, index);
+    }
+}
+
+// Render tools table
+function renderToolsTable() {
+    const tbody = document.getElementById('tool-table-body');
+    if (!tbody) return;
+
+    syncToolTableUnits();
+
+    const existingRows = new Map();
+    Array.from(tbody.children).forEach(row => {
+        if (row.dataset && row.dataset.recid) {
+            existingRows.set(row.dataset.recid, row);
         }
     });
 
-    const deleteButton = row.querySelector('.tool-row-delete');
-    if (deleteButton) {
-        deleteButton.addEventListener('click', (e) => {
-            e.stopPropagation();
-            deleteTool(index);
-        });
+    const fragment = document.createDocumentFragment();
+
+    tools.forEach((tool, index) => {
+        const recid = String(tool.recid);
+        const row = existingRows.get(recid) || createToolRow(tool, index);
+        syncToolRow(row, tool, index);
+        fragment.appendChild(row);
+    });
+
+    tbody.replaceChildren(fragment);
+
+    if (typeof lucide !== 'undefined' && typeof lucide.createIcons === 'function') {
+        lucide.createIcons();
     }
 
-    return row;
+    if (tools.length > 0 && !currentTool) {
+        selectTool(0);
+    }
 }
 
 function selectTool(index) {
@@ -3226,11 +3372,11 @@ function updateTool(index, field, value) {
         tools[index][field] = value;
         localStorage.setItem('tools', JSON.stringify(tools));
 
-        // Refresh tool table
-        renderToolsTable();
+        updateRenderedToolRow(index);
 
         if (currentTool && currentTool.recid === tools[index].recid) {
             currentTool = tools[index];
+            updateRenderedToolRow(index);
             toolChanged(currentTool);
             setMode(null);
         }
@@ -3860,12 +4006,53 @@ function addToolPath(id, name, operation, toolName) {
     refreshToolPathsDisplay();
 }
 
+function createOrphanToolpathsGroup(count) {
+    const groupContainer = document.createElement('div');
+    groupContainer.className = 'sidebar-object-group sidebar-object-group-orphan';
+
+    const header = document.createElement('div');
+    header.className = 'sidebar-item sidebar-object-header sidebar-orphan-header';
+
+    const main = document.createElement('div');
+    main.className = 'sidebar-object-header-main d-flex align-items-start';
+    main.appendChild(createBootstrapLayoutIconNode('wrench'));
+
+    const body = document.createElement('div');
+    body.className = 'sidebar-item-body';
+
+    const titleRow = document.createElement('div');
+    titleRow.className = 'sidebar-item-title-row';
+    const title = document.createElement('span');
+    title.className = 'sidebar-item-title';
+    title.textContent = 'Unlinked Toolpaths';
+    titleRow.appendChild(title);
+
+    const meta = document.createElement('div');
+    meta.className = 'sidebar-item-meta';
+    const metaTag = document.createElement('span');
+    metaTag.className = 'sidebar-item-meta-tag';
+    metaTag.textContent = 'Toolpaths';
+    const metaChip = document.createElement('span');
+    metaChip.className = 'sidebar-item-meta-chip';
+    metaChip.textContent = `${count} item${count !== 1 ? 's' : ''}`;
+    meta.appendChild(metaTag);
+    meta.appendChild(metaChip);
+
+    body.appendChild(titleRow);
+    body.appendChild(meta);
+    main.appendChild(body);
+    header.appendChild(main);
+    groupContainer.appendChild(header);
+
+    return groupContainer;
+}
+
 // Refresh the toolpaths display in array order (no auto-sorting)
 function refreshToolPathsDisplay() {
     const section = document.getElementById('svg-paths-section');
     if (!section) return;
 
-    section.innerHTML = '';
+    const fragment = document.createDocumentFragment();
 
     if (typeof svgpaths === 'undefined' || !svgpaths || svgpaths.length === 0) {
         const orphanToolpaths = buildOrphanToolpaths(new Set());
@@ -3876,7 +4063,7 @@ function refreshToolPathsDisplay() {
                 meta: `${orphanToolpaths.length} item${orphanToolpaths.length > 1 ? 's' : ''}`,
                 itemClass: 'sidebar-orphan-header'
             });
-            section.appendChild(orphanGroup);
+            fragment.appendChild(orphanGroup);
             orphanToolpaths.forEach(toolpath => {
                 const item = renderSidebarLeafItem({
                     id: toolpath.id,
@@ -3888,8 +4075,11 @@ function refreshToolPathsDisplay() {
                     pending: toolpath.pending === true,
                     itemClass: 'sidebar-toolpath-item ms-4'
                 });
-                section.appendChild(item);
+                fragment.appendChild(item);
             });
+        }
+        section.replaceChildren(fragment);
+        if (typeof lucide !== 'undefined' && typeof lucide.createIcons === 'function') {
             lucide.createIcons();
         }
         return;
@@ -3912,7 +4102,7 @@ function refreshToolPathsDisplay() {
         badges.push(`${linkedToolpaths.length} toolpath${linkedToolpaths.length !== 1 ? 's' : ''}`);
         if (group.path.visible === false) badges.push('Hidden');
 
-        section.appendChild(renderObjectSidebarGroup({
+        fragment.appendChild(renderObjectSidebarGroup({
             groupId: `object-sidebar-${group.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`,
             path: group.path,
             title: group.title,
@@ -3926,24 +4116,7 @@ function refreshToolPathsDisplay() {
 
     const orphanToolpaths = buildOrphanToolpaths(assignedToolpathIds);
     if (orphanToolpaths.length > 0) {
-        const orphanContainer = document.createElement('div');
-        orphanContainer.className = 'sidebar-object-group sidebar-object-group-orphan';
-        orphanContainer.innerHTML = `
-            <div class="sidebar-item sidebar-object-header sidebar-orphan-header">
-                <div class="sidebar-object-header-main d-flex align-items-start">
-                    <i data-lucide="wrench"></i>
-                    <div class="sidebar-item-body">
-                        <div class="sidebar-item-title-row">
-                            <span class="sidebar-item-title">Unlinked Toolpaths</span>
-                        </div>
-                        <div class="sidebar-item-meta">
-                            <span class="sidebar-item-meta-tag">Toolpaths</span>
-                            <span class="sidebar-item-meta-chip">${orphanToolpaths.length} item${orphanToolpaths.length !== 1 ? 's' : ''}</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
+        const orphanContainer = createOrphanToolpathsGroup(orphanToolpaths.length);
 
         orphanToolpaths.forEach(toolpath => {
             orphanContainer.appendChild(renderSidebarLeafItem({
@@ -3958,10 +4131,13 @@ function refreshToolPathsDisplay() {
             }));
         });
 
-        section.appendChild(orphanContainer);
+        fragment.appendChild(orphanContainer);
     }
 
-    lucide.createIcons();
+    section.replaceChildren(fragment);
+    if (typeof lucide !== 'undefined' && typeof lucide.createIcons === 'function') {
+        lucide.createIcons();
+    }
 }
 
 function removeSvgPath(id) {
@@ -3973,12 +4149,13 @@ function removeToolPath(id) {
 }
 
 function clearSvgPaths() {
-    document.getElementById('svg-paths-section').innerHTML = '';
+    const section = document.getElementById('svg-paths-section');
+    if (section) section.replaceChildren();
 }
 
 function clearToolPaths() {
     const section = document.getElementById('svg-paths-section');
-    if (section) section.innerHTML = '';
+    if (section) section.replaceChildren();
 }
 
 function selectSidebarNode(id) {
@@ -4091,10 +4268,25 @@ function addOperation(name, icon, tooltip, displayName = name) {
     }
 
     if (icon != null) {
-        document.getElementById('draw-tools-list').innerHTML += `
-        <div class="sidebar-item" data-operation=${name} data-bs-toggle="tooltip" data-bs-placement="right" title="${tooltip}">
-         <i data-lucide=${icon}></i><span>${displayName}</span>
-         </div>`
+        const drawToolsList = document.getElementById('draw-tools-list');
+        if (!drawToolsList) return;
+
+        const item = document.createElement('div');
+        item.className = 'sidebar-item';
+        item.dataset.operation = name;
+        item.dataset.bsToggle = 'tooltip';
+        item.dataset.bsPlacement = 'right';
+        item.title = tooltip;
+        item.appendChild(createBootstrapLayoutIconNode(icon));
+
+        const label = document.createElement('span');
+        label.textContent = displayName;
+        item.appendChild(label);
+        drawToolsList.appendChild(item);
+
+        if (typeof lucide !== 'undefined' && typeof lucide.createIcons === 'function') {
+            lucide.createIcons();
+        }
     }
 
 }
