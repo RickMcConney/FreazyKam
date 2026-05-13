@@ -1467,6 +1467,9 @@ function setupSidebarEventHandlers(sidebar) {
                 showOperationPropertiesEditor(operation);
                 handleOperationClick(operation);
             } else {
+                // Machining operations like Profile/Pocket use the properties panel and
+                // canvas selection, so leave any interactive tool mode such as Drill first.
+                cncController.setMode('Select');
                 showOperationPropertiesEditor(operation);
                 generateToolpathForSelection();
             }
@@ -1939,6 +1942,10 @@ function setActiveToolpaths(toolpathsArray) {
     return toolpathsArray;
 }
 
+function isWholeWorkpieceOperation(operationName) {
+    return operationName === 'Surfacing';
+}
+
 /**
  * Get all currently active toolpaths
  * This filters the actual toolpaths array, so it's always in sync
@@ -1967,6 +1974,13 @@ function isSameToolpathSource(toolpath, selectedSvgIds) {
 
 function findExistingToolpathsForSelection(operationName, selectedSvgIds) {
     const normalizedOperation = operationName === 'Drill' ? 'HelicalDrill' : operationName;
+	if (isWholeWorkpieceOperation(operationName)) {
+		return toolpaths.filter(toolpath => {
+			if (toolpath.operation !== normalizedOperation) return false;
+			return getToolpathSourceIds(toolpath).length === 0;
+		});
+	}
+
 	const selectedPaths = Array.isArray(selectedSvgIds)
 		? selectedSvgIds.map(id => svgpaths.find(path => path.id === id)).filter(Boolean)
 		: [];
@@ -2000,7 +2014,7 @@ function generateToolpathForSelection() {
     if (currentOperationName == null) return;
 
     const selectedSvgIds = selectMgr.selectedPaths().map(path => path.id);
-    if (selectedSvgIds.length === 0) {
+    if (!isWholeWorkpieceOperation(currentOperationName) && selectedSvgIds.length === 0) {
         notify('Select a path first', 'info');
         return null;
     }
@@ -2167,7 +2181,7 @@ function showOperationPropertiesEditor(operationName) {
         const selectedSvgIds = typeof getSelectedSvgPathIds === 'function'
             ? getSelectedSvgPathIds().filter(Boolean)
             : [];
-        const existingToolpaths = selectedSvgIds.length > 0
+        const existingToolpaths = (selectedSvgIds.length > 0 || isWholeWorkpieceOperation(operationName))
             ? findExistingToolpathsForSelection(operationName, selectedSvgIds)
             : [];
         const hasAssociatedShape = existingToolpaths.length > 0;
@@ -3517,7 +3531,7 @@ function handleOperationClick(operation) {
             break;
         case 'Boolean':
             doBoolean();
-            setMode("Select");
+            cncController.setMode("Select");
             break;
         case 'Pen':
             doPen();
@@ -3552,34 +3566,34 @@ function handleOperationClick(operation) {
             doProfile();
             endUndoBatch();
             selectMgr.unselectAll();
-            setMode("Select");
+            cncController.setMode("Select");
             break;
         case 'Pocket':
             beginUndoBatch();
             doPocket();
             endUndoBatch();
             selectMgr.unselectAll();
-            setMode("Select");
+            cncController.setMode("Select");
             break;
         case 'VCarve':
             beginUndoBatch();
             doVcarve();
             endUndoBatch();
             selectMgr.unselectAll();
-            setMode("Select");
+            cncController.setMode("Select");
             break;
         case 'Inlay':
             beginUndoBatch();
             doInlay();
             endUndoBatch();
             selectMgr.unselectAll();
-            setMode("Select");
+            cncController.setMode("Select");
             break;
         case 'Surfacing':
             beginUndoBatch();
             doSurfacing();
             endUndoBatch();
-            setMode("Select");
+            cncController.setMode("Select");
             break;
         case '3dProfile':
             beginUndoBatch();
@@ -3588,7 +3602,7 @@ function handleOperationClick(operation) {
             }
             endUndoBatch();
             selectMgr.unselectAll();
-            setMode("Select");
+            cncController.setMode("Select");
             break;
         default:
             doSelect(operation);

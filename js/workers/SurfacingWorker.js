@@ -60,6 +60,7 @@ function generateSurfacingToolpaths(payload) {
 
 	const paths = [];
 	const rad = angle * Math.PI / 180;
+	let lineIndex = 0;
 
 	for (let y = minY; ; y += stepover) {
 		const ly = Math.min(y, maxY);
@@ -76,6 +77,7 @@ function generateSurfacingToolpaths(payload) {
 			const tpath = lineIndex % 2 === 0 ? clipped : [clipped[1], clipped[0]];
 			paths.push({ tpath: tpath });
 		}
+		lineIndex++;
 
 		if (ly >= maxY) break;
 	}

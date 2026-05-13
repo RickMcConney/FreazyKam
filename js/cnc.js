@@ -945,7 +945,6 @@ function doDrill() {
 	// Enter drill mode — handles both path highlighting/helical drill
 	// and empty-space peck drilling
 	cncController.setMode("Drill");
-	setMode("Select");
 }
 
 function doTabEditor() {
@@ -1041,7 +1040,9 @@ function doSurfacing() {
 	if (typeof refreshToolPathsDisplay === 'function') refreshToolPathsDisplay();
 	redraw();
 
-	const worker = new Worker('js/workers/SurfacingWorker.js');
+	// Cache-bust the worker URL so browser-stale copies do not keep throwing
+	// outdated runtime errors after a local fix.
+	const worker = new Worker('js/workers/SurfacingWorker.js?v=' + Date.now());
 	registerGenerationWorker('surfacing', worker);
 	console.log('SurfacingWorker: queued', { wpWidth, wpLength, radius, stepover, angle, pendingKey });
 	notify('Generating surfacing paths…', 'info');
