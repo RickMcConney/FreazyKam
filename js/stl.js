@@ -1211,8 +1211,7 @@ window.do3dProfile = function() {
     if (typeof window.redraw === 'function') window.redraw();
 
     const worker = new Worker('js/workers/3dProfileWorker.js');
-    profile3dGenerationWorker = worker;
-    window.profile3dGenerationWorker = worker;
+    registerGenerationWorker('profile3d', worker);
     console.log('3D ProfileWorker: queued', {
         pendingKey,
         strategy,
@@ -1232,7 +1231,7 @@ window.do3dProfile = function() {
     }
 
     worker.onmessage = function(event) {
-        if (profile3dGenerationWorker !== worker) {
+        if (!isGenerationWorkerActive('profile3d', worker)) {
             worker.terminate();
             return;
         }
@@ -1242,8 +1241,7 @@ window.do3dProfile = function() {
             return;
         }
 
-        profile3dGenerationWorker = null;
-        window.profile3dGenerationWorker = null;
+        unregisterGenerationWorker('profile3d', worker);
         worker.terminate();
 
         if (!event.data || !event.data.ok) {
@@ -1290,10 +1288,7 @@ window.do3dProfile = function() {
     };
 
     worker.onerror = function(error) {
-        if (profile3dGenerationWorker === worker) {
-            profile3dGenerationWorker = null;
-            window.profile3dGenerationWorker = null;
-        }
+        unregisterGenerationWorker('profile3d', worker);
         worker.terminate();
         clearPendingToolpaths();
         if (typeof window.notify === 'function') {

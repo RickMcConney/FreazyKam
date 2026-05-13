@@ -26,6 +26,35 @@ var profileGenerationWorker = null;
 var inlayGenerationWorker = null;
 var surfacingGenerationWorker = null;
 var profile3dGenerationWorker = null;
+var generationWorkerRegistry = window.generationWorkerRegistry || {
+	profile: new Set(),
+	surfacing: new Set(),
+	inlay: new Set(),
+	pocket: new Set(),
+	vcarve: new Set(),
+	drill: new Set(),
+	profile3d: new Set()
+};
+window.generationWorkerRegistry = generationWorkerRegistry;
+
+function registerGenerationWorker(kind, worker) {
+	if (!generationWorkerRegistry[kind]) {
+		generationWorkerRegistry[kind] = new Set();
+	}
+	generationWorkerRegistry[kind].add(worker);
+	return worker;
+}
+
+function unregisterGenerationWorker(kind, worker) {
+	const workers = generationWorkerRegistry[kind];
+	if (!workers) return;
+	workers.delete(worker);
+}
+
+function isGenerationWorkerActive(kind, worker) {
+	const workers = generationWorkerRegistry[kind];
+	return !!workers && workers.has(worker);
+}
 
 function makePendingToolpath(svgIds, name, operation, pendingKey, overrides) {
 	const pendingToolpath = {
@@ -778,11 +807,11 @@ function doProfile() {
 	redraw();
 
 	const worker = new Worker('js/workers/ProfileWorker.js');
-	window.profileGenerationWorker = worker;
+	registerGenerationWorker('profile', worker);
 	notify('Generating profile paths…', 'info');
 
 	worker.onmessage = function(event) {
-		if (window.profileGenerationWorker !== worker) {
+		if (!isGenerationWorkerActive('profile', worker)) {
 			worker.terminate();
 			return;
 		}
@@ -792,7 +821,7 @@ function doProfile() {
 			return;
 		}
 
-		window.profileGenerationWorker = null;
+		unregisterGenerationWorker('profile', worker);
 		worker.terminate();
 
 		if (!event.data || !event.data.ok) {
@@ -826,9 +855,7 @@ function doProfile() {
 	};
 
 	worker.onerror = function(error) {
-		if (window.profileGenerationWorker === worker) {
-			window.profileGenerationWorker = null;
-		}
+		unregisterGenerationWorker('profile', worker);
 		worker.terminate();
 		removePendingToolpaths(pendingToolpaths);
 		notify((error && error.message) || 'Profile generation failed', 'error');
@@ -1015,19 +1042,17 @@ function doSurfacing() {
 	redraw();
 
 	const worker = new Worker('js/workers/SurfacingWorker.js');
-	window.surfacingGenerationWorker = worker;
+	registerGenerationWorker('surfacing', worker);
 	console.log('SurfacingWorker: queued', { wpWidth, wpLength, radius, stepover, angle, pendingKey });
 	notify('Generating surfacing paths…', 'info');
 
 	function clearPendingToolpaths() {
-		if (window.surfacingGenerationWorker === worker) {
-			window.surfacingGenerationWorker = null;
-		}
+		unregisterGenerationWorker('surfacing', worker);
 		removePendingToolpaths(pendingToolpaths);
 	}
 
 	worker.onmessage = function(event) {
-		if (window.surfacingGenerationWorker !== worker) {
+		if (!isGenerationWorkerActive('surfacing', worker)) {
 			worker.terminate();
 			return;
 		}
@@ -1037,7 +1062,7 @@ function doSurfacing() {
 			return;
 		}
 
-		window.surfacingGenerationWorker = null;
+		unregisterGenerationWorker('surfacing', worker);
 		worker.terminate();
 
 		if (!event.data || !event.data.ok) {
@@ -1071,9 +1096,7 @@ function doSurfacing() {
 	};
 
 	worker.onerror = function(error) {
-		if (window.surfacingGenerationWorker === worker) {
-			window.surfacingGenerationWorker = null;
-		}
+		unregisterGenerationWorker('surfacing', worker);
 		worker.terminate();
 		removePendingToolpaths(pendingToolpaths);
 		notify((error && error.message) || 'Surfacing generation failed', 'error');
@@ -2342,8 +2365,7 @@ function doInlay() {
 	redraw();
 
 	const worker = new Worker('js/workers/InlayWorker.js');
-	inlayGenerationWorker = worker;
-	window.inlayGenerationWorker = worker;
+	registerGenerationWorker('inlay', worker);
 	console.log('InlayWorker main:start', {
 		groupCount: selectionGroups.length,
 		inlayType: props?.inlayType || 'female',
@@ -2357,7 +2379,7 @@ function doInlay() {
 	}
 
 	worker.onmessage = function(event) {
-		if (inlayGenerationWorker !== worker) {
+		if (!isGenerationWorkerActive('inlay', worker)) {
 			worker.terminate();
 			return;
 		}
@@ -2367,8 +2389,7 @@ function doInlay() {
 			return;
 		}
 
-		inlayGenerationWorker = null;
-		window.inlayGenerationWorker = null;
+		unregisterGenerationWorker('inlay', worker);
 		worker.terminate();
 
 		if (!event.data || !event.data.ok) {
@@ -2418,10 +2439,7 @@ function doInlay() {
 	};
 
 	worker.onerror = function(error) {
-		if (inlayGenerationWorker === worker) {
-			inlayGenerationWorker = null;
-			window.inlayGenerationWorker = null;
-		}
+		unregisterGenerationWorker('inlay', worker);
 		worker.terminate();
 		clearPendingToolpaths();
 		notify((error && error.message) || 'Inlay generation failed', 'error');
@@ -2533,7 +2551,7 @@ function doPocket() {
 	redraw();
 
 	const worker = new Worker('js/workers/pocketWorker.js');
-	window.pocketGenerationWorker = worker;
+	registerGenerationWorker('pocket', worker);
 	notify('Generating pocket paths…', 'info');
 
 	function clearPendingToolpaths() {
@@ -2547,7 +2565,7 @@ function doPocket() {
 	}
 
 	worker.onmessage = function(event) {
-		if (window.pocketGenerationWorker !== worker) {
+		if (!isGenerationWorkerActive('pocket', worker)) {
 			worker.terminate();
 			return;
 		}
@@ -2556,7 +2574,7 @@ function doPocket() {
 			return;
 		}
 
-		window.pocketGenerationWorker = null;
+		unregisterGenerationWorker('pocket', worker);
 		worker.terminate();
 
 		if (!event.data || !event.data.ok) {
@@ -2590,9 +2608,7 @@ function doPocket() {
 	};
 
 	worker.onerror = function(error) {
-		if (window.pocketGenerationWorker === worker) {
-			window.pocketGenerationWorker = null;
-		}
+		unregisterGenerationWorker('pocket', worker);
 		worker.terminate();
 		clearPendingToolpaths();
 		notify((error && error.message) || 'Pocket generation failed', 'error');
@@ -2661,12 +2677,11 @@ function startVcarveGeneration(config) {
 	redraw();
 
 	const worker = new Worker('js/workers/vcarveWorker.js');
-	vcarveGenerationWorker = worker;
-	window.vcarveGenerationWorker = worker;
+	registerGenerationWorker('vcarve', worker);
 	notify('Generating VCarve paths…', 'info');
 
 	worker.onmessage = function(event) {
-		if (vcarveGenerationWorker !== worker) {
+		if (!isGenerationWorkerActive('vcarve', worker)) {
 			worker.terminate();
 			return;
 		}
@@ -2676,8 +2691,7 @@ function startVcarveGeneration(config) {
 			return;
 		}
 
-		vcarveGenerationWorker = null;
-		window.vcarveGenerationWorker = null;
+		unregisterGenerationWorker('vcarve', worker);
 		worker.terminate();
 
 		if (!event.data || !event.data.ok) {
@@ -2711,10 +2725,7 @@ function startVcarveGeneration(config) {
 	};
 
 	worker.onerror = function(error) {
-		if (vcarveGenerationWorker === worker) {
-			vcarveGenerationWorker = null;
-			window.vcarveGenerationWorker = null;
-		}
+		unregisterGenerationWorker('vcarve', worker);
 		worker.terminate();
 		removePendingToolpaths(pendingToolpaths);
 		notify((error && error.message) || 'VCarve generation failed', 'error');

@@ -527,8 +527,7 @@ function startDrillGeneration(requests) {
 	redraw();
 
 	const worker = new Worker('js/workers/drillWorker.js');
-	drillGenerationWorker = worker;
-	window.drillGenerationWorker = worker;
+	registerGenerationWorker('drill', worker);
 	console.log('DrillWorker main:start', {
 		requestCount: requests.length,
 		toolRadius: toolRadiusValue,
@@ -537,7 +536,7 @@ function startDrillGeneration(requests) {
 	});
 
 	worker.onmessage = function(event) {
-		if (drillGenerationWorker !== worker) {
+		if (!isGenerationWorkerActive('drill', worker)) {
 			worker.terminate();
 			return;
 		}
@@ -547,8 +546,7 @@ function startDrillGeneration(requests) {
 			return;
 		}
 
-		drillGenerationWorker = null;
-		window.drillGenerationWorker = null;
+		unregisterGenerationWorker('drill', worker);
 		worker.terminate();
 
 		if (!event.data || !event.data.ok) {
@@ -584,10 +582,7 @@ function startDrillGeneration(requests) {
 	};
 
 	worker.onerror = function(error) {
-		if (drillGenerationWorker === worker) {
-			drillGenerationWorker = null;
-			window.drillGenerationWorker = null;
-		}
+		unregisterGenerationWorker('drill', worker);
 		worker.terminate();
 		removePendingToolpaths(pendingToolpaths);
 		notify((error && error.message) || 'Drill generation failed', 'error');
@@ -1623,4 +1618,3 @@ function computeVcarve(outside, name) {
 	}
 
 }
-
