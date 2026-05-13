@@ -523,7 +523,12 @@ function queueCanvasResizeSync() {
 	pendingCanvasResizeFrame = requestAnimationFrame(function () {
 		pendingCanvasResizeFrame = null;
 		if (resizeCanvasToViewport()) {
-			redraw();
+			// Keep the canvas repaint in the same frame as the bitmap resize to
+			// avoid a visible blank flash while the sidebar is being dragged.
+			staticDirty = true;
+			simulationDirty = true;
+			redrawCore();
+			setDirty();
 		}
 	});
 }
