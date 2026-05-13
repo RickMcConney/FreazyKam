@@ -279,7 +279,7 @@ const CONFIG = {
   // Control panel
   CONTROL_PANEL_OPACITY: 0.8,
   ANIMATION_SPEED_MIN: 1,
-  ANIMATION_SPEED_MAX: 10,
+  ANIMATION_SPEED_MAX: 50,
 
   // G-code defaults
   DEFAULT_FEED_RATE: 1000,
@@ -2470,7 +2470,7 @@ class ToolpathAnimation {
   }
 
   setSpeed(speed) {
-    this.speed = Math.max(1, Math.min(10, speed));
+    this.speed = Math.max(CONFIG.ANIMATION_SPEED_MIN, Math.min(CONFIG.ANIMATION_SPEED_MAX, speed));
   }
 
   /**
