@@ -72,81 +72,65 @@ var currentOperationName = null;
 
 
 // Wood species database with cutting parameters
-var woodSpeciesDatabase = {
-    'Pine': {
-        color: '#F5DEB3', // Wheat
-        density: 0.5,
-        feedMultiplier: 1.2,
-        speedMultiplier: 1.0
+const materialsDatabase = {
+    'Softwood / MDF': {
+        color: '#F5DEB3', // wheat
+        chipLoad: {
+            base: 0.30,
+            min: 0.22,
+            max: 0.38
+        }
     },
-    'Oak': {
-        color: '#DEB887', // Burlywood
-        density: 0.75,
-        feedMultiplier: 0.8,
-        speedMultiplier: 0.9
+
+    'Hardwood / Plywood': {
+        color: '#DEB887', // burlywood
+        chipLoad: {
+            base: 0.18,
+            min: 0.14,
+            max: 0.24
+        }
     },
-    'Maple': {
-        color: '#F0E68C', // Khaki
-        density: 0.7,
-        feedMultiplier: 0.9,
-        speedMultiplier: 0.95
+
+    'PVC Foam': {
+        color: '#E0FFFF', // light cyan
+        chipLoad: {
+            base: 0.40,
+            min: 0.30,
+            max: 0.50
+        }
     },
-    'Cherry': {
-        color: '#FFB6C1', // Light Pink
-        density: 0.6,
-        feedMultiplier: 1.0,
-        speedMultiplier: 1.0
+
+    'POM / PMMA / PC': {
+        color: '#ADD8E6', // light blue
+        chipLoad: {
+            base: 0.10,
+            min: 0.08,
+            max: 0.14
+        }
     },
-    'Walnut': {
-        color: '#D2B48C', // Tan
-        density: 0.65,
-        feedMultiplier: 0.95,
-        speedMultiplier: 0.95
-    },
-    'Birch': {
-        color: '#FFF8DC', // Cornsilk
-        density: 0.68,
-        feedMultiplier: 0.9,
-        speedMultiplier: 0.95
-    },
-    'Poplar': {
-        color: '#e6f7c1', // patel green
-        density: 0.45,
-        feedMultiplier: 1.3,
-        speedMultiplier: 1.1
-    },
-    'Cedar': {
-        color: '#f8d091', // Lavender
-        density: 0.35,
-        feedMultiplier: 1.4,
-        speedMultiplier: 1.2
-    },
-    'Ash': {
-        color: '#FFFACD', // Lemon Chiffon
-        density: 0.72,
-        feedMultiplier: 0.85,
-        speedMultiplier: 0.9
-    },
-    'Mahogany': {
-        color: '#f5c373', // Misty Rose
-        density: 0.55,
-        feedMultiplier: 1.1,
-        speedMultiplier: 1.0
+
+    'Copper / Brass': {
+        color: '#FFD700', // gold
+        chipLoad: {
+            base: 0.07,
+            min: 0.05,
+            max: 0.09
+        }
     }
 };
 
 function getDefaultOptions() {
     return [
-        { recid: 1,  option: 'showGrid',           value: true,            desc: 'Show Grid',                                   hidden: true  },
+        { recid: 1,  option: 'showGrid',           value: true,            desc: 'Show Grid',                                    hidden: true  },
         { recid: 2,  option: 'showOrigin',          value: true,            desc: 'Show Origin',                                 hidden: true  },
         { recid: 3,  option: 'Inches',              value: false,           desc: 'Display Inches',                              hidden: false },
         { recid: 4,  option: 'safeHeight',          value: 5,               desc: 'Safe Height in mm',                           hidden: false },
-        { recid: 5,  option: 'tolerance',           value: 0.01,             desc: 'Tool path tolerance (mm)',                    hidden: false },
+        { recid: 5,  option: 'tolerance',           value: 0.01,             desc: 'Tool path tolerance (mm)',                   hidden: false },
         { recid: 6,  option: 'zbacklash',           value: 0.1,             desc: 'Back lash compensation in mm',                hidden: false },
         { recid: 7,  option: 'workpieceWidth',      value: 300,             desc: 'Workpiece Width (mm)',                        hidden: true  },
         { recid: 8,  option: 'workpieceLength',     value: 200,             desc: 'Workpiece Length (mm)',                       hidden: true  },
         { recid: 9,  option: 'workpieceThickness',  value: 19,              desc: 'Workpiece Thickness (mm)',                    hidden: true  },
-        { recid: 10, option: 'woodSpecies',         value: 'Pine',          desc: 'Wood Species',                                hidden: true  },
+        { recid: 10, option: 'material',            value: 'Softwood / MDF', desc: 'Material',                                   hidden: true  },
         { recid: 11, option: 'autoFeedRate',        value: false,           desc: 'Auto Calculate Feed Rates',                   hidden: false },
         { recid: 12, option: 'minFeedRate',         value: 100,             desc: 'Minimum Feed Rate (mm/min)',                  hidden: false },
         { recid: 13, option: 'maxFeedRate',         value: 2000,            desc: 'Maximum Feed Rate (mm/min)',                  hidden: false },
@@ -3225,10 +3209,10 @@ function syncToolRow(row, tool, index) {
     const refs = row._toolRefs;
     const useInches = getOption('Inches');
     const autoFeedRateEnabled = getOption('autoFeedRate');
-    const woodSpecies = getOption('woodSpecies');
+    const material = getOption('material');
 
     const displayDiameter = formatDimension(tool.diameter, useInches, true);
-    const autoCalculatedFeed = autoFeedRateEnabled ? calculateFeedRate(tool, woodSpecies, 'Profile') : null;
+    const autoCalculatedFeed = autoFeedRateEnabled ? calculateFeedRate(tool, material, 'Profile') : null;
     const autoCalculatedFeedDisplay = autoCalculatedFeed === null
         ? null
         : (useInches ? Math.round(autoCalculatedFeed / 25.4) : autoCalculatedFeed);

@@ -318,10 +318,10 @@ const CONFIG = {
 
 // Return the wood color for the given species as a THREE.js hex integer.
 // Falls back to a default brown if the species is not in the database.
-function getWoodColor(species) {
+function getMaterialColor(species) {
   const DEFAULT = 0x8B7355;
-  if (typeof woodSpeciesDatabase === 'undefined') return DEFAULT;
-  const entry = woodSpeciesDatabase[species];
+  if (typeof materialsDatabase === 'undefined') return DEFAULT;
+  const entry = materialsDatabase[species];
   if (!entry || !entry.color) return DEFAULT;
   return parseInt(entry.color.replace('#', ''), 16);
 }
@@ -466,8 +466,8 @@ function refreshToolpath() {
   const { width: workpieceWidth, length: workpieceLength, thickness: workpieceThickness, originPosition } = getWorkpieceDimensions();
 
   // Get wood species color
-  const woodSpecies = (typeof getOption === 'function') ? getOption('woodSpecies') : 'Pine';
-  const woodColor = getWoodColor(woodSpecies);
+  const material = (typeof getOption === 'function') ? getOption('material') : 'Softwood / MDF';
+  const materialColor = getMaterialColor(material);
 
   // Remove old workpiece
   scene.remove(workpieceManager.mesh);
@@ -475,7 +475,7 @@ function refreshToolpath() {
   if (workpieceManager.mesh.material) workpieceManager.mesh.material.dispose();
 
   // Create new workpiece with current dimensions and wood color
-  workpieceManager = new WorkpieceManager(scene, workpieceWidth, workpieceLength, workpieceThickness, originPosition, woodColor);
+  workpieceManager = new WorkpieceManager(scene, workpieceWidth, workpieceLength, workpieceThickness, originPosition, materialColor);
   workpieceManager.mesh.visible = true;  // Show workpiece
 
   // Update the toolpath animation's reference
@@ -585,12 +585,12 @@ async function initThree(loadToken = threeViewLoadToken) {
   // Create and add tool visualization
   createToolVisualization(6);  // 6mm diameter tool
 
-  // Get wood species color for initial workpiece
-  const woodSpecies = (typeof getOption === 'function') ? getOption('woodSpecies') : 'Pine';
-  const woodColor = getWoodColor(woodSpecies);
+  // Get material color for initial workpiece
+  const material = (typeof getOption === 'function') ? getOption('material') : 'Softwood / MDF';
+  const materialColor = getMaterialColor(material);
 
-  // Initialize workpiece manager with workpiece positioned correctly and wood color
-  workpieceManager = new WorkpieceManager(scene, workpieceWidth, workpieceLength, workpieceThickness, originPosition, woodColor);
+  // Initialize workpiece manager with workpiece positioned correctly and material color
+  workpieceManager = new WorkpieceManager(scene, workpieceWidth, workpieceLength, workpieceThickness, originPosition, materialColor);
   workpieceManager.mesh.visible = true;  // Show workpiece
 
   // Initialize visualizers
@@ -1018,8 +1018,8 @@ function updateProgressiveGrid3D(force = false) {
 window.threeScene = null; // Will be set after init
 window.updateGridSize3D = updateGridSize3D;
 
-function updateWorkpiece3D(width, length, thickness, originPosition, woodSpecies) {
-  // Update 3D workpiece with new dimensions and species color
+function updateWorkpiece3D(width, length, thickness, originPosition, material) {
+  // Update 3D workpiece with new dimensions and material color
   if (!scene || !workpieceManager) return;  // Scene or workpiece not initialized yet
 
   // Use provided values or fall back to getOption
@@ -1035,12 +1035,12 @@ function updateWorkpiece3D(width, length, thickness, originPosition, woodSpecies
   if (originPosition === undefined) {
     originPosition = (typeof getOption === 'function') ? getOption('originPosition') : 'middle-center';
   }
-  if (woodSpecies === undefined) {
-    woodSpecies = (typeof getOption === 'function') ? getOption('woodSpecies') : 'Pine';
+  if (material === undefined) {
+    material = (typeof getOption === 'function') ? getOption('material') : 'Softwood / MDF';
   }
 
-  // Get wood color from species database
-  const woodColor = getWoodColor(woodSpecies);
+  // Get material color from database
+  const materialColor = getMaterialColor(material);
   const previousOriginPosition = workpieceManager.originPosition || 'middle-center';
   const dimensionsChanged =
     workpieceManager.width !== width ||
@@ -1053,7 +1053,7 @@ function updateWorkpiece3D(width, length, thickness, originPosition, woodSpecies
     if (workpieceManager.mesh.geometry) workpieceManager.mesh.geometry.dispose();
     if (workpieceManager.mesh.material) workpieceManager.mesh.material.dispose();
 
-    workpieceManager = new WorkpieceManager(scene, width, length, thickness, originPosition, woodColor);
+    workpieceManager = new WorkpieceManager(scene, width, length, thickness, originPosition, materialColor);
     workpieceManager.mesh.visible = true;
 
     if (toolpathAnimation) {
@@ -1062,9 +1062,9 @@ function updateWorkpiece3D(width, length, thickness, originPosition, woodSpecies
   } else {
     // Origin change only: keep the workpiece fixed and move only the axes helper
     workpieceManager.originPosition = originPosition;
-    workpieceManager.woodColor = woodColor;
+    workpieceManager.materialColor = materialColor;
     if (workpieceManager.mesh && workpieceManager.mesh.material) {
-      workpieceManager.mesh.material.color.set(woodColor);
+      workpieceManager.mesh.material.color.set(materialColor);
     }
 
     const boundsOffset = getWorkpieceBoundsOffset(originPosition, width, length);
@@ -1617,13 +1617,13 @@ window.withAnimationPaused = withAnimationPaused;
 
 // ============ WORKPIECE MANAGER ============
 class WorkpieceManager {
-  constructor(scene, width, length, thickness, originPosition, woodColor) {
+  constructor(scene, width, length, thickness, originPosition, materialColor) {
     this.scene = scene;
     this.width = width;
     this.length = length;
     this.thickness = thickness;
     this.originPosition = originPosition || 'middle-center';
-    this.woodColor = woodColor || 0x8B7355;  // Default wood color if not provided
+    this.materialColor = materialColor || 0x8B7355;  // Default wood color if not provided
 
     // Keep the 3D workpiece physically centered in the scene.
     // Origin changes are represented only by the axes/toolpath offsets.
@@ -1634,7 +1634,7 @@ class WorkpieceManager {
     geometry.applyMatrix4(matrix);
 
     const material = new THREE.MeshPhongMaterial({
-      color: this.woodColor,  // Use wood species color
+      color: this.materialColor,  // Use wood species color
       shininess: 30,
       side: THREE.DoubleSide
     });
@@ -1898,8 +1898,8 @@ class ToolpathAnimation {
       }
 
       // Get workpiece color
-     const woodColor = this.workpieceManager.woodColor || 0x8B6914;
-     // const woodColor = 0xff0000; // red for testing
+     const materialColor = this.workpieceManager.materialColor || 0x8B6914;
+     // const materialColor = 0xff0000; // red for testing
 
       // Calculate toolpath bounding box
       const bounds = this.calculateToolPathBounds();
@@ -1973,7 +1973,7 @@ class ToolpathAnimation {
       this.voxelSize = originalVoxelSize;  // restore before passing to quadtree
       const qtGrid = new QuadtreeVoxelGrid(
         gridWidth, gridLength, gridThickness,
-        originalVoxelSize, gridOrigin, woodColor
+        originalVoxelSize, gridOrigin, materialColor
       );
 
       // Annotate each movement with the active tool radius so buildFromMovements
@@ -2038,11 +2038,11 @@ class ToolpathAnimation {
    */
   createWorkpieceOutlineBox(width, length, thickness, gridWidth, gridLength, gridOrigin) {
     // Get workpiece color
-    let woodColor;
+    let materialColor;
     if (typeof getOption === 'function') {
-      woodColor = getWoodColor(getOption('woodSpecies'));
+      materialColor = getMaterialColor(getOption('material'));
     } else {
-      woodColor = this.workpieceManager?.woodColor ?? 0x8B6914;
+      materialColor = this.workpieceManager?.materialColor ?? 0x8B6914;
     }
 
     // Calculate workpiece boundaries (accounting for origin position)
@@ -2118,7 +2118,7 @@ class ToolpathAnimation {
 
     const positions = geometry.attributes.position.array;
     const normals = geometry.attributes.normal.array;
-    const materialColor = new THREE.Color(woodColor);
+    const materialColorValue = new THREE.Color(materialColor);
 
     const colors = [];
     for (let i = 0; i < positions.length; i += 3) {
@@ -2126,7 +2126,7 @@ class ToolpathAnimation {
       const absNormalZ = Math.abs(normalZ);
 
       // Top/bottom faces get wood color, sides get wood color for consistent appearance
-      colors.push(materialColor.r, materialColor.g, materialColor.b);
+      colors.push(materialColorValue.r, materialColorValue.g, materialColorValue.b);
     }
 
     geometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array(colors), 3));
@@ -2157,7 +2157,7 @@ class ToolpathAnimation {
       dummy.updateMatrix();
 
       this.workpieceOutlineBox.setMatrixAt(i, dummy.matrix);
-      this.workpieceOutlineBox.setColorAt(i, materialColor);
+      this.workpieceOutlineBox.setColorAt(i, materialColorValue);
     }
 
     this.workpieceOutlineBox.instanceMatrix.needsUpdate = true;

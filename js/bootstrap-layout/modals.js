@@ -746,7 +746,7 @@ function renderOptionsTable() {
     // These options are rendered in the dedicated section above the generic options table.
     const workpieceManaged = new Set([
         'showGrid', 'showOrigin', 'workpieceWidth', 'workpieceLength', 'workpieceThickness',
-        'woodSpecies', 'originPosition', 'gridSize', 'showWorkpiece', 'snapGrid'
+        'material', 'originPosition', 'gridSize', 'showWorkpiece', 'snapGrid'
     ]);
     // Only show options that have a desc (declared in defaults) and aren't workpiece-managed.
     // Options pushed dynamically by setOption() at runtime (internal state like textFont,
@@ -764,13 +764,13 @@ function renderOptionsTable() {
                          <input type="checkbox" class="form-check-input" ${option.value ? 'checked' : ''}
                                 data-option-index="${originalIndex}">
                        </div>`;
-        } else if (option.option === 'woodSpecies') {
-            // Create dropdown for wood species (this should never appear since woodSpecies is filtered out)
-            const speciesOptions = Object.keys(woodSpeciesDatabase).map(species =>
-                `<option value="${species}" ${option.value === species ? 'selected' : ''}>${species}</option>`
+        } else if (option.option === 'material') {
+            // Create dropdown for material (this should never appear since material is filtered out)
+            const materialOptions = Object.keys(materialsDatabase).map(material =>
+                `<option value="${material}" ${option.value === material ? 'selected' : ''}>${material}</option>`
             ).join('');
             inputHtml = `<select class="form-select" data-option-index="${originalIndex}">
-                           ${speciesOptions}
+                           ${materialOptions}
                          </select>`;
         } else {
             // Use step 0.1 for tolerance and zbacklash, step 1 for other numeric fields

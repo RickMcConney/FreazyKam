@@ -428,13 +428,15 @@ npx http-server
 ## Common Development Tasks
 
 ### Adding Wood Species
-Edit `woodSpeciesDatabase` object in `js/bootstrap-layout.js` with material properties:
+Edit `materialsDatabase` object in `js/bootstrap-layout.js` with material properties:
 ```javascript
-'SpeciesName': {
+'MaterialName': {
     color: '#hexcolor',
-    density: 0.5,           // relative density
-    feedMultiplier: 1.0,    // cutting speed adjustment
-    speedMultiplier: 1.0    // spindle speed adjustment
+    chipLoad: {
+        base: 0.18,
+        min: 0.14,
+        max: 0.24
+    }
 }
 ```
 

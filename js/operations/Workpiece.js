@@ -3,14 +3,14 @@ class Workpiece extends Operation {
         super('Workpiece', 'cuboid', 'Configure your workpiece dimensions and material properties');
 
         this.fields = {
-            workpieceWidth:     { key: 'workpieceWidth',     label: 'Width (X)',      type: 'dimension', default: 300  },
-            workpieceLength:    { key: 'workpieceLength',    label: 'Length (Y)',     type: 'dimension', default: 200  },
-            workpieceThickness: { key: 'workpieceThickness', label: 'Thickness (Z)',  type: 'dimension', default: 19   },
-            woodSpecies:        { key: 'woodSpecies',        label: 'Wood Species',   type: 'choice',    default: 'Pine', options: [] },
-            gridSize:           { key: 'gridSize',           label: 'Grid Size',      type: 'dimension', default: 10   },
-            showGrid:           { key: 'showGrid',           label: 'Show Grid',      type: 'checkbox',  default: true },
-            showOrigin:         { key: 'showOrigin',         label: 'Show Origin',    type: 'checkbox',  default: true },
-            showWorkpiece:      { key: 'showWorkpiece',      label: 'Show Workpiece', type: 'checkbox',  default: true },
+            workpieceWidth:     { key: 'workpieceWidth',     label: 'Width (X)',       type: 'dimension',  default: 300  },
+            workpieceLength:    { key: 'workpieceLength',    label: 'Length (Y)',      type: 'dimension',  default: 200  },
+            workpieceThickness: { key: 'workpieceThickness', label: 'Thickness (Z)',   type: 'dimension',  default: 19   },
+            material:           { key: 'material',           label: 'Material',        type: 'choice',     default: 'Softwood / MDF', options: [] },
+            gridSize:           { key: 'gridSize',           label: 'Grid Size',       type: 'dimension',  default: 10   },
+            showGrid:           { key: 'showGrid',           label: 'Show Grid',       type: 'checkbox',   default: true },
+            showOrigin:         { key: 'showOrigin',         label: 'Show Origin',     type: 'checkbox',   default: true },
+            showWorkpiece:      { key: 'showWorkpiece',      label: 'Show Workpiece',  type: 'checkbox',   default: true },
             originPosition:     { key: 'originPosition',     label: 'Origin Position', type: 'radio-grid', default: 'middle-center',
                 cols: 3,
                 options: [
@@ -41,11 +41,11 @@ class Workpiece extends Operation {
         const currentWidth     = getOption("workpieceWidth")     || 300;
         const currentLength    = getOption("workpieceLength")    || 200;
         const currentThickness = getOption("workpieceThickness") || 19;
-        const currentSpecies   = getOption("woodSpecies")        || 'Pine';
+        const currentMaterial   = getOption("material")          || 'Softwood / MDF';
 
-        // Build dynamic species options
-        const speciesField = { ...this.fields.woodSpecies };
-        speciesField.options = Object.keys(woodSpeciesDatabase).map(s => ({ value: s, label: s }));
+        // Build dynamic material options
+        const materialField = { ...this.fields.material };
+        materialField.options = Object.keys(materialsDatabase).map(s => ({ value: s, label: s }));
 
         const fh = (field, value) => PropertiesManager.fieldHTML(field, value);
 
@@ -61,7 +61,7 @@ class Workpiece extends Operation {
             </div>
             <div class="row g-2">
                 <div class="col-6">${fh(this.fields.workpieceThickness, formatDimension(currentThickness, true))}</div>
-                <div class="col-6">${fh(speciesField, currentSpecies)}</div>
+                <div class="col-6">${fh(materialField, currentMaterial)}</div>
             </div>
 
             <div class="alert alert-light">
@@ -124,8 +124,8 @@ class Workpiece extends Operation {
             setOption("gridSize", newValue);
         }
 
-        if ('woodSpecies' in data) {
-            setOption("woodSpecies", data.woodSpecies);
+        if ('material' in data) {
+            setOption("material", data.material);
         }
 
         if ('originPosition' in data) {
@@ -169,7 +169,7 @@ class Workpiece extends Operation {
 
         // Regenerate surfacing toolpaths when anything that affects their geometry changes.
         // This runs after all setOption calls so getOption returns the new values.
-        if (dimensionChanged || originChanged || 'woodSpecies' in data) {
+        if (dimensionChanged || originChanged || 'material' in data) {
             const surfacingPaths = toolpaths.filter(tp => tp.operation === 'Surfacing');
             if (surfacingPaths.length > 0) {
                 const originalTool = window.currentTool;
@@ -199,7 +199,7 @@ class Workpiece extends Operation {
 
         // Update 3D workpiece if any dimensions or species changed
         if ((('workpieceWidth' in data) || ('workpieceLength' in data) || ('workpieceThickness' in data) ||
-             ('originPosition' in data) || ('woodSpecies' in data)) && typeof window.updateWorkpiece3D === 'function') {
+             ('originPosition' in data) || ('material' in data)) && typeof window.updateWorkpiece3D === 'function') {
             const useInches = getOption('Inches');
 
             // Parse new dimension values if they're in the change data
@@ -215,11 +215,11 @@ class Workpiece extends Operation {
             const newOriginPosition = ('originPosition' in data) ?
                 data.originPosition :
                 getOption('originPosition');
-            const newWoodSpecies = ('woodSpecies' in data) ?
-                data.woodSpecies :
-                getOption('woodSpecies');
+            const newMaterial = ('material' in data) ?
+                data.material :
+                getOption('material');
 
-            window.updateWorkpiece3D(newWidth, newLength, newThickness, newOriginPosition, newWoodSpecies);
+            window.updateWorkpiece3D(newWidth, newLength, newThickness, newOriginPosition, newMaterial);
         }
 
         // Force a second redraw on next frame to ensure all updates are visible

@@ -1,26 +1,14 @@
 // Calculate feed rate based on tool and wood species
-// Chip load lookup table (mm per tooth) for different wood species
-const chipLoadTable = {
-	'Pine': { base: 0.15, min: 0.10, max: 0.20 },
-	'Oak': { base: 0.08, min: 0.05, max: 0.10 },
-	'Maple': { base: 0.10, min: 0.08, max: 0.13 },
-	'Cherry': { base: 0.12, min: 0.09, max: 0.15 },
-	'Walnut': { base: 0.10, min: 0.07, max: 0.13 },
-	'Birch': { base: 0.09, min: 0.07, max: 0.12 },
-	'Poplar': { base: 0.16, min: 0.12, max: 0.22 },
-	'Cedar': { base: 0.18, min: 0.14, max: 0.24 },
-	'Ash': { base: 0.08, min: 0.06, max: 0.11 },
-	'Mahogany': { base: 0.13, min: 0.10, max: 0.16 }
-};
 
 const REFERENCE_TOOL_DIAMETER_MM = 6.0; // Diameter used as baseline for chip-load scaling
 const VBIT_CHIP_LOAD_FACTOR  = 0.6;     // V-bits are more fragile; reduce chip load
 const DRILL_CHIP_LOAD_FACTOR = 0.5;     // Drills have poor chip clearance; reduce chip load
 
 // Get chip load for a specific material and tool combination
-function getChipLoad(woodSpecies, toolDiameter, toolType) {
-	// Get material data, default to Oak if species not found
-	const materialData = chipLoadTable[woodSpecies] || chipLoadTable['Oak'];
+function getChipLoad(material, toolDiameter, toolType) {
+	// Get material chip-load data, default to Oak if material not found
+	const materialData = (materialsDatabase[material] && materialsDatabase[material].chipLoad)
+		|| materialsDatabase['Oak'].chipLoad;
 	let chipLoad = materialData.base;
 
 	// Scale by tool diameter (larger tools can handle more chip load)
@@ -41,7 +29,7 @@ function getChipLoad(woodSpecies, toolDiameter, toolType) {
 
 const DEFAULT_FEED_MM_MIN = 600; // Fallback feed rate when no tool or auto-feed is disabled
 
-function calculateFeedRate(tool, woodSpecies, operation) {
+function calculateFeedRate(tool, material, operation) {
 	// Manual mode - return user-specified feed rate
 	if (!getOption("autoFeedRate") || !tool) {
 		return tool ? tool.feed : DEFAULT_FEED_MM_MIN;
@@ -49,7 +37,7 @@ function calculateFeedRate(tool, woodSpecies, operation) {
 
 	const stepDepth = tool.step != undefined ? tool.step : (tool.depth || 1);
 	// Get chip load for this material and tool
-	const chipLoad = getChipLoad(woodSpecies, tool.diameter, tool.bit);
+	const chipLoad = getChipLoad(material, tool.diameter, tool.bit);
 
 	// Get tool parameters with safe defaults
 	const rpm = tool.rpm || 18000;
@@ -83,11 +71,6 @@ function calculateFeedRate(tool, woodSpecies, operation) {
 	const engagementFactor = Math.max(0.5, 1.0 - (radialEngagement * 0.5));
 	feedRate *= engagementFactor;
 
-	const speciesData = woodSpeciesDatabase[woodSpecies];
-	if (speciesData && speciesData.feedMultiplier) {
-		feedRate *= speciesData.feedMultiplier;
-	}
-
 	// Get user-configured limits from options
 	const minFeed = getOption('minFeedRate') || 100;
 	const maxFeed = getOption('maxFeedRate') || 3000;
@@ -103,14 +86,14 @@ const ZFEED_DRILL_FACTOR       = 0.8;  // Drills need slower plunge for chip eva
 const ZFEED_VBIT_FACTOR        = 0.75; // V-bits are fragile at the tip
 
 // Calculate Z feed rate (plunge rate)
-function calculateZFeedRate(tool, woodSpecies, operation) {
+function calculateZFeedRate(tool, material, operation) {
 	// Manual mode - return user-specified Z feed rate
 	if (!getOption("autoFeedRate") || !tool) {
 		return tool ? tool.zfeed : 200;
 	}
 
 	// Z feed is typically 25-35% of XY feed for wood
-	const xyFeed = calculateFeedRate(tool, woodSpecies, operation);
+	const xyFeed = calculateFeedRate(tool, material, operation);
 	let zFeedRate = xyFeed * ZFEED_XY_RATIO;
 
 	// Additional reduction for deep plunges
@@ -922,7 +905,7 @@ function _generateGcodeFooter(profile) {
 // HELPER FUNCTION: Process drill operations
 function _generateDrillOperationGcode(toolpath, profile, useInches, settings) {
 	var output = "";
-	var { feed, zfeed, rapidFeed, depth, toolStep, woodSpecies, safeHeight, zbacklash } = settings;
+	var { feed, zfeed, rapidFeed, depth, toolStep, material, safeHeight, zbacklash } = settings;
 	var paths = toolpath.paths;
 
 	for (var k = 0; k < paths.length; k++) {
@@ -1016,7 +999,7 @@ function _generateHelicalDrillOperationGcode(toolpath, profile, useInches, setti
 // HELPER FUNCTION: Process V-carve operations
 function _generateVcarveOperationGcode(toolpath, profile, useInches, settings) {
 	var output = "";
-	var { feed, zfeed, rapidFeed, angle, woodSpecies, safeHeight, zbacklash } = settings;
+	var { feed, zfeed, rapidFeed, angle, material, safeHeight, zbacklash } = settings;
 	var paths = toolpath.paths;
 
 	for (var k = 0; k < paths.length; k++) {
@@ -1047,10 +1030,10 @@ function _generateVcarveOperationGcode(toolpath, profile, useInches, settings) {
 			if (movingUp) {
 				cz += (useInches ? zbacklash / MM_PER_INCH : zbacklash);
 				cz = Math.round((cz + ROUND_EPSILON) * 10000) / 10000;
-				var vcarveZFeed = calculateZFeedRate(toolpath.tool, woodSpecies, toolpath.operation) / 2;
+				var vcarveZFeed = calculateZFeedRate(toolpath.tool, material, toolpath.operation) / 2;
 				feedZ = convertFeedUnits(vcarveZFeed, useInches);
 			} else {
-				var vcarveZFeed = calculateZFeedRate(toolpath.tool, woodSpecies, toolpath.operation);
+				var vcarveZFeed = calculateZFeedRate(toolpath.tool, material, toolpath.operation);
 				feedZ = convertFeedUnits(vcarveZFeed, useInches);
 			}
 
@@ -1307,7 +1290,7 @@ function generateRampIn(path, toolDiameter, currentZ, stepdown, safeHeight, prof
 // HELPER FUNCTION: Process pocket operations
 function _generatePocketOperationGcode(toolpath, profile, useInches, settings) {
 	var output = "";
-	var { feed, zfeed, rapidFeed, depth, toolStep, woodSpecies, safeHeight } = settings;
+	var { feed, zfeed, rapidFeed, depth, toolStep, material, safeHeight } = settings;
 	var paths = toolpath.paths;
 
 	var comment = formatComment(toolpath.operation + ' ' + toolpath.id, profile);
@@ -1498,7 +1481,7 @@ function _generateProfilePass(augmentedPath, pass, z, tabData, toolDiameter, too
 // HELPER FUNCTION: Process profile operations (inside, outside, center cuts)
 function _generateProfileOperationGcode(toolpath, profile, useInches, settings) {
 	var output = "";
-	var { feed, zfeed, rapidFeed, depth, toolStep, radius, woodSpecies, safeHeight } = settings;
+	var { feed, zfeed, rapidFeed, depth, toolStep, radius, material, safeHeight } = settings;
 	var paths = toolpath.paths;
 
 	for (var k = 0; k < paths.length; k++) {
@@ -1644,14 +1627,14 @@ function toGcode() {
 
 		// Extract toolpath settings for helper functions
 		var settings = {
-			feed: calculateFeedRate(toolpath.tool, getOption("woodSpecies"), toolpath.operation),
-			zfeed: calculateZFeedRate(toolpath.tool, getOption("woodSpecies"), toolpath.operation),
+			feed: calculateFeedRate(toolpath.tool, getOption("material"), toolpath.operation),
+			zfeed: calculateZFeedRate(toolpath.tool, getOption("material"), toolpath.operation),
 			rapidFeed: Math.round((getOption('maxFeedRate') || 3000) * 0.75),
 			depth: toolpath.tool.depth,
 			toolStep: toolpath.tool.step || 0,
 			radius: toolpath.tool.diameter / 2,
 			angle: toolpath.tool.angle,
-			woodSpecies: getOption("woodSpecies"),
+			material: getOption("material"),
 			safeHeight: safeHeight,
 			zbacklash: getOption("zbacklash")
 		};

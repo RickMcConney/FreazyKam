@@ -945,10 +945,10 @@ function redrawOverlay() {
 function drawWorkpiece() {
 	var width = getOption("workpieceWidth") * viewScale;
 	var length = getOption("workpieceLength") * viewScale;
-	var woodSpecies = getOption("woodSpecies");
+	var material = getOption("material");
 	var woodColor = workpieceColor;
-	if (typeof woodSpeciesDatabase !== 'undefined' && woodSpeciesDatabase[woodSpecies]) {
-		woodColor = woodSpeciesDatabase[woodSpecies].color;
+	if (typeof materialsDatabase !== 'undefined' && materialsDatabase[material]) {
+		woodColor = materialsDatabase[material].color;
 	}
 	var startX = 0;
 	var startY = 0;
