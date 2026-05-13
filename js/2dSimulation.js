@@ -35,8 +35,44 @@ var simulation2D = {
 
     // Display tracking
     totalElapsedTime: 0,    // Accumulated elapsed time during simulation
-    totalSimulationTime: 0  // Pre-calculated total time for entire G-code
+    totalSimulationTime: 0,  // Pre-calculated total time for entire G-code
+
+    // Throttled UI updates
+    lastDisplayUpdateTime: 0,
+    lastHighlightedGcodeLine: -1,
+    displayUpdateIntervalMs: 80
 };
+
+function resetSimulation2DUIThrottle() {
+    simulation2D.lastDisplayUpdateTime = 0;
+    simulation2D.lastHighlightedGcodeLine = -1;
+}
+
+function getSimulation2DDisplayLine(index) {
+    return simulation2D.lineMap
+        ? simulation2D.lineMap[index]
+        : index;
+}
+
+function syncSimulation2DUI(force) {
+    const now = (typeof performance !== 'undefined' && performance.now)
+        ? performance.now()
+        : Date.now();
+    const shouldUpdateDisplay = !!force || (now - simulation2D.lastDisplayUpdateTime) >= simulation2D.displayUpdateIntervalMs;
+
+    if (shouldUpdateDisplay) {
+        updateSimulation2DDisplay();
+        simulation2D.lastDisplayUpdateTime = now;
+    }
+
+    if (typeof gcodeView !== 'undefined' && gcodeView) {
+        var displayLine = getSimulation2DDisplayLine(simulation2D.currentLineIndex);
+        if (force || displayLine !== simulation2D.lastHighlightedGcodeLine) {
+            gcodeView.setCurrentLine(displayLine);
+            simulation2D.lastHighlightedGcodeLine = displayLine;
+        }
+    }
+}
 
 /**
  * Setup simulation: generate G-code and parse with profile-aware parser
@@ -44,6 +80,8 @@ var simulation2D = {
  */
 function setupSimulation2D() {
     try {
+        resetSimulation2DUIThrottle();
+
         // Generate G-code from toolpaths
         simulation2D.gcode = toGcode();
 
@@ -482,6 +520,45 @@ function convertPointsToScreen(...points) {
     });
 }
 
+function ensureDrawPointScreenCache(drawPoint) {
+    if (!drawPoint) {
+        return null;
+    }
+
+    if (drawPoint._screenCacheZoom === zoomLevel && drawPoint._screenCachePanX === panX && drawPoint._screenCachePanY === panY && drawPoint._screenPoint) {
+        return drawPoint._screenPoint;
+    }
+
+    drawPoint._screenPoint = worldToScreen(drawPoint.x, drawPoint.y);
+    drawPoint._screenCacheZoom = zoomLevel;
+    drawPoint._screenCachePanX = panX;
+    drawPoint._screenCachePanY = panY;
+    return drawPoint._screenPoint;
+}
+
+function getFrustumScreenCache(frustumData) {
+    if (!frustumData) {
+        return null;
+    }
+
+    if (frustumData._screenCacheZoom === zoomLevel && frustumData._screenCachePanX === panX && frustumData._screenCachePanY === panY && frustumData._screenCache) {
+        return frustumData._screenCache;
+    }
+
+    frustumData._screenCache = {
+        c1: worldToScreen(frustumData.x1, frustumData.y1),
+        c2: worldToScreen(frustumData.x2, frustumData.y2),
+        tp1p1: worldToScreen(frustumData.t1p1.x, frustumData.t1p1.y),
+        tp2p1: worldToScreen(frustumData.t2p1.x, frustumData.t2p1.y),
+        tp1p2: worldToScreen(frustumData.t1p2.x, frustumData.t1p2.y),
+        tp2p2: worldToScreen(frustumData.t2p2.x, frustumData.t2p2.y)
+    };
+    frustumData._screenCacheZoom = zoomLevel;
+    frustumData._screenCachePanX = panX;
+    frustumData._screenCachePanY = panY;
+    return frustumData._screenCache;
+}
+
 // Interpolate a precomputed point at progress t (0–1) along its segment.
 // Returns a drawPoint with interpolated x, y, z and recalculated radius.
 function createDrawPoint(point, t) {
@@ -492,7 +569,19 @@ function createDrawPoint(point, t) {
     if (point.tool && point.tool.angle && point.tool.angle > 0) {
         radius = getToolCircleRadius(z, point.tool) * viewScale;
     }
-    return { x, y, z, radius, moveType: point.moveType, frustumData: point.frustumData, isFrustum: point.isFrustum };
+    return {
+        x,
+        y,
+        z,
+        radius,
+        moveType: point.moveType,
+        frustumData: point.frustumData,
+        isFrustum: point.isFrustum,
+        _screenPoint: null,
+        _screenCacheZoom: null,
+        _screenCachePanX: null,
+        _screenCachePanY: null
+    };
 }
 
 /**
@@ -668,16 +757,13 @@ function drawFrustumShape(frustumData, color) {
     if (!frustumData) return;
 
     const { x1, y1, r1, arc1Start, arc1End, t1p1, t2p1, x2, y2, r2, arc2Start, arc2End, t1p2, t2p2 } = frustumData;
-
-    // Batch convert multiple points to screen coordinates for better performance
-    const [c1, c2, tp1p1, tp2p1, tp1p2, tp2p2] = convertPointsToScreen(
-        {x: x1, y: y1},
-        {x: x2, y: y2},
-        t1p1,
-        t2p1,
-        t1p2,
-        t2p2
-    );
+    const screenCache = getFrustumScreenCache(frustumData);
+    const c1 = screenCache.c1;
+    const c2 = screenCache.c2;
+    const tp1p1 = screenCache.tp1p1;
+    const tp2p1 = screenCache.tp2p1;
+    const tp1p2 = screenCache.tp1p2;
+    const tp2p2 = screenCache.tp2p2;
 
     // Scale radii by zoom level
     const r1Screen = r1 * zoomLevel;
@@ -744,8 +830,8 @@ function drawCutSegment(points) {
         // Otherwise, draw a stroke from previous point to this point
         else if (i > 0) {
             const fromPoint = points[i - 1];
-            const fromPt = worldToScreen(fromPoint.x, fromPoint.y);
-            const toPt = worldToScreen(point.x, point.y);
+            const fromPt = ensureDrawPointScreenCache(fromPoint);
+            const toPt = ensureDrawPointScreenCache(point);
 
             // Use minimum radius of the two points to avoid overdrawing when radius changes
             const minRadius = Math.min(fromPoint.radius || 0, point.radius || 0);
@@ -825,16 +911,8 @@ function runSimulation2D() {
         }
     }
 
-    // Update UI displays (line number, elapsed time, feed rate)
-    updateSimulation2DDisplay();
-
-    // Update G-code viewer highlight (0-based indexing)
-    if (typeof gcodeView !== 'undefined' && gcodeView) {
-        var displayLine = simulation2D.lineMap
-            ? simulation2D.lineMap[simulation2D.currentLineIndex]
-            : simulation2D.currentLineIndex;
-        gcodeView.setCurrentLine(displayLine);
-    }
+    // Throttle panel refreshes and avoid redundant G-code highlight updates.
+    syncSimulation2DUI(false);
 
     // Trigger canvas redraw (draws with interpolation)
     redrawImmediate();
@@ -852,6 +930,7 @@ function startSimulation2D() {
         // Resume from pause
         simulation2D.isPaused = false;
         simulation2D.lastFrameTime = null;  // Reset timing
+        syncSimulation2DUI(true);
 
         // Re-enable pause button when resuming
         const pauseBtn = document.getElementById('pause-simulation');
@@ -899,6 +978,7 @@ function startSimulation2D() {
     simulation2D.currentLineProgress = 0;
     simulation2D.lastFrameTime = null;  // Will be set on first frame
     simulation2D.totalElapsedTime = 0;  // Reset elapsed time for fresh simulation
+    resetSimulation2DUIThrottle();
 
     // Read speed from slider and apply it before starting
     const speedSlider = document.getElementById('simulation-speed');
@@ -953,6 +1033,8 @@ function pauseSimulation2D() {
     }
 
     // Slider is always enabled - user can seek at any time
+    syncSimulation2DUI(true);
+    redrawImmediate();
 }
 
 /**
@@ -987,7 +1069,7 @@ function finishSimulation2D() {
 
     // Keep material removal points visible - do NOT clear them
     // Keep current state - user can restart by clicking play
-    updateSimulation2DDisplay();
+    syncSimulation2DUI(true);
     redrawImmediate();
 }
 
@@ -1029,7 +1111,9 @@ function stopSimulation2D() {
 
     // Reset state
     simulation2D.currentLineIndex = 0;
+    simulation2D.currentLineProgress = 0;
     simulation2D.totalElapsedTime = 0;
+    resetSimulation2DUIThrottle();
 
     // Clear parsed data to free memory (will be re-parsed if simulation is restarted)
     simulation2D.movements = [];
@@ -1051,6 +1135,10 @@ function stopSimulation2D() {
     if (zDepth) zDepth.textContent = '0.00';
     const progressSlider = document.getElementById('simulation-step');
     if (progressSlider) { progressSlider.value = 0; progressSlider.max = 100; }
+
+    if (typeof gcodeView !== 'undefined' && gcodeView) {
+        gcodeView.setCurrentLine(-1);
+    }
 
     redrawImmediate();
 }
@@ -1108,15 +1196,7 @@ function setSimulation2DLineNumber(targetLineNum) {
     simulation2D.currentLineProgress = 1.0;  // Show segment fully drawn when seeking
 
     // Update display
-    updateSimulation2DDisplay();
-
-    // Update G-code viewer highlight (map movement index to original G-code line)
-    if (typeof gcodeView !== 'undefined' && gcodeView) {
-        var displayLine = simulation2D.lineMap
-            ? simulation2D.lineMap[pointIndex]
-            : pointIndex;
-        gcodeView.setCurrentLine(displayLine);
-    }
+    syncSimulation2DUI(true);
 
     // Trigger redraw (will draw up to currentLineIndex)
 
