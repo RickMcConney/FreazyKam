@@ -3,6 +3,20 @@ import { VoxelGrid } from './voxels/VoxelGrid.js';
 import { QuadtreeVoxelGrid } from './voxels/QuadtreeVoxelGrid.js';
 import { VoxelMaterialRemover } from './voxels/VoxelMaterialRemover.js';
 
+const GCODE_PREPROCESS_WORKER_URL = './js/workers/gcodePreprocessorWorker.js';
+
+function serializeGcodeProfileForWorker(profile) {
+  if (!profile) return null;
+
+  return {
+    rapidTemplate: profile.rapidTemplate,
+    cutTemplate: profile.cutTemplate,
+    cwArcTemplate: profile.cwArcTemplate,
+    ccwArcTemplate: profile.ccwArcTemplate,
+    gcodeUnits: profile.gcodeUnits
+  };
+}
+
 
 // Global state
 let renderer, scene, camera;
@@ -1193,6 +1207,11 @@ function cleanup3DView() {
       toolpathAnimation.stop();
     }
 
+    if (toolpathAnimation._gcodePreprocessWorker) {
+      toolpathAnimation._gcodePreprocessWorker.terminate();
+      toolpathAnimation._gcodePreprocessWorker = null;
+    }
+
     // Dispose voxel grid (stored within toolpathAnimation instance)
     if (toolpathAnimation.voxelGrid) {
       if (typeof toolpathAnimation.voxelGrid.dispose === 'function') {
@@ -1619,6 +1638,11 @@ class ToolpathAnimation {
 
     // Tool lookup by line number (sparse array - only stores tool change points)
     this.toolChangePoints = [];  // Array of {lineNumber, toolInfo} - only tool changes, not every line
+
+    this.frameCount = 0;
+    this.voxelRemovalRate = 1;
+    this._gcodePreprocessWorker = null;
+    this._gcodePreprocessRequestId = 0;
   }
 
   clearToolpath() {
@@ -2002,6 +2026,12 @@ class ToolpathAnimation {
   }
 
   loadFromGcode(gcode) {
+    this.loadFromGcodeAsync(gcode).catch((error) => {
+      console.error('loadFromGcodeAsync failed:', error);
+    });
+  }
+
+  async loadFromGcodeAsync(gcode) {
     // CRITICAL FIX 1.5: Input validation - prevent crashes from malformed G-code
     if (!gcode || typeof gcode !== 'string') {
       console.error('loadFromGcode: Invalid G-code input', { type: typeof gcode, value: gcode });
@@ -2014,21 +2044,8 @@ class ToolpathAnimation {
       return;
     }
 
-    // Performance profiling
-    const perfStart = performance.now();
-    const timers = {};
-
-    // Parse G-code and extract all movements (G0 and G1) with feed rates
-    this.flattenedPath = [];
-    const movements = [];  // Track all movements with G0/G1 type and feed rate
-
     // Store toolpaths for tool info access
     this.toolpaths = window.toolpaths || [];
-
-    // Parse tool information from G-code comments
-    timers.toolInfoStart = performance.now();
-    this.extractToolInfoFromGcode(gcode);
-    timers.toolInfoTime = performance.now() - timers.toolInfoStart;
 
     // Query the currently selected post-processor profile
     const profile = window.currentGcodeProfile || null;
@@ -2036,91 +2053,32 @@ class ToolpathAnimation {
       console.warn('No post-processor profile found, using defaults (G0/G1 with X Y Z)');
     }
 
-    // Create parse configuration from the post-processor profile
-    const parseConfig = createGcodeParseConfig(profile);
-
-    // Split G-code into lines for line-driven animation and processing
-    const lines = gcode.split('\n');
-    this.gcodeLines = lines;  // Store for line-by-line animation
-
-    // Set maximum G-code line number (0-based indexing: if 100 lines, max index = 99)
-    this.totalGcodeLines = Math.max(0, lines.length);
-
-    // Use shared G-code parser to parse movements
-    timers.parseStart = performance.now();
-    const parseResult = parseGcodeFile(gcode, parseConfig, true);
-    const parsedMovements = parseResult.movements;
-    const toolsArray = parseResult.tools;
-    const parsedLineMap = parseResult.lineMap || null;
-    timers.parseGcodeTime = performance.now() - timers.parseStart;
-
-    // Add starting movement from safe position (0, 0, 5) to first actual position
-    let firstPosition = null;
-    if (parsedMovements.length > 0) {
-      firstPosition = {
-        x: parsedMovements[0].x,
-        y: parsedMovements[0].y,
-        z: parsedMovements[0].z
-      };
+    const requestId = ++this._gcodePreprocessRequestId;
+    const preprocessResult = await this.preprocessGcodeAsync(gcode, profile, requestId);
+    if (requestId !== this._gcodePreprocessRequestId) {
+      return;
     }
+    const movements = preprocessResult.movements || [];
+    const visualizationMovements = preprocessResult.visualizationMovements || movements;
 
-    // Build movements array with safe position at start (using optimized structure)
-    if (firstPosition) {
-      movements.push({
-        x: firstPosition.x,
-        y: firstPosition.y,
-        z: 5,  // Start at safe height
-        f: 6000,  // Feed rate (fast rapid)
-        t: -1,  // No tool
-        m: 1    // Rapid move
-      });
-    }
-
-    // Build lineMap for the full movements array (with synthetic entry at index 0)
-    const lineMap = [];
-    if (firstPosition) {
-      lineMap.push(undefined); // synthetic first entry has no G-code line
-    }
-    if (parsedLineMap) {
-      for (let i = 0; i < parsedLineMap.length; i++) lineMap.push(parsedLineMap[i]);
-    }
-
-    // Add all parsed movements (avoid spread to prevent stack overflow with large arrays)
-    for (let i = 0; i < parsedMovements.length; i++) {
-      movements.push(parsedMovements[i]);
-    }
-
-    // Build flattened path for cutting movements only (CUT=1 means cutting)
-    for (let i = 0; i < parsedMovements.length; i++) {
-      const movement = parsedMovements[i];
-      if (movement.m === CUT) {  // CUT (1) = cutting move
-        this.flattenedPath.push({
-          x: movement.x,
-          y: movement.y,
-          z: movement.z,
-          isCutting: true
-        });
-      }
-    }
-
-    // G-code parsing complete
-    timers.parseGcodeTime = performance.now() - perfStart;
-
-    // Calculate cumulative times for animation based on feed rates
-    timers.animationStart = performance.now();
-    this.calculateAnimationTiming(movements, lineMap.length > 0 ? lineMap : null);
-    timers.animationTime = performance.now() - timers.animationStart;
-
-    // Build line-to-time map for direct line-based seeking and time display
-    this.buildLineNumberToTimeMap();
-
-    // Build lookup table for which tool is active at each line number
-    this.buildToolLineRangeLookup();
+    this.gcodeLines = preprocessResult.gcodeLines || [];
+    this.totalGcodeLines = Math.max(0, preprocessResult.totalGcodeLines || this.gcodeLines.length);
+    this.flattenedPath = preprocessResult.flattenedPath || [];
+    this.movementTiming = preprocessResult.movementTiming || [];
+    this.totalAnimationTime = preprocessResult.totalAnimationTime || 0;
+    this.toolChangePoints = preprocessResult.toolChangePoints || [];
+    this.toolCommentsInOrder = preprocessResult.toolCommentsInOrder || [];
+    this.toolCommentsByLineIndex = preprocessResult.toolCommentsByLineIndex || {};
+    this.toolInfo = preprocessResult.toolInfo || {};
+    this.lineNumberToTimeMap = new Map(preprocessResult.lineNumberToTimeEntries || []);
+    this.totalJobTime = preprocessResult.totalJobTime || 0;
+    this.currentMovementIndex = 0;
+    this.currentGcodeLineNumber = 0;
+    this.elapsedTime = 0;
+    this.frameCount = 0;
 
     // Visualize the complete toolpath with G0/G1 distinction
-    timers.visualizeStart = performance.now();
-    this.visualizeToolpathWithGCode(movements);
-    timers.visualizeTime = performance.now() - timers.visualizeStart;
+    this.visualizeToolpathWithGCode(visualizationMovements);
 
     // Offset toolpath lines so workpiece center aligns with 3D origin
     const boundsOffset = getWorkpieceBoundsOffset();
@@ -2145,9 +2103,7 @@ class ToolpathAnimation {
 
     // Initialize voxel grid for material removal simulation
     if (this.enableVoxelRemoval && this.workpieceManager) {
-      timers.voxelGridStart = performance.now();
       this.initializeVoxelGrid();
-      timers.voxelGridTime = performance.now() - timers.voxelGridStart;
     }
 
 
@@ -2171,161 +2127,48 @@ class ToolpathAnimation {
     }
   }
 
-  extractToolInfoFromGcode(gcode) {
-    // Parse tool information comments from G-code
-    // Format: (Tool: ID=X Type=Y Diameter=Z Angle=A [StepDown=S])
-    this.toolInfo = {};
-    this.toolCommentsByLineIndex = {};  // Map of line index to tool info for tool switching during animation
-    this.toolCommentsInOrder = [];  // Array of unique tool comments in order they appear
-    const lines = gcode.split('\n');
-    const seenToolIds = new Set();  // Track which tool IDs we've already added to avoid duplicates
+  preprocessGcodeAsync(gcode, profile, requestId) {
+    return new Promise((resolve, reject) => {
+      const worker = this.getGcodePreprocessWorker();
 
-    for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
-      const line = lines[lineIndex];
-      const trimmed = line.trim();
-      if (trimmed.includes('Tool:')) {
-        // Extract tool information from comment (StepDown is optional)
-        // Note: Type can have spaces (e.g., "End Mill"), so we match [A-Za-z ]+ instead of \w+
-        const toolMatch = trimmed.match(/Tool:\s*ID=(\d+)\s+Type=([A-Za-z ]+)\s+Diameter=([\d.]+)\s+Angle=([\d.]+)(?:\s+StepDown=([\d.]+))?/);
-        if (toolMatch) {
-          const toolId = toolMatch[1];
-          const toolType = toolMatch[2].trim();  // Trim whitespace from type (keep original: End Mill, Ball Nose, VBit, Drill)
+      const handleMessage = (event) => {
+        const data = event.data || {};
+        if (data.requestId !== requestId) return;
 
-          const toolData = {
-            id: toolId,
-            type: toolType,  // Store original type name (End Mill, Ball Nose, VBit, Drill)
-            diameter: parseFloat(toolMatch[3]),
-            angle: parseFloat(toolMatch[4]),
-            vbitAngle: parseFloat(toolMatch[4]),  // Also store as vbitAngle for VoxelMaterialRemover
-            stepDown: toolMatch[5] ? parseFloat(toolMatch[5]) : null
-          };
+        worker.removeEventListener('message', handleMessage);
+        worker.removeEventListener('error', handleError);
 
-          // Store all tool comments for tool switching during animation
-          this.toolCommentsByLineIndex[lineIndex] = toolData;
-
-          // Track tool comment appearances in chronological order (avoid consecutive duplicates)
-          if (!seenToolIds.has(toolId) || this.toolCommentsInOrder.length === 0 ||
-              this.toolCommentsInOrder[this.toolCommentsInOrder.length - 1].id !== toolId) {
-            this.toolCommentsInOrder.push(toolData);
-            seenToolIds.add(toolId);
-          }
-
-          // Use FIRST tool comment for initialization
-          if (Object.keys(this.toolInfo).length === 0) {
-            this.toolInfo = toolData;
-          }
+        if (data.ok) {
+          resolve(data.result);
+        } else {
+          reject(new Error(data.error || 'Unknown G-code preprocess worker error'));
         }
-      }
-    }
-  }
+      };
 
-  calculateAnimationTiming(movements, lineMap) {
-    // Calculate cumulative times for each movement based on distance and feed rate
-    // This allows animation speed to be proportional to actual feed rates
-    //
-    // movements - array with optimized structure: {x, y, z, f, t, m}
-    // lineMap - optional array mapping movement index to original G-code line number
+      const handleError = (error) => {
+        worker.removeEventListener('message', handleMessage);
+        worker.removeEventListener('error', handleError);
+        reject(error);
+      };
 
-    this.movementTiming = [];  // Array of {x, y, z, cumulativeTime, feedRate, isG1, distance, gcodeLineNumber}
-    let cumulativeTime = 0;  // In seconds
-    let prevX = 0, prevY = 0, prevZ = 5;  // Start at safe position
-
-    for (let i = 0; i < movements.length; i++) {
-      const move = movements[i];
-
-      // Skip non-movement lines (NON_MOVEMENT: comments, empty lines, etc.)
-      // These shouldn't affect animation timing or tool position
-      if (move.m === NON_MOVEMENT) continue;
-
-      const dx = move.x - prevX;
-      const dy = move.y - prevY;
-      const dz = move.z - prevZ;
-      const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
-
-      // Get feed rate from optimized structure (move.f)
-      // Default based on movement type if not specified
-      const feedRate = move.f || (move.m === CUT ? 600 : 6000);  // Default cut vs rapid
-
-      // Calculate time for this segment: distance (mm) / feedRate (mm/min) = time (min)
-      // Convert to seconds
-      const feedRateMMPerSec = feedRate / 60;
-      const segmentTime = distance > 0 ? distance / feedRateMMPerSec : 0;
-      cumulativeTime += segmentTime;
-
-      // Determine G-code line number (0-based indexing)
-      // Use lineMap if available (handles G2/G3 arc expansion), else fall back to i-1
-      let gcodeLineNumber = undefined;
-      if (lineMap && i < lineMap.length) {
-        gcodeLineNumber = lineMap[i];
-      } else if (i > 0) {
-        gcodeLineNumber = i - 1;
-      }
-
-      this.movementTiming.push({
-        x: move.x,
-        y: move.y,
-        z: move.z,
-        cumulativeTime: cumulativeTime,
-        feedRate: feedRate,
-        isG1: move.m === CUT,  // CUT (1) = G1 cutting, RAPID (0) = G0 rapid
-        distance: distance,
-        gcodeLineNumber: gcodeLineNumber  // G-code line number (0-based, undefined for synthetic movement)
+      worker.addEventListener('message', handleMessage);
+      worker.addEventListener('error', handleError);
+      worker.postMessage({
+        requestId,
+        gcode,
+        profile: serializeGcodeProfileForWorker(profile),
+        config: {
+          rapidFeedRate: CONFIG.RAPID_FEED_RATE
+        }
       });
-
-      prevX = move.x;
-      prevY = move.y;
-      prevZ = move.z;
-    }
-
-    this.totalAnimationTime = cumulativeTime;
+    });
   }
 
-  /**
-   * Build line number to cumulative time map for direct seeking by line number
-   * Allows O(1) lookup: given a line number, get its cumulative time
-   */
-  buildLineNumberToTimeMap() {
-    this.lineNumberToTimeMap = new Map();
-    this.totalJobTime = 0;
-
-    for (const movement of this.movementTiming) {
-      if (movement.gcodeLineNumber !== undefined) {
-        this.lineNumberToTimeMap.set(movement.gcodeLineNumber, movement.cumulativeTime);
-        this.totalJobTime = Math.max(this.totalJobTime, movement.cumulativeTime);
-      }
+  getGcodePreprocessWorker() {
+    if (!this._gcodePreprocessWorker) {
+      this._gcodePreprocessWorker = new Worker(GCODE_PREPROCESS_WORKER_URL);
     }
-  }
-
-  /**
-   * Build lookup table: create a sparse array of only tool change points
-   * Instead of storing tool info for every line, only store where tools actually change
-   * This is much more memory efficient (1-2 entries vs hundreds of duplicates)
-   *
-   * Example output:
-   * toolChangePoints[0] = {lineNumber: 5, toolInfo: ballNoseTool}    (lines 5-19 use ball nose)
-   * toolChangePoints[1] = {lineNumber: 20, toolInfo: vbitTool}       (lines 20+ use vbit)
-   */
-  buildToolLineRangeLookup() {
-    this.toolChangePoints = [];
-
-    if (!this.toolCommentsByLineIndex) {
-      return;
-    }
-
-    // Build sorted list of tool changes from comments
-    let toolChanges = [];
-    for (const lineIndexStr in this.toolCommentsByLineIndex) {
-      const lineNum = parseInt(lineIndexStr);
-      toolChanges.push({
-        lineNumber: lineNum,
-        toolInfo: this.toolCommentsByLineIndex[lineIndexStr]
-      });
-    }
-    toolChanges.sort((a, b) => a.lineNumber - b.lineNumber);
-
-    // Store only the actual tool change points (sparse array)
-    // This is much more memory efficient than storing for every line
-    this.toolChangePoints = toolChanges;
+    return this._gcodePreprocessWorker;
   }
 
   /**
@@ -2457,13 +2300,13 @@ class ToolpathAnimation {
       if (this.voxelGrid) {
         this.voxelGrid.reset();
         this.voxelMaterialRemover.reset();
-        this.voxelGrid.updateVoxelColors();
-        this.voxelGrid.updateInstanceMatrices();
+        this.voxelGrid.flushVisualUpdates();
       }
       this.currentMovementIndex = 0;
       this._syncGcodeLineNumber();
       this.elapsedTime = 0;
       this.wasStopped = false;
+      this.frameCount = 0;
     }
     this.isPlaying = true;
     this.updateStatus();
@@ -2538,8 +2381,7 @@ class ToolpathAnimation {
 
     // Batch update GPU
     if (this.voxelGrid) {
-      this.voxelGrid.updateVoxelColors();
-      this.voxelGrid.updateInstanceMatrices();
+      this.voxelGrid.flushVisualUpdates();
     }
   }
 
@@ -2550,7 +2392,6 @@ class ToolpathAnimation {
     if (targetMovementIndex === -1) return; // Line not found
 
     const oldMovementIndex = this.currentMovementIndex;
-    const oldElapsedTime = this.elapsedTime;
 
     // Determine if this is backward seeking
     const isBackwardSeek = targetMovementIndex < oldMovementIndex;
@@ -2606,8 +2447,7 @@ class ToolpathAnimation {
 
     // Batch update GPU: commit all material removal calculations in one render batch
     if (this.voxelGrid) {
-      this.voxelGrid.updateVoxelColors();
-      this.voxelGrid.updateInstanceMatrices();
+      this.voxelGrid.flushVisualUpdates();
     }
 
     requestThreeRender();
@@ -2638,7 +2478,8 @@ class ToolpathAnimation {
             prevMove,
             { x: move.x, y: move.y, z: move.z },
             toolData,
-            stepDist
+            stepDist,
+            { deferVisualUpdate: true }
           );
         } catch (e) {
           console.error('Voxel replay error:', e);
@@ -2701,7 +2542,8 @@ class ToolpathAnimation {
           this.voxelMaterialRemover.removeAlongPath(
             this.voxelGrid, prevPos,
             { x: move.x, y: move.y, z: move.z },
-            toolData, stepDist
+            toolData, stepDist,
+            { deferVisualUpdate: true }
           );
         } catch (e) {
           console.error('Voxel removal error during advance:', e);
@@ -2716,7 +2558,11 @@ class ToolpathAnimation {
         this._syncGcodeLineNumber();
 
         const finalMovement = this.movementTiming[this.currentMovementIndex];
-        this.updateToolPositionAtCoordinates(finalMovement.x, finalMovement.y, finalMovement.z, finalMovement.isG1, finalMovement.gcodeLineNumber);
+        this.updateToolPositionAtCoordinates(finalMovement.x, finalMovement.y, finalMovement.z, false, finalMovement.gcodeLineNumber);
+
+        if (this.voxelGrid) {
+          this.voxelGrid.flushVisualUpdates();
+        }
 
         this.pause();
         this.updateStatus();
@@ -2751,8 +2597,13 @@ class ToolpathAnimation {
     const toolZ = prevPos.z + (currentMovement.z - prevPos.z) * t;
     this.currentFeedRate = currentMovement.feedRate || 0;
 
-    // Update tool position and remove material at interpolated location
-    this.updateToolPositionAtCoordinates(toolX, toolY, toolZ, currentMovement.isG1 || false, this.currentGcodeLineNumber);
+    // Keep progressive removal on the in-flight segment, but skip the exact terminal point
+    // because completed segments are already handled by removeAlongPath above.
+    this.updateToolPositionAtCoordinates(toolX, toolY, toolZ, currentMovement.isG1 && t < 0.999, this.currentGcodeLineNumber);
+
+    if (this.voxelGrid) {
+      this.voxelGrid.flushVisualUpdates();
+    }
 
     // Sync gcode viewer - now cheap thanks to virtualized DOM (only ~50 elements rendered)
     if (typeof gcodeView !== 'undefined' && gcodeView) {
@@ -2790,7 +2641,8 @@ class ToolpathAnimation {
         this.voxelMaterialRemover.removeAtToolPosition(
           this.voxelGrid,
           toolX, toolY, toolZ,
-          currentToolData || { diameter: this.toolRadius * 2, type: 'End Mill', angle: 0 }
+          currentToolData || { diameter: this.toolRadius * 2, type: 'End Mill', angle: 0 },
+          { deferVisualUpdate: true }
         );
       } catch (e) {
         console.error('Voxel removal error:', e);

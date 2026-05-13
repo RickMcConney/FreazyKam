@@ -50,10 +50,12 @@ class VoxelMaterialRemover {
    * @param {number} [toolInfo.vbitAngle=90] - V-bit angle in degrees (only for 'vbit')
    * @returns {Array} Array of removed voxel indices in this operation
    */
-  removeAtToolPosition(voxelGrid, toolX, toolY, toolZ, toolInfo) {
+  removeAtToolPosition(voxelGrid, toolX, toolY, toolZ, toolInfo, options = {}) {
     if (!voxelGrid || !toolInfo) {
       return [];
     }
+
+    const { deferVisualUpdate = false } = options;
 
     // Pre-calculate tool constants if tool has changed
     if (this.lastToolInfo !== toolInfo) {
@@ -73,7 +75,8 @@ class VoxelMaterialRemover {
       toolRadius,
       this.toolRadiusSq,
       toolType,
-      this.vbitTangent
+      this.vbitTangent,
+      deferVisualUpdate
     );
 
     this.totalVoxelsRemoved += removedVoxels.length;
@@ -91,10 +94,12 @@ class VoxelMaterialRemover {
    * @param {number} stepDistance - Distance between samples along the path in mm
    * @returns {number} Cumulative total voxels removed across all operations (not just this call)
    */
-  removeAlongPath(voxelGrid, startPos, endPos, toolInfo, stepDistance = 1.0) {
+  removeAlongPath(voxelGrid, startPos, endPos, toolInfo, stepDistance = 1.0, options = {}) {
     if (!voxelGrid || !toolInfo) {
       return 0;
     }
+
+    const { deferVisualUpdate = false } = options;
 
     // Calculate path length
     const dx = endPos.x - startPos.x;
@@ -104,7 +109,7 @@ class VoxelMaterialRemover {
 
     if (pathLength === 0) {
       // No movement, just remove at current position
-      this.removeAtToolPosition(voxelGrid, startPos.x, startPos.y, startPos.z, toolInfo);
+      this.removeAtToolPosition(voxelGrid, startPos.x, startPos.y, startPos.z, toolInfo, { deferVisualUpdate });
       return this.totalVoxelsRemoved;
     }
 
@@ -117,7 +122,7 @@ class VoxelMaterialRemover {
       const y = startPos.y + dy * t;
       const z = startPos.z + dz * t;
 
-      this.removeAtToolPosition(voxelGrid, x, y, z, toolInfo);
+      this.removeAtToolPosition(voxelGrid, x, y, z, toolInfo, { deferVisualUpdate });
     }
 
     return this.totalVoxelsRemoved;
