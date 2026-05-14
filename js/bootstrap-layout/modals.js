@@ -272,7 +272,7 @@ function createModals() {
                     <div class="modal-header">
                         <div>
                             <h5 class="modal-title" id="reorder-operations-title">Reorder Operations</h5>
-                            <div class="small text-muted">Drag and drop operations to optimize their sequence, or right-click an item to move it up or down.</div>
+                            <div class="small text-muted">Drag and drop operations to optimize their sequence.</div>
                         </div>
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
