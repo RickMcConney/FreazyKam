@@ -1195,9 +1195,7 @@ window.do3dProfile = function() {
         updateTarget.pendingKey = pendingKey;
         if (window.currentToolpathProperties) {
             updateTarget.toolpathProperties = { ...window.currentToolpathProperties };
-            if (window.currentToolpathProperties.toolpathName) {
-                updateTarget.label = window.currentToolpathProperties.toolpathName;
-            }
+            setToolpathLabel(updateTarget, window.currentToolpathProperties.toolpathName);
         }
         pendingToolpaths.push(updateTarget);
     } else {

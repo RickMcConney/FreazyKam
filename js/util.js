@@ -148,6 +148,23 @@ function formatDimension(mm, showFractions) {
 	return (result || '0') + ' in';
 }
 
+function normalizeToolpathName(value) {
+	return typeof value === 'string' ? value.trim() : '';
+}
+
+function setToolpathLabel(toolpath, value) {
+	const normalized = normalizeToolpathName(value);
+	if (!toolpath) return normalized;
+
+	if (normalized) {
+		toolpath.label = normalized;
+	} else {
+		delete toolpath.label;
+	}
+
+	return normalized;
+}
+
 // Parse user input dimension back to mm
 function parseDimension(value) {
 	if (!value) return 0;

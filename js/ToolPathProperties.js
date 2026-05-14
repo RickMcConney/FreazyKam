@@ -154,7 +154,7 @@ class ToolPathProperties {
         const toolOpts = tools.map(t => ({ value: t.recid, label: `${t.name} (${t.diameter}mm ${t.bit})` }));
 
         return [
-            { key: 'toolpathName', label: 'Name', persist: false,           type: 'text',      default: formatDimension(defaults.depth, false) + ' deep Profile' },
+            { key: 'toolpathName', label: 'Name', persist: false,           type: 'text',      default: '', help: 'Leave empty to auto-name from the linked shape.' },
             { key: 'toolId',       label: 'Tool',           type: 'choice',    default: tools[0]?.recid ?? null, options: toolOpts },
             { key: 'inside',       label: 'Cutting Side',   type: 'choice',    default: defaults.inside,
               options: [{ value: 'inside', label: 'Inside' }, { value: 'outside', label: 'Outside' }, { value: 'center', label: 'Center' }] },
@@ -176,7 +176,7 @@ class ToolPathProperties {
         const toolOpts = tools.map(t => ({ value: t.recid, label: `${t.name} (${t.diameter}mm ${t.bit})` }));
 
         return [
-            { key: 'toolpathName', label: 'Name', persist: false,          type: 'text',      default: formatDimension(defaults.depth, false) + ' deep Pocket' },
+            { key: 'toolpathName', label: 'Name', persist: false,          type: 'text',      default: '', help: 'Leave empty to auto-name from the linked shape.' },
             { key: 'toolId',       label: 'Tool',          type: 'choice',    default: tools[0]?.recid ?? null, options: toolOpts },
             { key: 'strategy',     label: 'Strategy',      type: 'choice',    default: defaults.strategy,
               options: [{ value: 'adaptive', label: 'Adaptive' }, { value: 'raster', label: 'Raster' }, { value: 'contour', label: 'Contour' }],
@@ -199,7 +199,7 @@ class ToolPathProperties {
         const toolOpts = tools.map(t => ({ value: t.recid, label: `${t.name} (${t.diameter}mm ${t.bit})` }));
 
         return [
-            { key: 'toolpathName', label: 'Name', persist: false,           type: 'text',      default: formatDimension(defaults.depth, false) + ' deep VCarve' },
+            { key: 'toolpathName', label: 'Name', persist: false,           type: 'text',      default: '', help: 'Leave empty to auto-name from the linked shape.' },
             { key: 'toolId',       label: 'Tool',           type: 'choice',    default: tools[0]?.recid ?? null, options: toolOpts },
             { key: 'inside',       label: 'Cutting Side',   type: 'choice',    default: defaults.inside,
               options: [{ value: 'inside', label: 'Inside' }, { value: 'outside', label: 'Outside' }, { value: 'center', label: 'Center' }] },
@@ -215,7 +215,7 @@ class ToolPathProperties {
         const toolOpts = tools.map(t => ({ value: t.recid, label: `${t.name} (${t.diameter}mm ${t.bit})` }));
 
         return [
-            { key: 'toolpathName', label: 'Name', persist: false,       type: 'text',      default: formatDimension(defaults.depth, false) + ' deep Drill' },
+            { key: 'toolpathName', label: 'Name', persist: false,       type: 'text',      default: '', help: 'Leave empty to auto-name from the linked shape.' },
             { key: 'toolId',       label: 'Tool',       type: 'choice',    default: tools[0]?.recid ?? null, options: toolOpts },
             { key: 'depth',        label: 'Depth',      type: 'dimension', default: defaults.depth, help: 'Drilling depth' },
             { key: 'step',         label: 'Step Down',  type: 'dimension', default: defaults.step,  help: 'Depth per pass (helical drill only)' },
@@ -238,7 +238,7 @@ class ToolPathProperties {
         ];
 
         return [
-            { key: 'toolpathName',    label: 'Name',            type: 'text',    default: formatDimension(defaults.depth, false) + ' deep 3D Profile' },
+            { key: 'toolpathName',    label: 'Name',            type: 'text',    default: '', help: 'Leave empty to auto-name from the linked shape.' },
             { key: 'strategy',        label: 'Strategy',        type: 'choice',  default: defaults.strategy,
               options: [{ value: 'raster', label: 'Raster' }, { value: 'contour', label: 'Contour (Waterline)' }],
               help: 'Raster for curved surfaces, Contour for vertical walls' },
@@ -261,7 +261,7 @@ class ToolPathProperties {
         const toolOpts = tools.map(t => ({ value: t.recid, label: `${t.name} (${t.diameter}mm ${t.bit})` }));
 
         return [
-            { key: 'toolpathName', label: 'Name', persist: false,           type: 'text',    default: formatDimension(defaults.depth, false) + ' deep Surfacing' },
+            { key: 'toolpathName', label: 'Name', persist: false,           type: 'text',    default: '' },
             { key: 'toolId',       label: 'Tool',           type: 'choice',  default: tools[0]?.recid ?? null, options: toolOpts },
             { key: 'depth',        label: 'Depth',          type: 'dimension', default: defaults.depth,    help: 'Cutting depth per pass' },
             { key: 'stepover',     label: 'Stepover (%)',   type: 'number',  default: defaults.stepover,
@@ -280,7 +280,7 @@ class ToolPathProperties {
         const finishOpts    = finishTools.map(t => ({ value: t.recid, label: `${t.name} (${t.diameter}mm ${t.bit})` }));
 
         return [
-            { key: 'toolpathName',   label: 'Name',              type: 'text',      default: formatDimension(defaults.depth, false) + ' deep Inlay' },
+            { key: 'toolpathName',   label: 'Name',              type: 'text',      default: '', help: 'Leave empty to auto-name from the linked shape.' },
             { key: 'inlayType',      label: 'Inlay Type',        type: 'choice',    default: defaults.inlayType,
               options: [{ value: 'female', label: 'Female Socket' }, { value: 'male', label: 'Male Plug' }],
               help: 'Socket: pockets inside the path. Plug: pockets outside the path.' },

@@ -1118,9 +1118,31 @@ function getToolpathSourceIds(toolpath) {
     return toolpath?.svgId ? [toolpath.svgId] : [];
 }
 
+function buildLinkedToolpathName(toolpath) {
+    if (!toolpath) return '';
+
+    const sourceIds = getToolpathSourceIds(toolpath);
+    if (sourceIds.length === 0) return '';
+
+    const sourcePaths = sourceIds
+        .map(id => svgpaths.find(path => path.id === id))
+        .filter(Boolean);
+
+    if (sourcePaths.length === 0) return '';
+
+    const sourceNames = Array.from(new Set(sourcePaths.map(path => path.name).filter(Boolean)));
+    if (sourceNames.length === 0) return '';
+
+    if (sourceNames.length === 1) {
+        return sourceNames[0] + ' ' + toolpath.operation;
+    }
+
+    return sourceNames[0] + ' +' + (sourceNames.length - 1) + ' ' + toolpath.operation;
+}
+
 function getToolpathDisplayName(toolpath) {
     if (!toolpath) return '';
-    const baseName = toolpath.label || `${toolpath.name} ${toolpath.id.replace('T', '')}`;
+    const baseName = toolpath.label || buildLinkedToolpathName(toolpath) || `${toolpath.name} ${toolpath.id.replace('T', '')}`;
     return toolpath.pending ? `${baseName} (pending)` : baseName;
 }
 
@@ -2247,7 +2269,7 @@ function generateToolpathForSelection() {
         // Use centralized helper to set active state
         setActiveToolpaths(newToolpaths);
 
-        const editedOperationName = data.toolpathName || newToolpaths[0]?.label || currentOperationName;
+        const editedOperationName = getToolpathDisplayName(newToolpaths[0]) || currentOperationName;
         const operationIcon = getOperationIcon(currentOperationName);
         syncFloatingPopupOperationName(operationIcon, editedOperationName);
 
@@ -2300,28 +2322,14 @@ function wireDepthToNameAutoUpdate(operationName, operationIcon = null) {
     const depthInput = document.getElementById('pm-depth') || document.getElementById('depth-input');
     const nameInput  = document.getElementById('pm-toolpathName') || document.getElementById('toolpath-name-input');
     if (!nameInput) return;
- 
+
     const syncTitleFromInput = () => {
         const trimmedName = nameInput.value.trim();
         syncFloatingPopupOperationName(operationIcon, trimmedName || operationName);
     };
- 
-    let lastAutoName = nameInput.value;
+
     syncTitleFromInput();
     nameInput.addEventListener('input', syncTitleFromInput);
- 
-    if (!depthInput) return;
- 
-    depthInput.addEventListener('input', function () {
-        if (nameInput.value !== lastAutoName) return;
-        const depth = parseDimension(depthInput.value);
-        if (depth > 0) {
-            const newName = formatDimension(depth, false) + ' deep ' + operationName;
-            nameInput.value = newName;
-            lastAutoName = newName;
-            syncTitleFromInput();
-        }
-    });
 }
 
 function showOperationPropertiesEditor(operationName) {
@@ -2473,7 +2481,7 @@ function updateHelicalDrillToolpath(activeToolpaths, selectedTool, data) {
     for (const toolpath of activeToolpaths) {
         if (toolpath.operation !== 'HelicalDrill') continue;
         toolpath.toolpathProperties = { ...data };
-        if (data.toolpathName) toolpath.label = data.toolpathName;
+        setToolpathLabel(toolpath, data.toolpathName);
         toolpath.tool = {
             ...selectedTool,
             depth: data.depth,
@@ -2504,7 +2512,7 @@ function updateHelicalDrillToolpath(activeToolpaths, selectedTool, data) {
 function updateDrillToolpath(activeToolpaths, selectedTool, data) {
     for (const toolpath of activeToolpaths) {
         toolpath.toolpathProperties = { ...data };
-        if (data.toolpathName) toolpath.label = data.toolpathName;
+        setToolpathLabel(toolpath, data.toolpathName);
         toolpath.tool = {
             ...selectedTool,
             depth: data.depth,
@@ -2628,12 +2636,9 @@ function regenerateToolpathFromSvg(operationName, activeToolpaths, selectedTool,
         window.toolpathUpdateTargets = null;
     }
 
+    const updatedOperationIcon = getOperationIcon(operationName);
     const updatedNameInput = document.getElementById('pm-toolpathName') || document.getElementById('toolpath-name-input');
-    const updatedOperationName = updatedNameInput?.value?.trim();
-    if (updatedOperationName) {
-        const updatedOperationIcon = getOperationIcon(operationName);
-        syncFloatingPopupOperationName(updatedOperationIcon, updatedOperationName);
-    }
+    syncFloatingPopupOperationName(updatedOperationIcon, updatedNameInput?.value?.trim() || operationName);
  
     if (typeof refreshToolPathsDisplay === 'function') {
         refreshToolPathsDisplay();
@@ -2914,6 +2919,7 @@ function showToolpathPropertiesEditor(toolpath) {
     const toolpathOperationIcon = getOperationIcon(propsOperation);
     const editedOperationName = (document.getElementById('pm-toolpathName') || document.getElementById('toolpath-name-input'))?.value
         || toolpath.label
+        || buildLinkedToolpathName(toolpath)
         || (toolpath.operation === 'HelicalDrill' ? 'Helical Drill' : propsOperation);
     setFloatingPropertiesPopupContext({
         type: 'toolpath',
@@ -3920,7 +3926,7 @@ function startRenameToolpath(pathId) {
     const toolpath = toolpaths.find(tp => tp.id === pathId);
     if (!toolpath) return;
 
-    const currentName = toolpath.label || (toolpath.name + ' ' + toolpath.id.replace('T', ''));
+    const currentName = toolpath.label || buildLinkedToolpathName(toolpath) || (toolpath.name + ' ' + toolpath.id.replace('T', ''));
     const icon = item.querySelector('i');
 
     const input = document.createElement('input');
@@ -3940,7 +3946,7 @@ function startRenameToolpath(pathId) {
         if (committed) return;
         committed = true;
         const newName = input.value.trim();
-        if (newName) toolpath.label = newName;
+        setToolpathLabel(toolpath, newName);
         refreshToolPathsDisplay();
     }
 

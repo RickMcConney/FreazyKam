@@ -361,14 +361,10 @@ function pushToolPath(paths, name, operation, svgId = null, svgIds = null, label
 		existing.svgIds = svgIds;
 		if (window.currentToolpathProperties) {
 			existing.toolpathProperties = { ...window.currentToolpathProperties };
-			if (window.currentToolpathProperties.toolpathName) {
-				existing.label = window.currentToolpathProperties.toolpathName;
-			}
+			setToolpathLabel(existing, window.currentToolpathProperties.toolpathName);
 		}
 		// Caller-provided label overrides auto-generated default
-		if (label) {
-			existing.label = label;
-		}
+		setToolpathLabel(existing, label);
 		redraw();
 		return;
 	}
@@ -388,19 +384,15 @@ function pushToolPath(paths, name, operation, svgId = null, svgIds = null, label
 	// If toolpath properties were set (from the new properties panel), store them
 	if (window.currentToolpathProperties) {
 		toolpathData.toolpathProperties = { ...window.currentToolpathProperties };
-		if (window.currentToolpathProperties.toolpathName) {
-			toolpathData.label = window.currentToolpathProperties.toolpathName;
-		}
+		setToolpathLabel(toolpathData, window.currentToolpathProperties.toolpathName);
 	}
 
 	// Caller-provided label overrides the auto-generated default name
 	// (e.g. inlay generates multiple toolpaths each needing a distinct name)
-	if (label) {
-		toolpathData.label = label;
-	}
+	setToolpathLabel(toolpathData, label);
 
 	toolpaths.push(toolpathData);
-	const displayName = toolpathData.label || (name + ' ' + toolpathId);
+	const displayName = toolpathData.label || (typeof buildLinkedToolpathName === 'function' ? buildLinkedToolpathName(toolpathData) : '') || (name + ' ' + toolpathId);
 	addToolPath('T' + toolpathId, displayName, name, currentTool.name);
 	toolpathId++;
 

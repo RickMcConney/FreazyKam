@@ -67,11 +67,11 @@ function makePendingToolpath(svgIds, name, operation, pendingKey, overrides) {
 		svgId: svgIds.length > 0 ? svgIds[0] : null,
 		svgIds: svgIds,
 		pending: true,
-		pendingKey: pendingKey,
-		label: (window.currentToolpathProperties && window.currentToolpathProperties.toolpathName) || (name + ' ' + toolpathId)
+		pendingKey: pendingKey
 	};
 	if (window.currentToolpathProperties) {
 		pendingToolpath.toolpathProperties = { ...window.currentToolpathProperties };
+		setToolpathLabel(pendingToolpath, window.currentToolpathProperties.toolpathName);
 	}
 	if (overrides && typeof overrides === 'object') {
 		Object.assign(pendingToolpath, overrides);
@@ -792,15 +792,12 @@ function doProfile() {
 			updateTarget.pendingKey = entry.pendingKey;
 			if (window.currentToolpathProperties) {
 				updateTarget.toolpathProperties = { ...window.currentToolpathProperties };
-				if (window.currentToolpathProperties.toolpathName) {
-					updateTarget.label = window.currentToolpathProperties.toolpathName;
-				}
+				setToolpathLabel(updateTarget, window.currentToolpathProperties.toolpathName);
 			}
 			return updateTarget;
 		}
 		return makePendingToolpath([entry.svgpath.id], config.name, 'Profile', entry.pendingKey, {
-			svgId: entry.svgpath.id,
-			label: (window.currentToolpathProperties && window.currentToolpathProperties.toolpathName) || (config.name + ' ' + toolpathId)
+			svgId: entry.svgpath.id
 		});
 	});
 	if (typeof refreshToolPathsDisplay === 'function') refreshToolPathsDisplay();
@@ -1026,9 +1023,7 @@ function doSurfacing() {
 		updateTarget.pendingKey = pendingKey;
 		if (window.currentToolpathProperties) {
 			updateTarget.toolpathProperties = { ...window.currentToolpathProperties };
-			if (window.currentToolpathProperties.toolpathName) {
-				updateTarget.label = window.currentToolpathProperties.toolpathName;
-			}
+			setToolpathLabel(updateTarget, window.currentToolpathProperties.toolpathName);
 		}
 		pendingToolpaths.push(updateTarget);
 	} else {
@@ -2341,7 +2336,7 @@ function doInlay() {
 			updateTarget.svgIds = svgIds.slice();
 			updateTarget.pending = true;
 			updateTarget.pendingKey = group.pendingKey;
-			updateTarget.label = fallbackBaseLabel;
+			setToolpathLabel(updateTarget, fallbackBaseLabel);
 			if (window.currentToolpathProperties) {
 				updateTarget.toolpathProperties = { ...window.currentToolpathProperties };
 			}
@@ -2521,9 +2516,7 @@ function doPocket() {
 			updateTarget.pendingKey = group.pendingKey;
 			if (window.currentToolpathProperties) {
 				updateTarget.toolpathProperties = { ...window.currentToolpathProperties };
-				if (window.currentToolpathProperties.toolpathName) {
-					updateTarget.label = window.currentToolpathProperties.toolpathName;
-				}
+				setToolpathLabel(updateTarget, window.currentToolpathProperties.toolpathName);
 			}
 			pendingToolpaths.push(updateTarget);
 			continue;
@@ -2538,11 +2531,11 @@ function doPocket() {
 			svgId: svgIds.length > 0 ? svgIds[0] : null,
 			svgIds: svgIds,
 			pending: true,
-			pendingKey: group.pendingKey,
-			label: (window.currentToolpathProperties && window.currentToolpathProperties.toolpathName) || ('Pocket ' + toolpathId)
+			pendingKey: group.pendingKey
 		};
 		if (window.currentToolpathProperties) {
 			pendingToolpath.toolpathProperties = { ...window.currentToolpathProperties };
+			setToolpathLabel(pendingToolpath, window.currentToolpathProperties.toolpathName);
 		}
 		toolpaths.push(pendingToolpath);
 		toolpathId++;
@@ -2665,9 +2658,7 @@ function startVcarveGeneration(config) {
 			updateTarget.pendingKey = pendingKey;
 			if (window.currentToolpathProperties) {
 				updateTarget.toolpathProperties = { ...window.currentToolpathProperties };
-				if (window.currentToolpathProperties.toolpathName) {
-					updateTarget.label = window.currentToolpathProperties.toolpathName;
-				}
+				setToolpathLabel(updateTarget, window.currentToolpathProperties.toolpathName);
 			}
 			pendingToolpaths.push(updateTarget);
 			continue;
