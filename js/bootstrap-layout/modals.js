@@ -31,7 +31,6 @@ function createModals() {
                                 <thead>
                                     <tr>
                                         <th>Option</th>
-                                        <th>Description</th>
                                         <th>Value</th>
                                     </tr>
                                 </thead>
@@ -805,7 +804,6 @@ function renderOptionsTable() {
         }
 
         row.innerHTML = `
-            <td><strong>${option.option}</strong></td>
             <td>${option.desc}</td>
             <td>${inputHtml}</td>
         `;
