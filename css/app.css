@@ -454,6 +454,16 @@ html, body {
     background-color: rgba(15, 23, 42, 0.06);
 }
 
+.sidebar-item-meta-index {
+    display: inline-flex;
+    align-items: center;
+    min-height: 18px;
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    color: var(--color-gray-600);
+    letter-spacing: 0.01em;
+}
+
 .sidebar-item-meta-tag {
     font-weight: 600;
     color: var(--color-gray-600);
@@ -991,8 +1001,13 @@ html, body {
 }
 
 .canvas-object-tree .sidebar-item-meta-tag,
-.canvas-object-tree .sidebar-item-meta-chip {
+.canvas-object-tree .sidebar-item-meta-chip,
+.canvas-object-tree .sidebar-item-meta-index {
     border: none;
+}
+
+.canvas-object-tree .sidebar-item-meta-index {
+    color: rgba(15, 23, 42, 0.86);
 }
 
 .canvas-object-tree .sidebar-item-meta-tag {
@@ -1040,6 +1055,112 @@ html, body {
     .canvas-object-tree-content {
         max-height: calc(100vh - 132px);
     }
+}
+
+.reorder-operations-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.reorder-operation-item {
+    display: flex;
+    align-items: stretch;
+    gap: 12px;
+    padding: 12px 14px;
+    border: 1px solid rgba(15, 23, 42, 0.10);
+    border-radius: 12px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 0.98) 100%);
+    cursor: grab;
+    user-select: none;
+    transition: border-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+}
+
+.reorder-operation-item:hover {
+    border-color: rgba(37, 99, 235, 0.28);
+    box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
+}
+
+.reorder-operation-item.is-dragging {
+    opacity: 0.6;
+    transform: scale(0.99);
+    cursor: grabbing;
+}
+
+.reorder-operation-item.is-drop-target {
+    border-color: rgba(37, 99, 235, 0.54);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14);
+}
+
+.reorder-operation-handle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    color: rgba(71, 85, 105, 0.72);
+    flex-shrink: 0;
+}
+
+.reorder-operation-handle .lucide {
+    width: 18px;
+    height: 18px;
+}
+
+.reorder-operation-body {
+    min-width: 0;
+    flex: 1;
+}
+
+.reorder-operation-title-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+
+.reorder-operation-position {
+    font-size: 12px;
+    font-weight: 700;
+    color: rgba(15, 23, 42, 0.82);
+    font-variant-numeric: tabular-nums;
+    flex-shrink: 0;
+}
+
+.reorder-operation-title {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 600;
+    color: rgba(15, 23, 42, 0.94);
+}
+
+.reorder-operation-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 6px;
+}
+
+.reorder-operation-type,
+.reorder-operation-chip {
+    display: inline-flex;
+    align-items: center;
+    min-height: 20px;
+    padding: 0 8px;
+    border-radius: 999px;
+    font-size: 11px;
+}
+
+.reorder-operation-type {
+    background-color: rgba(15, 23, 42, 0.08);
+    color: rgba(15, 23, 42, 0.76);
+    font-weight: 700;
+}
+
+.reorder-operation-chip {
+    background-color: rgba(37, 99, 235, 0.10);
+    color: rgba(29, 78, 216, 0.88);
 }
 
 /* Tabbed Sidebar Styles */

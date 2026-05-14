@@ -264,6 +264,31 @@ function createModals() {
     `;
     body.appendChild(profileNameModal);
 
+    const reorderOperationsModal = document.createElement('div');
+    reorderOperationsModal.innerHTML = `
+        <div class="modal fade" id="reorderOperationsModal" tabindex="-1" aria-labelledby="reorder-operations-title" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-scrollable modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <div>
+                            <h5 class="modal-title" id="reorder-operations-title">Reorder Operations</h5>
+                            <div class="small text-muted">Drag and drop operations to optimize their sequence, or right-click an item to move it up or down.</div>
+                        </div>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div id="reorder-operations-empty" class="text-muted small d-none">No operations available.</div>
+                        <div id="reorder-operations-list" class="reorder-operations-list" aria-live="polite"></div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    body.appendChild(reorderOperationsModal);
+
     // Delete Profile Confirmation Modal
     const deleteConfirmModal = document.createElement('div');
     deleteConfirmModal.innerHTML = `

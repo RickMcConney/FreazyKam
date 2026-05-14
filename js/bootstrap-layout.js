@@ -1131,6 +1131,13 @@ function getToolpathDepthLabel(toolpath) {
     return formatDimension(depth, false);
 }
 
+function getToolpathPositionMeta(toolpath) {
+    if (!toolpath || !Array.isArray(toolpaths) || toolpaths.length === 0) return '';
+    const index = toolpaths.findIndex(tp => tp.id === toolpath.id);
+    if (index < 0) return '';
+    return `${index + 1}/${toolpaths.length}`;
+}
+
 function getObjectTypeLabel(path) {
     if (!path) return 'Path';
     if (path.creationTool === 'Text' || path.textGroupId) return 'Text';
@@ -1150,6 +1157,7 @@ function renderSidebarLeafItem(config) {
         icon,
         title,
         meta,
+        leadingMeta,
         visible,
         itemClass = '',
         dataset = {},
@@ -1168,6 +1176,7 @@ function renderSidebarLeafItem(config) {
     if (visible === false) item.classList.add('is-hidden');
 
     const metaParts = [];
+    if (leadingMeta) metaParts.push(`<span class="sidebar-item-meta-index">${leadingMeta}</span>`);
     if (meta) metaParts.push(`<span class="sidebar-item-meta-tag">${meta}</span>`);
     secondaryMeta.filter(Boolean).forEach(part => {
         metaParts.push(`<span class="sidebar-item-meta-chip">${part}</span>`);
@@ -1257,6 +1266,7 @@ function renderObjectSidebarGroup(config) {
             id: toolpath.id,
             icon: getOperationIcon(toolpath.name),
             title: getToolpathDisplayName(toolpath),
+            leadingMeta: getToolpathPositionMeta(toolpath),
             meta: toolpath.operation === 'HelicalDrill' ? 'Drill' : toolpath.operation,
             secondaryMeta,
             visible: toolpath.visible,
@@ -1410,6 +1420,165 @@ function activateSidebarObjectGroup(item) {
     }
 
     return false;
+}
+
+function moveToolpathRelative(toolpathId, direction) {
+    const idx = toolpaths.findIndex(tp => tp.id === toolpathId);
+    if (idx < 0) return false;
+
+    const targetIdx = idx + direction;
+    if (targetIdx < 0 || targetIdx >= toolpaths.length) return false;
+
+    [toolpaths[idx], toolpaths[targetIdx]] = [toolpaths[targetIdx], toolpaths[idx]];
+    refreshToolPathsDisplay();
+    redraw();
+    return true;
+}
+
+function syncReorderOperationsModal() {
+    const modalList = document.getElementById('reorder-operations-list');
+    const emptyState = document.getElementById('reorder-operations-empty');
+    if (!modalList || !emptyState) return;
+
+    modalList.replaceChildren();
+
+    if (!Array.isArray(toolpaths) || toolpaths.length === 0) {
+        emptyState.classList.remove('d-none');
+        return;
+    }
+
+    emptyState.classList.add('d-none');
+    const fragment = document.createDocumentFragment();
+
+    toolpaths.forEach(toolpath => {
+        const depthLabel = getToolpathDepthLabel(toolpath);
+        const item = document.createElement('div');
+        item.className = 'reorder-operation-item';
+        item.draggable = true;
+        item.dataset.pathId = toolpath.id;
+        item.innerHTML = `
+            <div class="reorder-operation-handle" aria-hidden="true">
+                <i data-lucide="grip-vertical"></i>
+            </div>
+            <div class="reorder-operation-body">
+                <div class="reorder-operation-title-row">
+                    <span class="reorder-operation-position">${getToolpathPositionMeta(toolpath)}</span>
+                    <span class="reorder-operation-title">${getToolpathDisplayName(toolpath)}</span>
+                </div>
+                <div class="reorder-operation-meta">
+                    <span class="reorder-operation-type">${toolpath.operation === 'HelicalDrill' ? 'Drill' : toolpath.operation}</span>
+                    ${toolpath.tool?.name ? `<span class="reorder-operation-chip">${toolpath.tool.name}</span>` : ''}
+                    ${depthLabel ? `<span class="reorder-operation-chip">${depthLabel}</span>` : ''}
+                </div>
+            </div>
+        `;
+        fragment.appendChild(item);
+    });
+
+    modalList.appendChild(fragment);
+    if (typeof lucide !== 'undefined' && typeof lucide.createIcons === 'function') {
+        lucide.createIcons();
+    }
+}
+
+function setupReorderOperationsModal() {
+    const modalElement = document.getElementById('reorderOperationsModal');
+    const modalList = document.getElementById('reorder-operations-list');
+    if (!modalElement || !modalList || modalList.dataset.initialized === 'true') return;
+
+    modalList.dataset.initialized = 'true';
+    let draggedId = null;
+
+    modalElement.addEventListener('shown.bs.modal', function () {
+        syncReorderOperationsModal();
+    });
+
+    modalList.addEventListener('dragstart', function (event) {
+        const item = event.target.closest('.reorder-operation-item');
+        if (!item) return;
+        draggedId = item.dataset.pathId;
+        item.classList.add('is-dragging');
+        if (event.dataTransfer) {
+            event.dataTransfer.effectAllowed = 'move';
+            event.dataTransfer.setData('text/plain', draggedId);
+        }
+    });
+
+    modalList.addEventListener('dragend', function (event) {
+        const item = event.target.closest('.reorder-operation-item');
+        if (item) item.classList.remove('is-dragging');
+        modalList.querySelectorAll('.reorder-operation-item.is-drop-target').forEach(node => node.classList.remove('is-drop-target'));
+        draggedId = null;
+    });
+
+    modalList.addEventListener('dragover', function (event) {
+        const target = event.target.closest('.reorder-operation-item');
+        if (!target || !draggedId || target.dataset.pathId === draggedId) return;
+        event.preventDefault();
+        if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+        modalList.querySelectorAll('.reorder-operation-item.is-drop-target').forEach(node => {
+            if (node !== target) node.classList.remove('is-drop-target');
+        });
+        target.classList.add('is-drop-target');
+    });
+
+    modalList.addEventListener('dragleave', function (event) {
+        const target = event.target.closest('.reorder-operation-item');
+        if (target) target.classList.remove('is-drop-target');
+    });
+
+    modalList.addEventListener('drop', function (event) {
+        const target = event.target.closest('.reorder-operation-item');
+        if (!target || !draggedId) return;
+
+        event.preventDefault();
+        target.classList.remove('is-drop-target');
+
+        const fromIndex = toolpaths.findIndex(tp => tp.id === draggedId);
+        const toIndex = toolpaths.findIndex(tp => tp.id === target.dataset.pathId);
+        if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) return;
+
+        const targetRect = target.getBoundingClientRect();
+        const insertAfterTarget = event.clientY > targetRect.top + (targetRect.height / 2);
+        const [moved] = toolpaths.splice(fromIndex, 1);
+        let insertIndex = toIndex;
+        if (fromIndex < toIndex) insertIndex -= 1;
+        if (insertAfterTarget) insertIndex += 1;
+        toolpaths.splice(insertIndex, 0, moved);
+        refreshToolPathsDisplay();
+        syncReorderOperationsModal();
+        redraw();
+    });
+
+    modalList.addEventListener('contextmenu', function (event) {
+        const item = event.target.closest('.reorder-operation-item');
+        if (!item) return;
+
+        const pathId = item.dataset.pathId;
+        const index = toolpaths.findIndex(tp => tp.id === pathId);
+        const items = [];
+        if (index > 0) items.push({ label: 'Move Up', icon: 'arrow-up', action: 'move-up' });
+        if (index < toolpaths.length - 1) items.push({ label: 'Move Down', icon: 'arrow-down', action: 'move-down' });
+        if (items.length === 0) return;
+
+        createContextMenu(event, {
+            items,
+            data: pathId,
+            onAction: function (action, toolpathId) {
+                if (action === 'move-up') moveToolpathUp(toolpathId);
+                if (action === 'move-down') moveToolpathDown(toolpathId);
+                syncReorderOperationsModal();
+            }
+        });
+    });
+}
+
+function showReorderOperationsModal() {
+    const modalElement = document.getElementById('reorderOperationsModal');
+    if (!modalElement) return;
+    setupReorderOperationsModal();
+    syncReorderOperationsModal();
+    bootstrap.Modal.getOrCreateInstance(modalElement).show();
 }
 
 function setupSidebarEventHandlers(sidebar) {
@@ -3696,31 +3865,15 @@ function handlePathClick(pathId) {
 
 // Move a toolpath one position earlier within its tool group
 function moveToolpathUp(toolpathId) {
-    const idx = toolpaths.findIndex(tp => tp.id === toolpathId);
-    if (idx <= 0) return;
-    const toolName = toolpaths[idx].tool.name;
-    for (let i = idx - 1; i >= 0; i--) {
-        if (toolpaths[i].tool.name === toolName) {
-            [toolpaths[i], toolpaths[idx]] = [toolpaths[idx], toolpaths[i]];
-            refreshToolPathsDisplay();
-            redraw();
-            return;
-        }
+    if (moveToolpathRelative(toolpathId, -1)) {
+        syncReorderOperationsModal();
     }
 }
 
 // Move a toolpath one position later within its tool group
 function moveToolpathDown(toolpathId) {
-    const idx = toolpaths.findIndex(tp => tp.id === toolpathId);
-    if (idx < 0) return;
-    const toolName = toolpaths[idx].tool.name;
-    for (let i = idx + 1; i < toolpaths.length; i++) {
-        if (toolpaths[i].tool.name === toolName) {
-            [toolpaths[i], toolpaths[idx]] = [toolpaths[idx], toolpaths[i]];
-            refreshToolPathsDisplay();
-            redraw();
-            return;
-        }
+    if (moveToolpathRelative(toolpathId, 1)) {
+        syncReorderOperationsModal();
     }
 }
 
@@ -3809,8 +3962,7 @@ function showContextMenu(event, pathId) {
     const isToolpath = toolpaths.some(tp => tp.id === pathId);
     const items = [];
     if (isToolpath) {
-        items.push({ label: 'Move Up', icon: 'arrow-up', action: 'move-up' });
-        items.push({ label: 'Move Down', icon: 'arrow-down', action: 'move-down' });
+        items.push({ label: 'Reorder', icon: 'grip-vertical', action: 'reorder' });
         items.push({ divider: true });
     }
     items.push({ label: 'Delete', icon: 'trash-2', action: 'delete', danger: true });
@@ -3822,14 +3974,12 @@ function showContextMenu(event, pathId) {
                 case 'rename':
                     startRenameToolpath(pathId);
                     break;
-                case 'move-up':
-                    moveToolpathUp(pathId);
-                    break;
-                case 'move-down':
-                    moveToolpathDown(pathId);
+                case 'reorder':
+                    showReorderOperationsModal();
                     break;
                 case 'delete':
                     doRemoveToolPath(pathId);
+                    syncReorderOperationsModal();
                     break;
             }
         }
@@ -4073,6 +4223,7 @@ function refreshToolPathsDisplay() {
                     id: toolpath.id,
                     icon: getOperationIcon(toolpath.name),
                     title: getToolpathDisplayName(toolpath),
+                    leadingMeta: getToolpathPositionMeta(toolpath),
                     meta: toolpath.operation === 'HelicalDrill' ? 'Drill' : toolpath.operation,
                     secondaryMeta: [getToolpathDepthLabel(toolpath)].filter(Boolean),
                     visible: toolpath.visible,
@@ -4127,6 +4278,7 @@ function refreshToolPathsDisplay() {
                 id: toolpath.id,
                 icon: getOperationIcon(toolpath.name),
                 title: getToolpathDisplayName(toolpath),
+                leadingMeta: getToolpathPositionMeta(toolpath),
                 meta: toolpath.operation === 'HelicalDrill' ? 'Drill' : toolpath.operation,
                 secondaryMeta: [getToolpathDepthLabel(toolpath)].filter(Boolean),
                 visible: toolpath.visible,
