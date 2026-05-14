@@ -2021,6 +2021,8 @@ function showToolPropertiesEditor(operationName) {
     const operationPropertiesEditor = document.getElementById('operation-properties-editor');
     const form = document.getElementById('tool-properties-form');
     const helpContent = document.getElementById('tool-help-content');
+
+    clearFloatingPropertiesFooter();
  
     // Keep tools list visible while preparing popup content
     toolsList.style.display = 'block';
@@ -2338,6 +2340,8 @@ function showOperationPropertiesEditor(operationName) {
     const toolPropertiesEditor = document.getElementById('tool-properties-editor');
     const form = document.getElementById('operation-properties-form');
     const helpContent = document.getElementById('operation-help-content');
+
+    clearFloatingPropertiesFooter();
 
     document.querySelectorAll('#operations-list .sidebar-item.selected').forEach(el => el.classList.remove('selected'));
     const selectedOperationItem = document.querySelector(`#operations-list [data-operation="${operationName}"]`);
@@ -2712,6 +2716,14 @@ function setupToolpathUpdateButton(operationName) {
     });
 }
 
+function clearFloatingPropertiesFooter() {
+    const footer = document.getElementById('floating-properties-footer');
+    if (!footer) return;
+
+    footer.innerHTML = '';
+    footer.classList.remove('is-visible');
+}
+
 /**
  * Regenerate all toolpaths linked to the given svgpath IDs.
  * Used after transforms to keep toolpaths in sync with their source paths.
@@ -2992,6 +3004,8 @@ function showPathPropertiesEditor(path) {
     const operationPropertiesEditor = document.getElementById('operation-properties-editor');
     const form = document.getElementById('tool-properties-form');
     const helpContent = document.getElementById('tool-help-content');
+
+    clearFloatingPropertiesFooter();
 
     // Keep tools list visible while preparing popup content
     toolsList.style.display = 'block';
