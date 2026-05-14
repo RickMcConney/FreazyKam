@@ -199,7 +199,6 @@ class StepWiseHelpSystem {
             'Move': [
                 'Click on a path to select it, or drag to select multiple paths',
                 'Use center handle to move the pivot point, corner handles to scale, bottom handle to rotate',
-                'Hold Shift while dragging to scale uniformly or constrain movement',
                 'All selected paths will move/scale/rotate together'
             ],
             'Edit': [

@@ -57,8 +57,6 @@ class Transform extends Select {
             width:    { key: 'width',    label: 'Width',       type: 'dimension', default: 0 },
             height:   { key: 'height',   label: 'Height',      type: 'dimension', default: 0 },
             rotation: { key: 'rotation', label: 'Rotation °',  type: 'number',    default: 0, step: 1 },
-            skewX:    { key: 'skewX',    label: 'Skew X °',    type: 'number',    default: 0, step: 1 },
-            skewY:    { key: 'skewY',    label: 'Skew Y °',    type: 'number',    default: 0, step: 1 },
         };
     }
 
@@ -228,9 +226,6 @@ class Transform extends Select {
             } else if (this.activeHandle.type === 'rotate') {
                 this.resetTransformState(); // Reset accumulators for clean rotation
                 Transform.state = Transform.ROTATING;
-            } else if (this.activeHandle.type === 'skewX' || this.activeHandle.type === 'skewY') {
-                this.resetTransformState();
-                Transform.state = Transform.SKEWING;
             }
 
         } else {
@@ -297,9 +292,6 @@ class Transform extends Select {
             }
             else if (Transform.state == Transform.ROTATING) {
                 this.handleRotation(mouse);
-            }
-            else if (Transform.state == Transform.SKEWING) {
-                this.handleSkewing(mouse, evt);
             }
             else {
                 super.onMouseMove(canvas, evt);
@@ -385,11 +377,13 @@ class Transform extends Select {
             scaleY = Math.max(Transform.SCALE_MIN, Math.min(Transform.SCALE_MAX, currentDistanceY / initialDistanceY));
         }
 
-        // Apply uniform scaling if shift key is pressed
-        if (evt.shiftKey) {
-            const avgScale = Math.max(Math.abs(scaleX), Math.abs(scaleY));
-            scaleX = scaleX < 0 ? -avgScale : avgScale;
-            scaleY = scaleY < 0 ? -avgScale : avgScale;
+        // Corner handles resize proportionally so shapes keep their aspect ratio.
+        // Shift still forces the same behaviour explicitly.
+        const preserveAspectRatio = this.activeHandle?.type === 'scale' || evt.shiftKey;
+        if (preserveAspectRatio) {
+            const uniformScale = Math.max(Math.abs(scaleX), Math.abs(scaleY));
+            scaleX = scaleX < 0 ? -uniformScale : uniformScale;
+            scaleY = scaleY < 0 ? -uniformScale : uniformScale;
         }
 
         // Update and apply scale
@@ -820,15 +814,11 @@ class Transform extends Select {
     drawText(ctx) {
         // Only draw info text when actively transforming
         if (!this.transformBox) return;
-        if (!(Transform.state == Transform.SCALING || Transform.state == Transform.ROTATING || Transform.state == Transform.SKEWING)) return;
+        if (!(Transform.state == Transform.SCALING || Transform.state == Transform.ROTATING)) return;
 
         let text = '0'
         if (Transform.state == Transform.ROTATING) {
             text = (this.totalRotation + this.rotation).toFixed(1) + '°';
-        }
-        else if (Transform.state == Transform.SKEWING) {
-            const angle = (this.activeHandle && this.activeHandle.type === 'skewX') ? (this.totalSkewX + this.skewX) : (this.totalSkewY + this.skewY);
-            text = 'Skew ' + angle.toFixed(1) + '°';
         }
         else if (Transform.state == Transform.SCALING) {
             // Show current dimensions instead of scale factors
@@ -1086,9 +1076,7 @@ class Transform extends Select {
             { id: 5, x: pivotX + rx, y: pivotY + ry, type: 'rotate' },
             { id: 6, x: pivotX, y: pivotY, type: 'center' },
             { id: 7, x: centerX + Transform.MIRROR_BUTTON_OFFSET, y: centerY, type: 'mirrorY' },
-            { id: 8, x: centerX, y: centerY - Transform.MIRROR_BUTTON_OFFSET, type: 'mirrorX' },
-            { id: 9, x: (centerX + maxx) / 2, y: miny, type: 'skewX' },
-            { id: 10, x: maxx, y: (centerY + miny) / 2, type: 'skewY' }
+            { id: 8, x: centerX, y: centerY - Transform.MIRROR_BUTTON_OFFSET, type: 'mirrorX' }
         ];
     }
 
@@ -1131,8 +1119,6 @@ class Transform extends Select {
         const widthMM    = this.transformBox ? this.transformBox.width  / viewScale : 0;
         const heightMM   = this.transformBox ? this.transformBox.height / viewScale : 0;
         const rotValue   = (this.totalRotation + this.rotation).toFixed(1);
-        const skewXValue = (this.totalSkewX + this.skewX).toFixed(1);
-        const skewYValue = (this.totalSkewY + this.skewY).toFixed(1);
 
         const fh = (field, val) => PropertiesManager.fieldHTML(field, val);
 
@@ -1152,19 +1138,12 @@ class Transform extends Select {
                 </div>
             </div>
             ${fh(this.fields.rotation, rotValue)}
-            <div class="mb-3">
-                <label class="form-label small"><strong>Skew (degrees)</strong></label>
-                <div class="row g-2">
-                    <div class="col-6">${fh(this.fields.skewX, skewXValue)}</div>
-                    <div class="col-6">${fh(this.fields.skewY, skewYValue)}</div>
-                </div>
-            </div>
             <div class="alert alert-secondary">
                 <i data-lucide="info"></i>
                 <small>
                     <strong>Move Tool:</strong> ${hasSelectedPaths ?
-                        'Drag the center handle to move, corner handles to resize, or the top handle to rotate. Enter exact width/height to resize to specific dimensions.' :
-                        'Select objects first, then drag the center handle to move, corner handles to resize, or the top handle to rotate.'}
+                        'Drag the center handle to move, corner handles to resize proportionally, or the top handle to rotate. Enter exact width/height to resize to specific dimensions.' :
+                        'Select objects first, then drag the center handle to move, corner handles to resize proportionally, or the top handle to rotate.'}
                 </small>
             </div>`;
     }
@@ -1192,27 +1171,30 @@ class Transform extends Select {
             this.deltaY = -deltaYmm * viewScale || 0;  // Flip Y for CNC coordinates
         }
 
-        // Handle width/height changes by calculating appropriate scale factors
-        // Guard against zero/empty values (user mid-typing) - applying scaleX=0 collapses
-        // the shape and commits it, making recovery impossible since originalWidth becomes 0.
-        if (data.width !== undefined && this.transformBox) {
-            const widthMM = parseDimension(data.width, useInches);
-            if (widthMM <= 0) return;
-            const originalWidth = this.transformBox.width / viewScale;
-            this.scaleX = originalWidth > 0 ? widthMM / originalWidth : 1;
-            this.scaleX = parseFloat(this.scaleX.toFixed(2));
-        }
-        if (data.height !== undefined && this.transformBox) {
-            const heightMM = parseDimension(data.height, useInches);
-            if (heightMM <= 0) return;
-            const originalHeight = this.transformBox.height / viewScale;
-            this.scaleY = originalHeight > 0 ? heightMM / originalHeight : 1;
-            this.scaleY = parseFloat(this.scaleY.toFixed(2));
+        // Width/height edits keep the current aspect ratio constant.
+        // Prefer the currently focused field so the other dimension follows it.
+        if (this.transformBox) {
+            const activeFieldKey = document.activeElement?.id?.replace(/^pm-/, '');
+            const currentWidth = this.transformBox.width / viewScale;
+            const currentHeight = this.transformBox.height / viewScale;
+
+            if (data.width !== undefined && (activeFieldKey === 'width' || data.height === undefined)) {
+                const widthMM = parseDimension(data.width, useInches);
+                if (widthMM <= 0) return;
+                const uniformScale = currentWidth > 0 ? widthMM / currentWidth : 1;
+                this.scaleX = parseFloat(uniformScale.toFixed(2));
+                this.scaleY = this.scaleX;
+            }
+            else if (data.height !== undefined) {
+                const heightMM = parseDimension(data.height, useInches);
+                if (heightMM <= 0) return;
+                const uniformScale = currentHeight > 0 ? heightMM / currentHeight : 1;
+                this.scaleY = parseFloat(uniformScale.toFixed(2));
+                this.scaleX = this.scaleY;
+            }
         }
 
         if (data.rotation !== undefined) this.rotation = (parseFloat(data.rotation) || 0) - this.totalRotation;
-        if (data.skewX !== undefined) this.skewX = (parseFloat(data.skewX) || 0) - this.totalSkewX;
-        if (data.skewY !== undefined) this.skewY = (parseFloat(data.skewY) || 0) - this.totalSkewY;
 
         // Apply transformation to paths based on current property values
         if (this.hasSelectedPaths()) {
@@ -1247,8 +1229,6 @@ class Transform extends Select {
         PropertiesManager.setValue('width',    formatDimension(currentWidth,  true));
         PropertiesManager.setValue('height',   formatDimension(currentHeight, true));
         PropertiesManager.setValue('rotation', rotation.toFixed(1));
-        PropertiesManager.setValue('skewX',    (this.totalSkewX + this.skewX).toFixed(1));
-        PropertiesManager.setValue('skewY',    (this.totalSkewY + this.skewY).toFixed(1));
     }
 
     applyTransformFromProperties() {
