@@ -232,15 +232,16 @@ class PropertiesManager {
 
     static _dimensionHTML(field, value) {
         const display = (typeof formatDimension === 'function')
-            ? formatDimension(parseDimension(value), true)
+            ? formatDimension(Number(value), true)
             : String(value);
         return `<div class="mb-3 pm-field">
             <label for="pm-${field.key}" class="form-label small"><strong>${field.label}:</strong></label>
             <input type="text" class="form-control form-control-sm"
                    id="pm-${field.key}" name="${field.key}"
-                   value="${display}"
-                   onblur="this.value = formatDimension(parseDimension(this.value), true)"
-                   onkeydown="if(event.key==='Enter'){this.value=formatDimension(parseDimension(this.value),true);this.blur();}">${field.help ? `
+                   data-dimension-input="true"
+                    value="${display}"
+                    onblur="this.value = formatDimension(parseDimension(this.value), true)"
+                    onkeydown="if(event.key==='Enter'){this.value=formatDimension(parseDimension(this.value),true);this.blur();}">${field.help ? `
             <div class="form-text">${field.help}</div>` : ''}
         </div>`;
     }

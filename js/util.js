@@ -110,42 +110,11 @@ function formatDimension(mm, showFractions) {
 
 	// For very small values, show decimal
 	if (Math.abs(inches) < 0.01) {
-		return inches.toFixed(3)+' in';
+		return inches.toFixed(2)+' in';
 	}
 
-	if (!showFractions) {
-		// Decimal inches
-		return inches.toFixed(3)+' in';
-	}
-
-	// Try to convert to fraction
-	var frac = decimalToFraction(inches, 64);
-
-	if (!frac) {
-		// Couldn't convert to clean fraction, use decimal
-		return inches.toFixed(3)+' in';
-	}
-
-	// Build fraction string
-	var result = '';
-	var sign = frac.whole < 0 || inches < 0 ? '-' : '';
-	var absWhole = Math.abs(frac.whole);
-
-	if (absWhole > 0) {
-		result += sign + absWhole;
-		if (frac.numerator > 0) {
-			result += ' ';
-		}
-	} else if (frac.numerator > 0) {
-		// No whole part, just fraction - include sign
-		result = sign;
-	}
-
-	if (frac.numerator > 0) {
-		result += frac.numerator + '/' + frac.denominator;
-	}
-
-	return (result || '0') + ' in';
+	// Use decimal inches for property displays to preserve exact values across unit switches.
+	return parseFloat(inches.toFixed(2)).toString() + ' in';
 }
 
 function normalizeToolpathName(value) {

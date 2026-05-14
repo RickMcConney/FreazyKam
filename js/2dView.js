@@ -65,6 +65,7 @@ var simulationCtx = null;
 var simulationDirty = true;
 var minimapCanvas = document.getElementById('canvas-minimap');
 var minimapCtx = minimapCanvas ? minimapCanvas.getContext('2d') : null;
+var unitToggleElement = document.getElementById('canvas-unit-toggle');
 var canvasResizeObserver = null;
 var pendingCanvasResizeFrame = null;
 var minimapState = {
@@ -482,6 +483,19 @@ function initializeCanvasOverlayControls() {
 		minimapCanvas.addEventListener('dblclick', handleMinimapDoubleClick);
 		minimapCanvas.dataset.initialized = 'true';
 	}
+
+	if (unitToggleElement && unitToggleElement.dataset.initialized !== 'true') {
+		unitToggleElement.addEventListener('click', function(evt) {
+			var button = evt.target.closest('.canvas-unit-toggle-button');
+			if (!button || typeof window.setDisplayUnits !== 'function') return;
+			window.setDisplayUnits(button.dataset.unit === 'in');
+		});
+		unitToggleElement.dataset.initialized = 'true';
+	}
+
+	if (typeof updateCanvasUnitToggleUI === 'function') {
+		updateCanvasUnitToggleUI();
+	}
 }
 
 initializeCanvasOverlayControls();
@@ -707,6 +721,20 @@ function _getProgressiveGridMultiplier(baseStepPixels, minStepPixels) {
 	return 10 * magnitude;
 }
 
+function _getImperialProgressiveGridMultiplier(baseStepPixels, minStepPixels) {
+	if (!baseStepPixels || baseStepPixels <= 0) {
+		return 1;
+	}
+
+	const ratio = Math.max(1, minStepPixels / baseStepPixels);
+	let multiplier = 1;
+	while (multiplier < ratio) {
+		multiplier *= 2;
+	}
+
+	return multiplier;
+}
+
 function _drawGridLines(stepPixels, topLeft, bottomRight, originScreen) {
 	if (!stepPixels || stepPixels <= 0) {
 		return;
@@ -733,7 +761,23 @@ function _drawGridLines(stepPixels, topLeft, bottomRight, originScreen) {
 
 function _formatAxisLabel(value, useInches) {
 	if (useInches) {
-		return formatDimension(value, true);
+		var frac = decimalToFraction(value, 64);
+		if (!frac) {
+			return parseFloat(value.toFixed(3)).toString();
+		}
+
+		var sign = frac.whole < 0 || value < 0 ? '-' : '';
+		var absWhole = Math.abs(frac.whole);
+		if (absWhole > 0) {
+			if (frac.numerator > 0) {
+				return sign + absWhole + ' ' + frac.numerator + '/' + frac.denominator;
+			}
+			return sign + absWhole;
+		}
+		if (frac.numerator > 0) {
+			return sign + frac.numerator + '/' + frac.denominator;
+		}
+		return '0';
 	}
 
 	if (Math.abs(value - Math.round(value)) < 0.0001) {
@@ -749,11 +793,15 @@ function _getGridSetup() {
 	const topLeft = worldToScreen(0, 0);
 	const bottomRight = worldToScreen(width, length);
 	const o = worldToScreen(origin.x, origin.y);
-	const gridSize = (typeof getOption !== 'undefined' && getOption("gridSize")) ? getOption("gridSize") : 10;
-	const grid = gridSize * viewScale * zoomLevel;
+	const useInches = typeof getOption !== 'undefined' ? getOption('Inches') : false;
+	const gridSizeMM = (typeof getOption !== 'undefined' && getOption("gridSize")) ? getOption("gridSize") : 10;
+	const gridSizeDisplay = useInches ? (gridSizeMM / MM_PER_INCH) : gridSizeMM;
+	const grid = gridSizeMM * viewScale * zoomLevel;
 	const minorMultiplier = _getProgressiveGridMultiplier(grid, 18);
 	const majorMultiplier = _getProgressiveGridMultiplier(grid, 90);
-	const labelMultiplier = _getProgressiveGridMultiplier(grid, 140);
+	const labelMultiplier = useInches
+		? _getImperialProgressiveGridMultiplier(grid, 140)
+		: _getProgressiveGridMultiplier(grid, 140);
 
 	return {
 		topLeft,
@@ -762,7 +810,7 @@ function _getGridSetup() {
 		minorGrid: grid * minorMultiplier,
 		majorGrid: grid * majorMultiplier,
 		labelGrid: grid * labelMultiplier,
-		labelInterval: gridSize * labelMultiplier
+		labelInterval: gridSizeDisplay * labelMultiplier
 	};
 }
 

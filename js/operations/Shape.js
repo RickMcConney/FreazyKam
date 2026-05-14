@@ -50,7 +50,7 @@ function Heart(r, a2) {
 }
 
 // Dimension-type parameter titles — these use text input + parseDimension/formatDimension
-const DIMENSION_PARAM_TITLES = ["radius", "distance", "width", "height", "left", "right", "inner", "outer", "radiusX", "radiusY"];
+const DIMENSION_PARAM_TITLES = ["radius", "distance", "width", "height", "left", "right", "inner", "outer", "radiusx", "radiusy"];
 
 function isDimensionTitle(title) {
     const firstWord = title.split(" ")[0].toLowerCase();

@@ -120,6 +120,7 @@ const materialsDatabase = {
 };
 
 function getDefaultOptions() {
+    const defaultGridSize = getDefaultGridSizeMM(false);
     return [
         { recid: 1,  option: 'showGrid',           value: true,            desc: 'Show Grid',                                    hidden: true  },
         { recid: 2,  option: 'showOrigin',          value: true,            desc: 'Show Origin',                                 hidden: true  },
@@ -135,7 +136,7 @@ function getDefaultOptions() {
         { recid: 12, option: 'minFeedRate',         value: 100,             desc: 'Minimum Feed Rate (mm/min)',                  hidden: false },
         { recid: 13, option: 'maxFeedRate',         value: 2000,            desc: 'Maximum Feed Rate (mm/min)',                  hidden: false },
         { recid: 14, option: 'originPosition',      value: 'middle-center', desc: 'Origin Position',                             hidden: true  },
-        { recid: 15, option: 'gridSize',            value: 10,              desc: 'Grid Size (mm)',                              hidden: true  },
+        { recid: 15, option: 'gridSize',            value: defaultGridSize, desc: 'Grid Size (mm)',                              hidden: true  },
         { recid: 16, option: 'showWorkpiece',       value: true,            desc: 'Show Workpiece',                              hidden: true  },
         { recid: 17, option: 'tableWidth',          value: 4000,            desc: 'Max cutting width (X travel) in mm',          hidden: false },
         { recid: 18, option: 'tableDepth',          value: 2000,            desc: 'Max cutting length (Y travel) in mm',         hidden: false },
@@ -152,6 +153,10 @@ function loadOptions() {
         options = JSON.parse(optionData);
     } else {
         options = getDefaultOptions();
+    }
+
+    if (typeof updateCanvasUnitToggleUI === 'function') {
+        updateCanvasUnitToggleUI();
     }
 }
 
@@ -2062,7 +2067,7 @@ function showToolPropertiesEditor(operationName) {
 
             // Add both change and input events for real-time updates
             input.addEventListener('change', handleInputChange);
-            if (input.type === 'text' || input.tagName === 'TEXTAREA') {
+            if ((input.type === 'text' || input.tagName === 'TEXTAREA') && input.dataset.dimensionInput !== 'true') {
                 input.addEventListener('input', handleInputChange);
             }
         });
@@ -2430,6 +2435,9 @@ function showOperationPropertiesEditor(operationName) {
 
                 // Add both change and input events for real-time updates
                 input.addEventListener('change', handleInputChange);
+                if ((input.type === 'text' || input.tagName === 'TEXTAREA') && input.dataset.dimensionInput !== 'true') {
+                    input.addEventListener('input', handleInputChange);
+                }
             });
 
             showFloatingPropertiesPopup(propertiesEditor, {
@@ -3071,7 +3079,7 @@ function showPathPropertiesEditor(path) {
 
         // Add both change and input events for real-time updates
         input.addEventListener('change', handlePathEditChange);
-        if (input.type === 'text' || input.tagName === 'TEXTAREA') {
+        if ((input.type === 'text' || input.tagName === 'TEXTAREA') && input.dataset.dimensionInput !== 'true') {
             input.addEventListener('input', handlePathEditChange);
         }
     });
@@ -3217,7 +3225,7 @@ function createWorkpiecePanel(targetId) {
         }
 
         input.addEventListener('change', handleInputChange);
-        if (input.type === 'text' || input.tagName === 'TEXTAREA') {
+        if ((input.type === 'text' || input.tagName === 'TEXTAREA') && input.dataset.dimensionInput !== 'true') {
             input.addEventListener('input', handleInputChange);
         }
     });
@@ -4605,6 +4613,99 @@ function setOption(name, value) {
     // Save to localStorage to persist the change
     localStorage.setItem('options', JSON.stringify(options));
 }
+
+function getDefaultGridSizeMM(useInches) {
+    const imperial = typeof useInches === 'boolean'
+        ? useInches
+        : !!getOption('Inches');
+    return imperial ? (MM_PER_INCH / 2) : 10;
+}
+
+function syncGridSizeToDisplayUnits() {
+    const nextGridSize = getDefaultGridSizeMM();
+    setOption('gridSize', nextGridSize);
+
+    if (typeof window.updateGridSize3D === 'function') {
+        window.updateGridSize3D(nextGridSize);
+    }
+}
+
+function convertDisplayDimensionValue(value, toInches) {
+    if (value === null || value === undefined || value === '') return value;
+    const numericValue = typeof value === 'number' ? value : parseFloat(value);
+    if (!Number.isFinite(numericValue)) return value;
+
+    const converted = toInches
+        ? Math.round((numericValue / MM_PER_INCH) * 1000) / 1000
+        : Math.round(numericValue * MM_PER_INCH * 1000) / 1000;
+
+    return converted;
+}
+
+function convertPathEditUnits(toInches) {
+    const pathEdit = window.cncController?.operationManager?.getOperation('Edit');
+    if (!pathEdit || pathEdit.lastRadiusValue === undefined) return;
+
+    pathEdit.lastRadiusValue = String(convertDisplayDimensionValue(pathEdit.lastRadiusValue, toInches));
+}
+
+function refreshVisibleDimensionInputs() {
+    document.querySelectorAll('input[data-dimension-input="true"]').forEach(input => {
+        if (!input || !input.offsetParent) return;
+        try {
+            const parsed = parseDimension(input.value);
+            if (!Number.isFinite(parsed)) return;
+            input.value = formatDimension(parsed, true);
+        } catch (error) {
+            // Ignore fields that are not dimension inputs.
+        }
+    });
+}
+
+function updateCanvasUnitToggleUI() {
+    const toggle = document.getElementById('canvas-unit-toggle');
+    if (!toggle) return;
+
+    const useInches = !!getOption('Inches');
+    toggle.querySelectorAll('.canvas-unit-toggle-button').forEach(button => {
+        const isActive = button.dataset.unit === (useInches ? 'in' : 'mm');
+        button.classList.toggle('is-active', isActive);
+        button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+    });
+}
+
+function refreshDisplayUnitsUI() {
+    updateCanvasUnitToggleUI();
+
+    if (typeof updateToolTableHeaders === 'function') {
+        updateToolTableHeaders();
+    }
+    if (typeof renderToolsTable === 'function') {
+        renderToolsTable();
+    }
+    if (typeof createWorkpiecePanel === 'function' && document.getElementById('workpiece-panel')) {
+        createWorkpiecePanel('workpiece-panel');
+    }
+    refreshVisibleDimensionInputs();
+
+    redraw();
+}
+
+function setDisplayUnits(useInches) {
+    const nextValue = !!useInches;
+    const currentValue = !!getOption('Inches');
+    if (nextValue === currentValue) {
+        updateCanvasUnitToggleUI();
+        return;
+    }
+
+    setOption('Inches', nextValue);
+    syncGridSizeToDisplayUnits();
+    convertPathEditUnits(nextValue);
+    refreshDisplayUnitsUI();
+}
+
+window.setDisplayUnits = setDisplayUnits;
 
 // Get display units ('mm' or 'inches')
 function getDisplayUnits() {

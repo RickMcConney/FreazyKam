@@ -484,7 +484,7 @@ function renderOptionsWorkpieceSettings() {
         ? getWorkpieceConfigController()
         : null;
 
-    const optionKeys = ['gridSize', 'showGrid', 'showOrigin', 'showWorkpiece', 'originPosition'];
+    const optionKeys = ['showGrid', 'showOrigin', 'showWorkpiece', 'originPosition'];
     const fields = optionKeys
         .map(key => workpieceController?.fields?.[key])
         .filter(Boolean);
@@ -500,7 +500,6 @@ function renderOptionsWorkpieceSettings() {
             <strong>Display & Origin</strong><br>
             Configure the grid, visibility toggles, and workpiece origin from this popup.
         </div>
-        ${fh(workpieceController.fields.gridSize, formatDimension(getOption('gridSize') || 10, true))}
         <div class="row g-2">
             <div class="col-md-4">${fh(workpieceController.fields.showGrid, getOption('showGrid') !== false)}</div>
             <div class="col-md-4">${fh(workpieceController.fields.showOrigin, getOption('showOrigin') !== false)}</div>
@@ -523,7 +522,7 @@ function renderOptionsWorkpieceSettings() {
         }
 
         input.addEventListener('change', handleInputChange);
-        if (input.type === 'text' || input.tagName === 'TEXTAREA') {
+        if ((input.type === 'text' || input.tagName === 'TEXTAREA') && input.dataset.dimensionInput !== 'true') {
             input.addEventListener('input', handleInputChange);
         }
     });
@@ -827,9 +826,8 @@ function renderOptionsTable() {
             const oldValue = options[index].value;
             options[index].value = value;
 
-            // If switching between mm and inches, round workpiece dimensions
-            if (optionName === 'Inches' && oldValue !== value) {
-                roundWorkpieceDimensions(value); // true = switching to inches, false = switching to mm
+            if (optionName === 'Inches' && oldValue !== value && typeof setDisplayUnits === 'function') {
+                setDisplayUnits(value);
             }
 
             toggleTooltips(getOption('showTooltips'));
@@ -880,35 +878,29 @@ function roundWorkpieceDimensions(useInches) {
     const width = getOption("workpieceWidth") || 300;
     const length = getOption("workpieceLength") || 200;
     const thickness = getOption("workpieceThickness") || 19;
-    const gridSize = getOption("gridSize") || 10;
 
-    let roundedWidth, roundedLength, roundedThickness, roundedGridSize;
+    let roundedWidth, roundedLength, roundedThickness;
 
     if (useInches) {
         // Converting from mm to inches - round to nearest 0.5 inch
         const widthInches = width / 25.4;
         const lengthInches = length / 25.4;
         const thicknessInches = thickness / 25.4;
-        const gridInches = gridSize / 25.4;
-
         // Round to nearest 0.5 inch, then convert back to mm
         roundedWidth = Math.round(widthInches * 2) / 2 * 25.4;
         roundedLength = Math.round(lengthInches * 2) / 2 * 25.4;
         roundedThickness = Math.round(thicknessInches * 2) / 2 * 25.4;
-        roundedGridSize = Math.round(gridInches * 2) / 2 * 25.4;
     } else {
         // Converting from inches to mm - round to nearest 10mm
         roundedWidth = Math.round(width / 10) * 10;
         roundedLength = Math.round(length / 10) * 10;
         roundedThickness = Math.round(thickness / 10) * 10;
-        roundedGridSize = Math.round(gridSize / 10) * 10;
     }
 
     // Update the options
     setOption("workpieceWidth", roundedWidth);
     setOption("workpieceLength", roundedLength);
     setOption("workpieceThickness", roundedThickness);
-    setOption("gridSize", roundedGridSize);
 
     // Update origin if Workpiece tool is active
     const width_scaled = roundedWidth * viewScale;

@@ -7,7 +7,6 @@ class Workpiece extends Operation {
             workpieceLength:    { key: 'workpieceLength',    label: 'Length (Y)',      type: 'dimension',  default: 200  },
             workpieceThickness: { key: 'workpieceThickness', label: 'Thickness (Z)',   type: 'dimension',  default: 19   },
             material:           { key: 'material',           label: 'Material',        type: 'choice',     default: 'Softwood / MDF', options: [] },
-            gridSize:           { key: 'gridSize',           label: 'Grid Size',       type: 'dimension',  default: 10   },
             showGrid:           { key: 'showGrid',           label: 'Show Grid',       type: 'checkbox',   default: true },
             showOrigin:         { key: 'showOrigin',         label: 'Show Origin',     type: 'checkbox',   default: true },
             showWorkpiece:      { key: 'showWorkpiece',      label: 'Show Workpiece',  type: 'checkbox',   default: true },
@@ -21,6 +20,16 @@ class Workpiece extends Operation {
                 help: 'Select where to place the X,Y origin (0,0) on your workpiece. Z origin is top of workpiece'
             },
         };
+    }
+
+    getDimensionValue(data, key, fallback, useInches) {
+        const rawValue = data[key];
+        if (typeof rawValue === 'number') {
+            return rawValue > 0 ? rawValue : fallback;
+        }
+
+        const parsedValue = parseDimension(rawValue, useInches);
+        return parsedValue > 0 ? parsedValue : fallback;
     }
 
     // No mouse interactions needed for workpiece tool
@@ -81,9 +90,10 @@ class Workpiece extends Operation {
         const useInches = getOption('Inches');
 
         // Update global options when properties change
-        // Parse inputs using parseDimension to handle both mm and inch inputs
+        // Dimension fields are already parsed to mm by PropertiesManager when they
+        // come from the rendered form. Keep string parsing only as a fallback.
         if ('workpieceWidth' in data) {
-            let newValue = parseDimension(data.workpieceWidth, useInches) || 300;
+            let newValue = this.getDimensionValue(data, 'workpieceWidth', 300, useInches);
             const tableWidth = getOption("tableWidth");
             const value = useInches ? newValue / 25.4 : newValue;
             if (tableWidth && value > tableWidth) {
@@ -97,7 +107,7 @@ class Workpiece extends Operation {
         }
 
         if ('workpieceLength' in data) {
-            let newValue = parseDimension(data.workpieceLength, useInches) || 200;
+            let newValue = this.getDimensionValue(data, 'workpieceLength', 200, useInches);
             const tableDepth = getOption("tableDepth");
             const value = useInches ? newValue / 25.4 : newValue;
             if (tableDepth && value > tableDepth) {
@@ -111,17 +121,12 @@ class Workpiece extends Operation {
         }
 
         if ('workpieceThickness' in data) {
-            const newValue = parseDimension(data.workpieceThickness, useInches) || 19;
+            const newValue = this.getDimensionValue(data, 'workpieceThickness', 19, useInches);
             setOption("workpieceThickness", newValue);
 
             // Recalculate tool depths and steps that are percentage-based
             recalculateToolPercentages();
             renderToolsTable();
-        }
-
-        if ('gridSize' in data) {
-            const newValue = parseDimension(data.gridSize, useInches) || 10;
-            setOption("gridSize", newValue);
         }
 
         if ('material' in data) {
@@ -145,8 +150,6 @@ class Workpiece extends Operation {
         if ('showWorkpiece' in data) {
             setOption("showWorkpiece", data.showWorkpiece);
         }
-
-        // Note: gridSize is already handled above with parseDimension
 
         // Update origin position if dimensions or origin position changed
         if (dimensionChanged || originChanged) {
@@ -190,13 +193,6 @@ class Workpiece extends Operation {
         // Force immediate canvas redraw when workpiece properties change
         redraw();
 
-        // Update 3D grid if gridSize changed - parse the new value and pass it
-        if ('gridSize' in data && typeof window.updateGridSize3D === 'function') {
-            const useInches = getOption('Inches');
-            const newGridSize = parseDimension(data.gridSize, useInches) || 10;  // Parse the string value
-            window.updateGridSize3D(newGridSize);
-        }
-
         // Update 3D workpiece if any dimensions or species changed
         if ((('workpieceWidth' in data) || ('workpieceLength' in data) || ('workpieceThickness' in data) ||
              ('originPosition' in data) || ('material' in data)) && typeof window.updateWorkpiece3D === 'function') {
@@ -204,13 +200,13 @@ class Workpiece extends Operation {
 
             // Parse new dimension values if they're in the change data
             const newWidth = ('workpieceWidth' in data) ?
-                (parseDimension(data.workpieceWidth, useInches) || getOption('workpieceWidth')) :
+                this.getDimensionValue(data, 'workpieceWidth', getOption('workpieceWidth'), useInches) :
                 getOption('workpieceWidth');
             const newLength = ('workpieceLength' in data) ?
-                (parseDimension(data.workpieceLength, useInches) || getOption('workpieceLength')) :
+                this.getDimensionValue(data, 'workpieceLength', getOption('workpieceLength'), useInches) :
                 getOption('workpieceLength');
             const newThickness = ('workpieceThickness' in data) ?
-                (parseDimension(data.workpieceThickness, useInches) || getOption('workpieceThickness')) :
+                this.getDimensionValue(data, 'workpieceThickness', getOption('workpieceThickness'), useInches) :
                 getOption('workpieceThickness');
             const newOriginPosition = ('originPosition' in data) ?
                 data.originPosition :
