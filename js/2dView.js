@@ -60,8 +60,13 @@ var ctx = canvas.getContext('2d');
 var staticCanvas = null;
 var staticCtx = null;
 var staticDirty = true;
+var simulationCanvas = null;
+var simulationCtx = null;
+var simulationDirty = true;
 var minimapCanvas = document.getElementById('canvas-minimap');
 var minimapCtx = minimapCanvas ? minimapCanvas.getContext('2d') : null;
+var canvasResizeObserver = null;
+var pendingCanvasResizeFrame = null;
 var minimapState = {
 	isDragging: false,
 	pointerId: null
@@ -70,6 +75,20 @@ var geometryCacheDirty = true;
 
 function markGeometryCacheDirty() {
 	geometryCacheDirty = true;
+}
+
+function markSimulationLayerDirty() {
+	simulationDirty = true;
+}
+
+function isSimulationLayerVisible() {
+	return typeof simulation2D !== 'undefined'
+		&& simulation2D.precomputedPoints
+		&& simulation2D.precomputedPoints.length > 0;
+}
+
+function isSimulationStaticModeActive() {
+	return typeof simulation2D !== 'undefined' && (simulation2D.isRunning || simulation2D.isPaused);
 }
 
 function buildScreenPolyline(path, isMultiSegment) {
@@ -122,17 +141,21 @@ function updateToolpathScreenCache(pathEntry, force) {
 }
 
 function refreshVisibleGeometryCaches() {
+	if (!geometryCacheDirty) {
+		return;
+	}
+
 	var i;
 	for (i = 0; i < svgpaths.length; i++) {
 		if (svgpaths[i] && svgpaths[i].visible) {
-			updatePathScreenCache(svgpaths[i], true);
+			updatePathScreenCache(svgpaths[i]);
 		}
 	}
 
 	for (i = 0; i < toolpaths.length; i++) {
 		if (!toolpaths[i] || !toolpaths[i].visible || !toolpaths[i].paths) continue;
 		for (var p = 0; p < toolpaths[i].paths.length; p++) {
-			updateToolpathScreenCache(toolpaths[i].paths[p], true);
+			updateToolpathScreenCache(toolpaths[i].paths[p]);
 		}
 	}
 
@@ -192,6 +215,7 @@ function getMinZoomLevel() {
 		return MIN_ZOOM_LEVEL;
 	}
 
+	// Allow a small margin around the workpiece at max zoom-out so its sides remain visible.
 	var fitZoom = Math.min(viewportWidth / workpieceWidth, viewportHeight / workpieceLength);
 	var zoomWithMargin = fitZoom / MAX_ZOOM_OUT_MARGIN_FACTOR;
 
@@ -400,11 +424,19 @@ function drawMinimap() {
 	var workpieceDrawWidth = metrics.workpieceWidth * metrics.scale;
 	var workpieceDrawHeight = metrics.workpieceLength * metrics.scale;
 
-	minimapCtx.fillStyle = getOption("showWorkpiece") ? workpieceColor : '#f3f3f3';
+	if (getOption("showWorkpiece"))
+	{
+		var woodSpecies = getOption("woodSpecies");
+		var woodColor = workpieceColor;
+		if (typeof woodSpeciesDatabase !== 'undefined' && woodSpeciesDatabase[woodSpecies]) {
+			woodColor = woodSpeciesDatabase[woodSpecies].color;
+		}
+		minimapCtx.fillStyle = woodColor;
 	minimapCtx.strokeStyle = workpieceBorderColor;
 	minimapCtx.lineWidth = 1;
 	minimapCtx.fillRect(workpieceX, workpieceY, workpieceDrawWidth, workpieceDrawHeight);
 	minimapCtx.strokeRect(workpieceX, workpieceY, workpieceDrawWidth, workpieceDrawHeight);
+	}
 
 	if (svgpaths && svgpaths.length) {
 		minimapCtx.save();
@@ -462,11 +494,76 @@ function initializeCanvasOverlayControls() {
 
 initializeCanvasOverlayControls();
 
+function resizeCanvasToViewport() {
+	var viewport = getViewportSize();
+	var nextWidth = Math.max(1, Math.round(viewport.width || 0));
+	var nextHeight = Math.max(1, Math.round(viewport.height || 0));
+
+	if (!nextWidth || !nextHeight) {
+		return false;
+	}
+
+	if (canvas.width === nextWidth && canvas.height === nextHeight) {
+		return false;
+	}
+
+	var currentCenter = screenToWorld(canvas.width / 2, canvas.height / 2);
+
+	canvas.width = nextWidth;
+	canvas.height = nextHeight;
+
+	var clampedPan = clampPanToWorkpiece(
+		canvas.width / 2 - currentCenter.x * zoomLevel,
+		canvas.height / 2 - currentCenter.y * zoomLevel
+	);
+	panX = clampedPan.panX;
+	panY = clampedPan.panY;
+	markGeometryCacheDirty();
+
+	return true;
+}
+
+function queueCanvasResizeSync() {
+	if (pendingCanvasResizeFrame !== null) {
+		return;
+	}
+
+	pendingCanvasResizeFrame = requestAnimationFrame(function () {
+		pendingCanvasResizeFrame = null;
+		if (resizeCanvasToViewport()) {
+			// Keep the canvas repaint in the same frame as the bitmap resize to
+			// avoid a visible blank flash while the sidebar is being dragged.
+			staticDirty = true;
+			simulationDirty = true;
+			redrawCore();
+			setDirty();
+		}
+	});
+}
+
+function initializeCanvasResizeObserver() {
+	if (!window.ResizeObserver || canvasResizeObserver || !canvas || !canvas.parentElement) {
+		return;
+	}
+
+	canvasResizeObserver = new ResizeObserver(function () {
+		queueCanvasResizeSync();
+	});
+
+	canvasResizeObserver.observe(canvas.parentElement);
+}
+
+function updateCanvasCenter() {
+	resizeCanvasToViewport();
+}
+
+window.updateCanvasCenter = updateCanvasCenter;
+
+initializeCanvasResizeObserver();
+
 // Calculate dynamic center based on viewport dimensions and coordinate system
 function getCanvasCenter() {
-
-	canvas.width = $('#canvas').parent()[0].clientWidth;
-	canvas.height = $('#canvas').parent()[0].clientHeight;
+	resizeCanvasToViewport();
 
 	return {
 		x: canvas.width / 2,
@@ -501,6 +598,7 @@ function drawNorms(norms) {
 		drawLine(norm, normLineColor);
 	}
 }
+
 
 function drawScreenPolyline(screenPath, color, lineWidth) {
 	if (!screenPath || !screenPath.points || !screenPath.points.length) {
@@ -768,17 +866,29 @@ function drawOrigin() {
 	ctx.fillStyle = originMarkerColor;
 	ctx.fillText("0", o.x + 2, o.y - 2);
 }
+
 // Core rendering function (does actual drawing)
 function redrawCore() {
 	if (!canvas.width || !canvas.height) return;
 
-	// Recreate static canvas if it doesn't exist or canvas was resized
+	// Recreate render layers if they don't exist or canvas was resized.
 	if (!staticCanvas || staticCanvas.width !== canvas.width || staticCanvas.height !== canvas.height) {
 		staticCanvas = document.createElement('canvas');
 		staticCanvas.width = canvas.width;
 		staticCanvas.height = canvas.height;
 		staticCtx = staticCanvas.getContext('2d');
 		staticDirty = true;
+	}
+
+	if (!simulationCanvas || simulationCanvas.width !== canvas.width || simulationCanvas.height !== canvas.height) {
+		simulationCanvas = document.createElement('canvas');
+		simulationCanvas.width = canvas.width;
+		simulationCanvas.height = canvas.height;
+		simulationCtx = simulationCanvas.getContext('2d');
+		simulationDirty = true;
+	}
+
+	if (staticDirty) {
 		markGeometryCacheDirty();
 	}
 
@@ -797,22 +907,36 @@ function redrawCore() {
 
 		if (getOption("showWorkpiece"))
 			drawWorkpiece();
-		if (getOption("showGrid") && !(typeof simulation2D !== 'undefined' && (simulation2D.isRunning || simulation2D.isPaused)))
+		if (getOption("showGrid") && !isSimulationStaticModeActive())
 			drawGrid();
 		if (getOption("showOrigin"))
 			drawOrigin();
 		drawToolPaths();
 		drawSvgPaths();
 		if (typeof window.drawSTLHeightMap === 'function') window.drawSTLHeightMap(ctx);
-		if (typeof simulation2D !== 'undefined' && simulation2D.precomputedPoints && simulation2D.precomputedPoints.length > 0)
-			drawMaterialRemovalCircles();
 
 		ctx = mainCtx;
 		staticDirty = false;
 	}
 
-	// Blit static layer then draw dynamic operation overlay
+	if (simulationDirty && simulationCtx) {
+		simulationCtx.clearRect(0, 0, simulationCanvas.width, simulationCanvas.height);
+
+		if (isSimulationLayerVisible()) {
+			var mainCtx = ctx;
+			ctx = simulationCtx;
+			drawMaterialRemovalCircles();
+			ctx = mainCtx;
+		}
+
+		simulationDirty = false;
+	}
+
+	// Compose static + simulation layers, then draw live interaction overlay.
 	ctx.drawImage(staticCanvas, 0, 0);
+	if (simulationCanvas) {
+		ctx.drawImage(simulationCanvas, 0, 0);
+	}
 	cncController.draw();
 	drawMinimap();
 }
@@ -820,6 +944,7 @@ function redrawCore() {
 // Full redraw — marks static layer dirty and queues a frame
 function redraw() {
 	staticDirty = true;
+	simulationDirty = true;
 	setDirty();
 }
 
@@ -919,7 +1044,7 @@ function drawReferenceImage(path, borderColor) {
 
 function drawSvgPaths() {
 	const currentOperation = window.cncController && window.cncController.operationManager
-		? window.cncController.operationManager.currentOperation
+		? window.cncController.operationManager.getCurrentOperation()
 		: null;
 	const isSelectOperation = currentOperation && currentOperation.name === 'Select';
 	const showHoverHighlight = !!currentOperation;

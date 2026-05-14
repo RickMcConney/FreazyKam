@@ -111,6 +111,7 @@ class QuadtreeVoxelGrid {
     this.leaves = [];
     this.voxelTopZ = null;
     this.voxelHeightChanged = new Set();
+    this.pendingMatrixUpdates = new Set();
     this.mesh = null;
 
 
@@ -375,7 +376,8 @@ class QuadtreeVoxelGrid {
   removeVoxelsAtToolPosition(
     toolX, toolY, toolZ,
     toolRadius, toolRadiusSq,
-    toolType = 'End Mill', vbitTangent = null
+    toolType = 'End Mill', vbitTangent = null,
+    deferVisualUpdate = false
   ) {
     let penetrationFn;
     switch (toolType) {
@@ -393,11 +395,28 @@ class QuadtreeVoxelGrid {
     this._queryCircle(this.root, toolX, toolY, toolRadius, toolRadiusSq, penetrationFn, updated);
 
     if (updated.length > 0) {
+      if (deferVisualUpdate) {
+        for (const index of updated) {
+          this.pendingMatrixUpdates.add(index);
+        }
+      } else {
       this._updateMatrices(updated);
       this._updateColors();
+      }
     }
 
     return updated;
+  }
+
+  flushVisualUpdates() {
+    if (!this.mesh) return;
+
+    if (this.pendingMatrixUpdates.size > 0) {
+      this._updateMatrices(Array.from(this.pendingMatrixUpdates));
+      this.pendingMatrixUpdates.clear();
+    }
+
+    this._updateColors();
   }
 
   // ── Quadtree range query ───────────────────────────────────────────────────
@@ -421,8 +440,15 @@ class QuadtreeVoxelGrid {
   }
 
   // Public aliases used by 3dView.js after batch seek operations
-  updateVoxelColors() { this._updateColors(); }
-  updateInstanceMatrices() { if (this.mesh) this.mesh.instanceMatrix.needsUpdate = true; }
+  updateVoxelColors()     { this._updateColors(); }
+  updateInstanceMatrices() {
+    if (this.pendingMatrixUpdates.size > 0) {
+      this._updateMatrices(Array.from(this.pendingMatrixUpdates));
+      this.pendingMatrixUpdates.clear();
+      return;
+    }
+    if (this.mesh) this.mesh.instanceMatrix.needsUpdate = true;
+  }
 
   // ── Matrix & colour updates ────────────────────────────────────────────────
 
@@ -463,6 +489,7 @@ class QuadtreeVoxelGrid {
   reset() {
     this.voxelTopZ.fill(0);
     this.voxelHeightChanged.clear();
+    this.pendingMatrixUpdates.clear();
     this._seedMatrices();
     this._resetColors();
   }
@@ -496,6 +523,7 @@ class QuadtreeVoxelGrid {
     }
     this.voxelTopZ = null;
     this.voxelHeightChanged.clear();
+    this.pendingMatrixUpdates.clear();
     this.leaves = [];
     this.root = null;
   }

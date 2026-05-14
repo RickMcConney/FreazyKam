@@ -78,7 +78,7 @@ const CONFIG = {
   // Control panel
   CONTROL_PANEL_OPACITY: 0.8,
   ANIMATION_SPEED_MIN: 1,
-  ANIMATION_SPEED_MAX: 10,
+  ANIMATION_SPEED_MAX: 50,
 
   // G-code defaults
   DEFAULT_FEED_RATE: 1000,
@@ -2329,8 +2329,7 @@ class ToolpathAnimation {
       if (this.voxelGrid) {
         this.voxelGrid.reset();
         this.voxelMaterialRemover.reset();
-        this.voxelGrid.updateVoxelColors();
-        this.voxelGrid.updateInstanceMatrices();
+        this.voxelGrid.flushVisualUpdates();
       }
       this.currentMovementIndex = 0;
       this._syncGcodeLineNumber();
@@ -2354,7 +2353,7 @@ class ToolpathAnimation {
   }
 
   setSpeed(speed) {
-    this.speed = Math.max(1, Math.min(10, speed));
+    this.speed = Math.max(CONFIG.ANIMATION_SPEED_MIN, Math.min(CONFIG.ANIMATION_SPEED_MAX, speed));
   }
 
   /**
@@ -2410,8 +2409,7 @@ class ToolpathAnimation {
 
     // Batch update GPU
     if (this.voxelGrid) {
-      this.voxelGrid.updateVoxelColors();
-      this.voxelGrid.updateInstanceMatrices();
+      this.voxelGrid.flushVisualUpdates();
     }
   }
 
@@ -2478,8 +2476,7 @@ class ToolpathAnimation {
 
     // Batch update GPU: commit all material removal calculations in one render batch
     if (this.voxelGrid) {
-      this.voxelGrid.updateVoxelColors();
-      this.voxelGrid.updateInstanceMatrices();
+      this.voxelGrid.flushVisualUpdates();
     }
   }
 
@@ -2585,7 +2582,11 @@ class ToolpathAnimation {
         this._syncGcodeLineNumber();
 
         const finalMovement = this.movementTiming[this.currentMovementIndex];
-        this.updateToolPositionAtCoordinates(finalMovement.x, finalMovement.y, finalMovement.z, finalMovement.isG1, finalMovement.gcodeLineNumber);
+        this.updateToolPositionAtCoordinates(finalMovement.x, finalMovement.y, finalMovement.z, false, finalMovement.gcodeLineNumber);
+
+        if (this.voxelGrid) {
+          this.voxelGrid.flushVisualUpdates();
+        }
 
         this.pause();
         this.updateStatus();
@@ -2620,8 +2621,13 @@ class ToolpathAnimation {
     const toolZ = prevPos.z + (currentMovement.z - prevPos.z) * t;
     this.currentFeedRate = currentMovement.feedRate || 0;
 
-    // Update tool position and remove material at interpolated location
-    this.updateToolPositionAtCoordinates(toolX, toolY, toolZ, currentMovement.isG1 || false, this.currentGcodeLineNumber);
+    // Keep progressive removal on the in-flight segment, but skip the exact terminal point
+    // because completed segments are already handled by removeAlongPath above.
+    this.updateToolPositionAtCoordinates(toolX, toolY, toolZ, currentMovement.isG1 && t < 0.999, this.currentGcodeLineNumber);
+
+    if (this.voxelGrid) {
+      this.voxelGrid.flushVisualUpdates();
+    }
 
     // Sync gcode viewer - now cheap thanks to virtualized DOM (only ~50 elements rendered)
     if (typeof gcodeView !== 'undefined' && gcodeView) {

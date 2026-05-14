@@ -317,7 +317,11 @@ function setDirty() {
 // Immediate redraw (for special cases like simulation)
 function redrawImmediate() {
   if (typeof redrawCore === 'function') {
-    staticDirty = true;
+    if (typeof markSimulationLayerDirty === 'function') {
+      markSimulationLayerDirty();
+    } else {
+      staticDirty = true;
+    }
     redrawCore();
   }
 }

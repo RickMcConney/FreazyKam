@@ -20,7 +20,7 @@ function create2DSimulationControls() {
 
             <div class="col-auto d-flex align-items-center gap-2">
                 <span class="small">Speed:</span>
-                <input type="range" class="form-range form-range-sm" id="simulation-speed" min="1" max="10" step="0.5" value="5" style="width: 60px;">
+                <input type="range" class="form-range form-range-sm" id="simulation-speed" min="1" max="50" step="0.5" value="5" style="width: 60px;">
                 <span id="speed-display" class="small">5x</span>
             </div>
 
@@ -103,7 +103,7 @@ function create3DSimulationControls() {
 
             <div class="col-auto d-flex align-items-center gap-2">
                 <span class="small">Speed:</span>
-                <input type="range" class="form-range form-range-sm" id="3d-simulation-speed" min="1" max="10" step="0.5" value="4" style="width: 60px;">
+                <input type="range" class="form-range form-range-sm" id="3d-simulation-speed" min="1" max="50" step="0.5" value="4" style="width: 60px;">
                 <span id="3d-speed-display" class="small">4x</span>
             </div>
 
