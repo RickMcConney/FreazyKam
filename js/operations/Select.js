@@ -359,6 +359,16 @@ class Select extends Operation {
                 return;
             }
 
+            const isMachiningOperationActive = currentOperationName
+                && window.toolPathProperties?.hasOperation(currentOperationName)
+                && !evt.shiftKey;
+
+            // When editing/applying a machining operation, a plain click on another
+            // shape should retarget the operation instead of accumulating selection.
+            if (path && isMachiningOperationActive && (!this.isSelected(path) || Select.selected.size > 1)) {
+                this.unselectAll();
+            }
+
             this.toggleSelection(path, evt);
         }
 
