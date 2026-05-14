@@ -110,9 +110,20 @@ class ToolPathProperties {
         return { ...base, ...(overrides[operationName] || {}) };
     }
 
+    _usesWorkpieceDepthDefault(operationName) {
+        return ['Drill', 'Profile', 'Pocket', 'VCarve', 'Inlay', '3dProfile'].includes(operationName);
+    }
+
     getDefaults(operationName) {
+        const currentDefaults = this._operationDefaults(operationName);
         const saved = PropertiesManager.loadSaved(operationName);
-        return { ...this._operationDefaults(operationName), ...saved };
+        const defaults = { ...currentDefaults, ...saved };
+
+        if (this._usesWorkpieceDepthDefault(operationName)) {
+            defaults.depth = currentDefaults.depth;
+        }
+
+        return defaults;
     }
 
     saveDefaults(operationName, values) {
