@@ -432,6 +432,7 @@ function generatePocketToolpaths(payload) {
 			paths: allPaths,
 			name: 'Pocket',
 			operation: 'Pocket',
+			displayOperation: 'Pocket',
 			svgId: null,
 			svgIds: selectedSvgIds
 		});

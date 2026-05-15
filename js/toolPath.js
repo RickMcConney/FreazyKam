@@ -355,13 +355,13 @@ function pushToolPath(paths, name, operation, svgId = null, svgIds = null, label
 	if (window.toolpathUpdateTargets && window.toolpathUpdateTargets.length > 0) {
 		const existing = window.toolpathUpdateTargets.shift();
 		existing.paths = paths;
-		existing.operation = operation;
+		existing.operation = window.currentToolpathDescriptor?.displayOperation || operation;
 		existing.tool = { ...currentTool };
 		existing.svgId = svgId || (svgIds && svgIds.length > 0 ? svgIds[0] : null);
 		existing.svgIds = svgIds;
 		if (window.currentToolpathProperties) {
-			existing.toolpathProperties = { ...window.currentToolpathProperties };
-			setToolpathLabel(existing, window.currentToolpathProperties.toolpathName);
+			existing.toolpathProperties = sanitizeToolpathProperties(window.currentToolpathProperties) || {};
+			setToolpathLabel(existing, getToolpathPropertyName(window.currentToolpathProperties));
 		}
 		// Caller-provided label overrides auto-generated default
 		setToolpathLabel(existing, label);
@@ -374,7 +374,7 @@ function pushToolPath(paths, name, operation, svgId = null, svgIds = null, label
 		id: "T" + toolpathId,
 		paths: paths,
 		visible: true,
-		operation: operation,
+		operation: window.currentToolpathDescriptor?.displayOperation || operation,
 		name: name,
 		tool: { ...currentTool },
 		svgId: svgId || (svgIds && svgIds.length > 0 ? svgIds[0] : null),  // Backward compatibility
@@ -383,8 +383,8 @@ function pushToolPath(paths, name, operation, svgId = null, svgIds = null, label
 
 	// If toolpath properties were set (from the new properties panel), store them
 	if (window.currentToolpathProperties) {
-		toolpathData.toolpathProperties = { ...window.currentToolpathProperties };
-		setToolpathLabel(toolpathData, window.currentToolpathProperties.toolpathName);
+		toolpathData.toolpathProperties = sanitizeToolpathProperties(window.currentToolpathProperties) || {};
+		setToolpathLabel(toolpathData, getToolpathPropertyName(window.currentToolpathProperties));
 	}
 
 	// Caller-provided label overrides the auto-generated default name
@@ -549,11 +549,11 @@ function startDrillGeneration(requests) {
 
 		const result = event.data.result || { toolpaths: [], createdCount: 0 };
 		for (let i = 0; i < result.toolpaths.length && i < pendingToolpaths.length; i++) {
-			const generated = result.toolpaths[i];
-			const pendingToolpath = pendingToolpaths[i];
-			pendingToolpath.paths = generated.paths;
-			pendingToolpath.operation = generated.operation;
-			pendingToolpath.name = generated.name;
+		const generated = result.toolpaths[i];
+		const pendingToolpath = pendingToolpaths[i];
+		pendingToolpath.paths = generated.paths;
+		pendingToolpath.operation = generated.displayOperation || generated.operation;
+		pendingToolpath.name = generated.name;
 			pendingToolpath.svgId = generated.svgId;
 			pendingToolpath.svgIds = generated.svgIds;
 			pendingToolpath.pending = false;

@@ -6,6 +6,40 @@ class Pen extends Curve {
         this.tooltip = 'Draw straight-line paths. Click to add corner points. Click near the first point to close, or press Escape to finish.';
         this.displayName = 'Pen';
         this.alwaysCorner = true;
+
+        const baseKeydownHandler = this.keydownHandler;
+        this.keydownHandler = (evt) => {
+            const previousEditPathId = this.editPath?.id || null;
+            baseKeydownHandler(evt);
+            this.syncEditPopup(previousEditPathId);
+        };
+    }
+
+    syncEditPopup(previousEditPathId = null) {
+        const currentEditPathId = this.editPath?.id || null;
+        if (currentEditPathId === previousEditPathId) return;
+
+        if (this.editPath && typeof showPathPropertiesEditor === 'function') {
+            showPathPropertiesEditor(this.editPath);
+            return;
+        }
+
+        if (typeof hideFloatingPropertiesPopup === 'function') {
+            hideFloatingPropertiesPopup();
+        }
+    }
+
+    onMouseDown(canvas, evt) {
+        const previousEditPathId = this.editPath?.id || null;
+        super.onMouseDown(canvas, evt);
+        this.syncEditPopup(previousEditPathId);
+    }
+
+    stop() {
+        super.stop();
+        if (typeof hideFloatingPropertiesPopup === 'function') {
+            hideFloatingPropertiesPopup();
+        }
     }
 
     getPropertiesHTML() {

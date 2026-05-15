@@ -14,9 +14,9 @@ class TabEditor extends Select {
         this.tabHandleSize = 8;
 
         this.fields = {
-            tabLength:    { key: 'tabLength',    label: 'Tab Length',     type: 'dimension', default: 5, help: 'Length of each tab along the path' },
-            tabHeight:    { key: 'tabHeight',    label: 'Tab Height',     type: 'dimension', default: 2, help: 'Height of each tab (material left uncut)' },
-            numberOfTabs: { key: 'numberOfTabs', label: 'Number of Tabs', type: 'number',    default: 4, min: 1, step: 1, integer: true }
+            tabLength:    { key: 'tabLength',    label: 'Length',     type: 'dimension', default: 5 },
+            tabHeight:    { key: 'tabHeight',    label: 'Height',     type: 'dimension', default: 2 },
+            numberOfTabs: { key: 'numberOfTabs', label: 'Quantity', type: 'number',    default: 4, min: 1, step: 1, integer: true }
         };
 
         // Default properties for new tabs
@@ -194,6 +194,10 @@ class TabEditor extends Select {
             tabs[tabIndex].y = closestPt.y;
             tabs[tabIndex].pathDistance = closestPt.pathDistance;
             tabs[tabIndex].angle = closestPt.angle;
+            tabs[tabIndex].edgeIndex = closestPt.segmentIndex;
+            tabs[tabIndex].positionFraction = closestPt.positionFraction;
+            tabs[tabIndex].edgeP1 = closestPt.edgeP1;
+            tabs[tabIndex].edgeP2 = closestPt.edgeP2;
 
             // Recalculate convexity at the new segment
             const i = closestPt.segmentIndex;
@@ -242,7 +246,10 @@ class TabEditor extends Select {
                     y: closestPt.y,
                     angle: segmentAngle,
                     pathDistance: cumulativeDistance + segmentLength * Math.max(0, Math.min(1, t)),
-                    segmentIndex: i
+                    segmentIndex: i,
+                    positionFraction: Math.max(0, Math.min(1, t)),
+                    edgeP1: { x: segStart.x, y: segStart.y },
+                    edgeP2: { x: segEnd.x, y: segEnd.y }
                 };
             }
 
@@ -554,18 +561,7 @@ class TabEditor extends Select {
             </button>
             <button class="btn btn-danger btn-sm w-100 mb-2" id="removeAllTabsBtn">
                 <i data-lucide="trash-2"></i> Remove All Tabs
-            </button>
-            <div class="alert alert-secondary">
-                <i data-lucide="info"></i>
-                <small>
-                    <strong>Tab Editor:</strong><br>
-                    • <strong>Generate Tabs:</strong> Creates tabs evenly spaced around selected path<br>
-                    • <strong>Drag</strong> tab handles to reposition along path<br>
-                    • <strong>Hover + Delete</strong> key to remove a tab<br>
-                    • <strong>Remove All Tabs:</strong> Clears all tabs from selected path<br>
-                    • Blue tabs = convex surface, Orange tabs = concave surface
-                </small>
-            </div>`;
+            </button>`;
     }
 
     updateFromProperties(data) {

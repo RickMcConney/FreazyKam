@@ -121,6 +121,52 @@ function normalizeToolpathName(value) {
 	return typeof value === 'string' ? value.trim() : '';
 }
 
+function getToolpathPropertyName(properties) {
+	if (!properties || typeof properties !== 'object') return '';
+	return normalizeToolpathName(properties.name ?? properties.toolpathName);
+}
+
+function sanitizeToolpathProperties(properties) {
+	if (!properties || typeof properties !== 'object') return null;
+
+	const normalizedName = getToolpathPropertyName(properties);
+	const numericTool = Number(properties.tool ?? properties.toolId);
+	const numericDepth = Number(properties.depth);
+	const numericCutDepth = Number(properties.cutDepth);
+	const numericExtraDepth = Number(properties.extraDepth);
+	const sanitized = {};
+
+	if (normalizedName) {
+		sanitized.name = normalizedName;
+	}
+
+	if (Number.isFinite(numericTool) && numericTool > 0) {
+		sanitized.tool = numericTool;
+	}
+
+	if (Number.isFinite(numericDepth) && numericDepth >= 0) {
+		sanitized.depth = numericDepth;
+	}
+
+	if (typeof properties.operationType === 'string' && properties.operationType.trim()) {
+		sanitized.operationType = properties.operationType.trim();
+	}
+
+	if (typeof properties.operation === 'string' && properties.operation.trim()) {
+		sanitized.operation = properties.operation.trim();
+	}
+
+	if (Number.isFinite(numericCutDepth) && numericCutDepth >= 0) {
+		sanitized.cutDepth = numericCutDepth;
+	}
+
+	if (Number.isFinite(numericExtraDepth) && numericExtraDepth >= 0) {
+		sanitized.extraDepth = numericExtraDepth;
+	}
+
+	return Object.keys(sanitized).length > 0 ? sanitized : null;
+}
+
 function setToolpathLabel(toolpath, value) {
 	const normalized = normalizeToolpathName(value);
 	if (!toolpath) return normalized;
@@ -232,7 +278,10 @@ function closestPath(pt, clear) {
 	if (clear) {
 		for (var i = 0; i < svgpaths.length; i++) svgpaths[i].highlight = false;
 	}
-	var found = findClosestPath(pt);
+	var found = Select.getInstance().pointInPath(pt);
+	if (!found) {
+		found = findClosestPath(pt);
+	}
 	if (found) {
 		found.highlight = true;
 	}

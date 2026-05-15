@@ -11,13 +11,11 @@ class CncController {
     // Register all operations
     let select = Select.getInstance();
     this.operationManager.registerOperation(select);
-    this.operationManager.registerOperation(new Shape(null, null, 'Create basic shapes (circle, rectangle, polygon, star, etc.)'));
+    this.operationManager.registerOperation(new Shape(null, null, 'Create basic shapes (square, circle, triangle, star, half circle, right triangle)'));
     AVAILABLE_SHAPES.forEach(shape => {
       this.operationManager.registerOperation(new Shape(shape.value, shape.icon, shape.tooltip));
     });
     this.operationManager.registerOperation(new Text());
-    this.operationManager.registerOperation(new Pen());
-    this.operationManager.registerOperation(new Curve());
     this.operationManager.registerOperation(new Transform());
     this.operationManager.registerOperation(new PathEdit());
     this.operationManager.registerOperation(new BooleanOpp());
@@ -88,7 +86,9 @@ class CncController {
       }
 
       const isShapeTool = (window.SHAPE_TOOL_NAMES || []).includes(clickedPath.creationTool);
-      if (clickedPath.creationTool === 'Text' || clickedPath.creationTool === 'Shape' || isShapeTool || clickedPath.creationTool === 'Offset' || clickedPath.creationTool === 'Pattern' || clickedPath.creationTool === 'Curve' || clickedPath.creationTool === 'Pen') {
+      if (clickedPath.creationTool === 'Text' || clickedPath.creationTool === 'Shape' || isShapeTool || clickedPath.creationTool === 'Offset' || clickedPath.creationTool === 'Pattern') {
+        selectMgr.unselectAll();
+        selectMgr.selectPath(clickedPath);
         handlePathClick(clickedPath.id);
         evt.preventDefault();
       }

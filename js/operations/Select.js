@@ -201,11 +201,47 @@ class Select extends Operation {
         return this._minSegDistSq(pt, svgpath.path) < t * t;
     }
 
+    hasClosedHitArea(svgpath) {
+        if (!svgpath || svgpath.type === 'image' || !Array.isArray(svgpath.path) || svgpath.path.length < 3) {
+            return false;
+        }
+
+        if (svgpath.closed === true) {
+            return true;
+        }
+
+        const first = svgpath.path[0];
+        const last = svgpath.path[svgpath.path.length - 1];
+        if (first && last && first.x === last.x && first.y === last.y) {
+            return true;
+        }
+
+        return svgpath.creationTool === 'Shape'
+            || (window.SHAPE_TOOL_NAMES || []).includes(svgpath.creationTool);
+    }
+
+    isInsideClosedPath(pt, svgpath) {
+        if (!this.hasClosedHitArea(svgpath)) {
+            return false;
+        }
+
+        const path = svgpath.path;
+        const first = path[0];
+        const last = path[path.length - 1];
+        const closedPath = (first && last && first.x === last.x && first.y === last.y)
+            ? path
+            : [...path, { x: first.x, y: first.y }];
+
+        return pointInPolygon(pt, closedPath);
+    }
+
     pointInPath(pt) {
         const bboxMargin = SELECT_TOLERANCE_PX / zoomLevel;
         const thresholdSq = bboxMargin * bboxMargin;
         let bestPath = null;
         let bestDist = Infinity;
+        let bestInsidePath = null;
+        let bestInsideArea = Infinity;
 
         for (let i = 0; i < svgpaths.length; i++) {
             if (!svgpaths[i].visible) continue;
@@ -220,10 +256,32 @@ class Select extends Operation {
                 }
                 continue;
             }
+
+            if (this.isInsideClosedPath(pt, svgpaths[i])) {
+                const bboxArea = Math.abs((bbox.maxx - bbox.minx) * (bbox.maxy - bbox.miny));
+                if (bboxArea < bestInsideArea) {
+                    bestInsideArea = bboxArea;
+                    bestInsidePath = svgpaths[i];
+                }
+                continue;
+            }
+
             const dist = this._minSegDistSq(pt, svgpaths[i].path);
             if (dist < bestDist) { bestDist = dist; bestPath = svgpaths[i]; }
         }
+        if (bestInsidePath) {
+            return bestInsidePath;
+        }
+
         return bestDist < thresholdSq ? bestPath : null;
+    }
+
+    isPathLocked(path) {
+        if (!path) return false;
+        return path.locked === true
+            || path.locked === 'true'
+            || path.creationProperties?.properties?.lockObject === true
+            || path.creationProperties?.properties?.lockObject === 'true';
     }
 
     updateSelectBox(mouse, evt, canvas) {
@@ -275,13 +333,20 @@ class Select extends Operation {
         this.dragPath = this.potentialDragPath || closestPath(mouse, false);
 
         if (this.dragPath) {
-            if (selectMgr.isSelected(this.dragPath) || selectMgr.noSelection()) {
+            const isShapePath = this.dragPath.creationTool === 'Shape' || (window.SHAPE_TOOL_NAMES || []).includes(this.dragPath.creationTool);
+            if (this.isPathLocked(this.dragPath)) {
+                Select.state = Select.SELECTING;
+                this.updateSelectBox(mouse, evt, canvas);
+            } else if (!isShapePath && (selectMgr.isSelected(this.dragPath) || selectMgr.noSelection())) {
                 Select.state = Select.DRAGGING;
                 this.dragStartX = mouse.x;
                 this.dragStartY = mouse.y;
                 this.dragStartXWorld = rawMouse.x;
                 this.dragStartYWorld = rawMouse.y;
                 addUndo(false, true, false);
+            } else if (isShapePath) {
+                Select.state = Select.SELECTING;
+                this.updateSelectBox(mouse, evt, canvas);
             }
         } else {
             Select.state = Select.SELECTING;
@@ -337,6 +402,7 @@ class Select extends Operation {
         var mouse = this.normalizeEvent(canvas, evt);
         const mouseHit = this.normalizeEventWorld(canvas, evt);
         const wasDragging = Select.state == Select.DRAGGING;
+        let editorTargetPath = null;
         const floatingPopup = document.getElementById('floating-properties-popup');
         const floatingWindow = document.getElementById('floating-properties-window');
         const isFloatingPopupOpen = floatingPopup
@@ -370,6 +436,12 @@ class Select extends Operation {
             }
 
             this.toggleSelection(path, evt);
+
+            const isShapePath = path && path.creationProperties
+                && (path.creationTool === 'Shape' || (window.SHAPE_TOOL_NAMES || []).includes(path.creationTool));
+            if (isShapePath && !evt.shiftKey) {
+                editorTargetPath = path;
+            }
         }
 
         // Handle selection box (from SELECTING state)
@@ -393,6 +465,11 @@ class Select extends Operation {
 
         // Return to IDLE state
         Select.state = Select.IDLE;
+
+        if (editorTargetPath && typeof openPathEditor === 'function') {
+            openPathEditor(editorTargetPath);
+            return;
+        }
 
         this.showSelection();
     }
@@ -419,7 +496,8 @@ class Select extends Operation {
 
         if (pathToShow) {
             const currentOp = window.cncController.operationManager.currentOperation.name;
-            if (isOnDrawTab && currentOp !== 'Move' && currentOp !== 'Boolean' && currentOp !== 'Offset' && currentOp !== 'Pattern') {
+            const isShapePath = pathToShow.creationTool === 'Shape' || (window.SHAPE_TOOL_NAMES || []).includes(pathToShow.creationTool);
+            if (isOnDrawTab && !isShapePath && currentOp !== 'Move' && currentOp !== 'Boolean' && currentOp !== 'Offset' && currentOp !== 'Pattern') {
                 doMove();
             } else if (isOnOperationsTab) {
                 this.doOperation();

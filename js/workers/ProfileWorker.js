@@ -81,10 +81,14 @@ function generateProfileToolpaths(payload) {
 			: buildProfileCutPaths(srcPath, config);
 
 		if (generatedPaths.length > 0) {
+			var displayOperation = config.mode === 'inside'
+				? 'Inside'
+				: (config.mode === 'outside' ? 'Outside' : 'Center');
 			toolpaths.push({
 				paths: generatedPaths,
 				name: config.name,
 				operation: 'Profile',
+				displayOperation: displayOperation,
 				svgId: item.id,
 				svgIds: [item.id]
 			});

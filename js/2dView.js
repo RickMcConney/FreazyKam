@@ -63,15 +63,11 @@ var staticDirty = true;
 var simulationCanvas = null;
 var simulationCtx = null;
 var simulationDirty = true;
-var minimapCanvas = document.getElementById('canvas-minimap');
-var minimapCtx = minimapCanvas ? minimapCanvas.getContext('2d') : null;
+var previewCompositeCanvas = null;
+var previewCompositeCtx = null;
 var unitToggleElement = document.getElementById('canvas-unit-toggle');
 var canvasResizeObserver = null;
 var pendingCanvasResizeFrame = null;
-var minimapState = {
-	isDragging: false,
-	pointerId: null
-};
 var geometryCacheDirty = true;
 
 function markGeometryCacheDirty() {
@@ -303,187 +299,7 @@ function fitWorkpieceInView() {
 	centerWorkpiece();
 }
 
-function handleCenterView() {
-	centerWorkpiece();
-	redraw();
-}
-
-function handleMinimapDoubleClick(evt) {
-	if (!minimapCanvas) return;
-	handleCenterView();
-	evt.preventDefault();
-}
-
-function getMinimapMetrics() {
-	if (!minimapCanvas) return null;
-
-	var workpieceWidth = getOption("workpieceWidth") * viewScale;
-	var workpieceLength = getOption("workpieceLength") * viewScale;
-	var viewportTopLeft = screenToWorld(0, 0);
-	var viewportBottomRight = screenToWorld(canvas.width, canvas.height);
-	var visibleWidth = viewportBottomRight.x - viewportTopLeft.x;
-	var visibleHeight = viewportBottomRight.y - viewportTopLeft.y;
-	var contentMinX = Math.min(0, viewportTopLeft.x);
-	var contentMinY = Math.min(0, viewportTopLeft.y);
-	var contentMaxX = Math.max(workpieceWidth, viewportBottomRight.x);
-	var contentMaxY = Math.max(workpieceLength, viewportBottomRight.y);
-	var contentWidth = Math.max(workpieceWidth, contentMaxX - contentMinX, visibleWidth);
-	var contentHeight = Math.max(workpieceLength, contentMaxY - contentMinY, visibleHeight);
-	var padding = 10;
-	var drawableWidth = minimapCanvas.width - padding * 2;
-	var drawableHeight = minimapCanvas.height - padding * 2;
-	var scale = Math.min(drawableWidth / contentWidth, drawableHeight / contentHeight);
-	var drawWidth = contentWidth * scale;
-	var drawHeight = contentHeight * scale;
-	var offsetX = (minimapCanvas.width - drawWidth) / 2;
-	var offsetY = (minimapCanvas.height - drawHeight) / 2;
-
-	return {
-		workpieceWidth: workpieceWidth,
-		workpieceLength: workpieceLength,
-		contentMinX: contentMinX,
-		contentMinY: contentMinY,
-		contentMaxX: contentMaxX,
-		contentMaxY: contentMaxY,
-		contentWidth: contentWidth,
-		contentHeight: contentHeight,
-		viewportTopLeft: viewportTopLeft,
-		viewportBottomRight: viewportBottomRight,
-		scale: scale,
-		offsetX: offsetX,
-		offsetY: offsetY,
-		drawWidth: drawWidth,
-		drawHeight: drawHeight
-	};
-}
-
-function updateViewFromMinimapPointer(evt) {
-	if (!minimapCanvas) return;
-
-	var metrics = getMinimapMetrics();
-	if (!metrics) return;
-
-	var rect = minimapCanvas.getBoundingClientRect();
-	var localX = evt.clientX - rect.left;
-	var localY = evt.clientY - rect.top;
-	var worldX = metrics.contentMinX + (localX - metrics.offsetX) / metrics.scale;
-	var worldY = metrics.contentMinY + (localY - metrics.offsetY) / metrics.scale;
-
-	worldX = Math.max(metrics.contentMinX, Math.min(metrics.contentMaxX, worldX));
-	worldY = Math.max(metrics.contentMinY, Math.min(metrics.contentMaxY, worldY));
-
-	var clampedPan = clampPanToWorkpiece(canvas.width / 2 - worldX * zoomLevel, canvas.height / 2 - worldY * zoomLevel);
-	panX = clampedPan.panX;
-	panY = clampedPan.panY;
-	redraw();
-}
-
-function handleMinimapPointerDown(evt) {
-	if (!minimapCanvas) return;
-
-	minimapState.isDragging = true;
-	minimapState.pointerId = evt.pointerId;
-	minimapCanvas.classList.add('dragging');
-	minimapCanvas.setPointerCapture(evt.pointerId);
-	updateViewFromMinimapPointer(evt);
-	evt.preventDefault();
-}
-
-function handleMinimapPointerMove(evt) {
-	if (!minimapState.isDragging) return;
-	if (minimapState.pointerId !== null && evt.pointerId !== minimapState.pointerId) return;
-
-	updateViewFromMinimapPointer(evt);
-	evt.preventDefault();
-}
-
-function handleMinimapPointerUp(evt) {
-	if (!minimapCanvas) return;
-	if (minimapState.pointerId !== null && evt.pointerId !== minimapState.pointerId) return;
-
-	minimapState.isDragging = false;
-	minimapState.pointerId = null;
-	minimapCanvas.classList.remove('dragging');
-	if (minimapCanvas.hasPointerCapture(evt.pointerId)) {
-		minimapCanvas.releasePointerCapture(evt.pointerId);
-	}
-	evt.preventDefault();
-}
-
-function drawMinimap() {
-	if (!minimapCanvas || !minimapCtx) return;
-
-	var metrics = getMinimapMetrics();
-	if (!metrics) return;
-
-	minimapCtx.clearRect(0, 0, minimapCanvas.width, minimapCanvas.height);
-	minimapCtx.fillStyle = 'rgba(255, 255, 255, 0.96)';
-	minimapCtx.fillRect(0, 0, minimapCanvas.width, minimapCanvas.height);
-
-	var workpieceX = metrics.offsetX + (0 - metrics.contentMinX) * metrics.scale;
-	var workpieceY = metrics.offsetY + (0 - metrics.contentMinY) * metrics.scale;
-	var workpieceDrawWidth = metrics.workpieceWidth * metrics.scale;
-	var workpieceDrawHeight = metrics.workpieceLength * metrics.scale;
-
-	minimapCtx.fillStyle = getOption("showWorkpiece") ? workpieceColor : '#f3f3f3';
-	minimapCtx.strokeStyle = workpieceBorderColor;
-	minimapCtx.lineWidth = 1;
-	minimapCtx.fillRect(workpieceX, workpieceY, workpieceDrawWidth, workpieceDrawHeight);
-	minimapCtx.strokeRect(workpieceX, workpieceY, workpieceDrawWidth, workpieceDrawHeight);
-
-	if (svgpaths && svgpaths.length) {
-		minimapCtx.save();
-		minimapCtx.beginPath();
-		minimapCtx.rect(metrics.offsetX, metrics.offsetY, metrics.drawWidth, metrics.drawHeight);
-		minimapCtx.clip();
-		minimapCtx.translate(metrics.offsetX - metrics.contentMinX * metrics.scale, metrics.offsetY - metrics.contentMinY * metrics.scale);
-		minimapCtx.scale(metrics.scale, metrics.scale);
-		minimapCtx.lineJoin = 'round';
-		minimapCtx.lineCap = 'round';
-
-		for (var i = 0; i < svgpaths.length; i++) {
-			var path = svgpaths[i];
-			if (!path.visible || path.type === 'image' || !path.path || !path.path.length) continue;
-
-			minimapCtx.beginPath();
-			minimapCtx.moveTo(path.path[0].x, path.path[0].y);
-			for (var j = 1; j < path.path.length; j++) {
-				minimapCtx.lineTo(path.path[j].x, path.path[j].y);
-			}
-			minimapCtx.strokeStyle = selectMgr.isSelected(path) ? activeColor : lineColor;
-			minimapCtx.lineWidth = Math.max(1 / metrics.scale, 0.75);
-			minimapCtx.stroke();
-		}
-		minimapCtx.restore();
-	}
-
-	var viewportX = metrics.offsetX + (metrics.viewportTopLeft.x - metrics.contentMinX) * metrics.scale;
-	var viewportY = metrics.offsetY + (metrics.viewportTopLeft.y - metrics.contentMinY) * metrics.scale;
-	var viewportWidth = (metrics.viewportBottomRight.x - metrics.viewportTopLeft.x) * metrics.scale;
-	var viewportHeight = (metrics.viewportBottomRight.y - metrics.viewportTopLeft.y) * metrics.scale;
-
-	var clampedX = Math.max(metrics.offsetX, Math.min(metrics.offsetX + metrics.drawWidth, viewportX));
-	var clampedY = Math.max(metrics.offsetY, Math.min(metrics.offsetY + metrics.drawHeight, viewportY));
-	var clampedWidth = Math.max(8, Math.min(metrics.offsetX + metrics.drawWidth - clampedX, viewportWidth));
-	var clampedHeight = Math.max(8, Math.min(metrics.offsetY + metrics.drawHeight - clampedY, viewportHeight));
-
-	minimapCtx.fillStyle = 'rgba(13, 110, 253, 0.14)';
-	minimapCtx.strokeStyle = 'rgba(13, 110, 253, 0.9)';
-	minimapCtx.lineWidth = 1.5;
-	minimapCtx.fillRect(clampedX, clampedY, clampedWidth, clampedHeight);
-	minimapCtx.strokeRect(clampedX, clampedY, clampedWidth, clampedHeight);
-}
-
 function initializeCanvasOverlayControls() {
-	if (minimapCanvas && minimapCanvas.dataset.initialized !== 'true') {
-		minimapCanvas.addEventListener('pointerdown', handleMinimapPointerDown);
-		minimapCanvas.addEventListener('pointermove', handleMinimapPointerMove);
-		minimapCanvas.addEventListener('pointerup', handleMinimapPointerUp);
-		minimapCanvas.addEventListener('pointercancel', handleMinimapPointerUp);
-		minimapCanvas.addEventListener('dblclick', handleMinimapDoubleClick);
-		minimapCanvas.dataset.initialized = 'true';
-	}
-
 	if (unitToggleElement && unitToggleElement.dataset.initialized !== 'true') {
 		unitToggleElement.addEventListener('click', function(evt) {
 			var button = evt.target.closest('.canvas-unit-toggle-button');
@@ -630,25 +446,65 @@ function drawScreenPolyline(screenPath, color, lineWidth) {
 		return;
 	}
 
-	ctx.beginPath();
-	ctx.lineCap = 'round';
-	ctx.lineJoin = 'round';
-	if (screenPath.isMultiSegment) {
-		for (var i = 0; i < points.length; i += 2) {
-			ctx.moveTo(points[i].x, points[i].y);
-			if (i + 1 < points.length) {
-				ctx.lineTo(points[i + 1].x, points[i + 1].y);
-			}
-		}
-	} else {
-		ctx.moveTo(points[0].x, points[0].y);
-		for (var j = 1; j < points.length; j++) {
-			ctx.lineTo(points[j].x, points[j].y);
-		}
+	if (!traceScreenPath(screenPath)) {
+		return;
 	}
+
 	ctx.lineWidth = lineWidth;
 	ctx.strokeStyle = color;
 	ctx.stroke();
+}
+
+function traceScreenPath(screenPath, targetCtx) {
+	targetCtx = targetCtx || ctx;
+
+	if (!screenPath || !screenPath.points || !screenPath.points.length) {
+		return false;
+	}
+
+	var points = screenPath.points;
+
+	targetCtx.beginPath();
+	targetCtx.lineCap = 'round';
+	targetCtx.lineJoin = 'round';
+	if (screenPath.isMultiSegment) {
+		for (var i = 0; i < points.length; i += 2) {
+			targetCtx.moveTo(points[i].x, points[i].y);
+			if (i + 1 < points.length) {
+				targetCtx.lineTo(points[i + 1].x, points[i + 1].y);
+			}
+		}
+	} else {
+		targetCtx.moveTo(points[0].x, points[0].y);
+		for (var j = 1; j < points.length; j++) {
+			targetCtx.lineTo(points[j].x, points[j].y);
+		}
+	}
+
+	return true;
+}
+
+function traceClosedScreenPath(screenPath, targetCtx) {
+	targetCtx = targetCtx || ctx;
+
+	if (!traceScreenPath(screenPath, targetCtx)) {
+		return false;
+	}
+
+	targetCtx.closePath();
+	return true;
+}
+
+function getPreviewCompositeContext() {
+	if (!previewCompositeCanvas || previewCompositeCanvas.width !== canvas.width || previewCompositeCanvas.height !== canvas.height) {
+		previewCompositeCanvas = document.createElement('canvas');
+		previewCompositeCanvas.width = canvas.width;
+		previewCompositeCanvas.height = canvas.height;
+		previewCompositeCtx = previewCompositeCanvas.getContext('2d');
+	}
+
+	previewCompositeCtx.clearRect(0, 0, previewCompositeCanvas.width, previewCompositeCanvas.height);
+	return previewCompositeCtx;
 }
 
 function drawPolyline(path, color, lineWidth, isMultiSegment) {
@@ -657,9 +513,141 @@ function drawPolyline(path, color, lineWidth, isMultiSegment) {
 
 function drawSvgPath(svgpath, color, lineWidth) {
 	updatePathScreenCache(svgpath);
+	if (svgpath.highlight && Select.getInstance().hasClosedHitArea(svgpath)) {
+		var screenPath = svgpath._screenCache;
+		if (screenPath && traceClosedScreenPath(screenPath)) {
+			ctx.save();
+			ctx.fillStyle = 'rgba(255, 0, 0, 0.12)';
+			ctx.fill();
+			ctx.restore();
+		}
+	}
 	drawScreenPolyline(svgpath._screenCache, color, lineWidth);
 	if (svgpath.creationProperties && svgpath.creationProperties.tabs && svgpath.creationProperties.tabs.length > 0) {
 		drawPathTabs(svgpath);
+	}
+}
+
+function getToolpathShadeColor(depth) {
+	var maxDepth = (typeof getOption === 'function' ? Number(getOption('workpieceThickness')) : 19) || 19;
+	var ratio = Math.min(Math.max((Number(depth) || 0) / maxDepth, 0), 1);
+	var channel = Math.round(235 * (1 - ratio));
+	return 'rgb(' + channel + ', ' + channel + ', ' + channel + ')';
+}
+
+function getToolpathCutPreviewMode(toolpath) {
+	var operationType = toolpath && toolpath.toolpathProperties ? toolpath.toolpathProperties.operationType : null;
+	if (operationType === 'pocket' || operationType === 'inside' || operationType === 'outside' || operationType === 'center') {
+		return operationType;
+	}
+
+	if (!toolpath) return 'pocket';
+	if (toolpath.operation === 'Pocket') return 'pocket';
+	if (toolpath.operation === 'Inside' || toolpath.operation === 'VCarve In') return 'inside';
+	if (toolpath.operation === 'Outside' || toolpath.operation === 'VCarve Out') return 'outside';
+	if (toolpath.tool && (toolpath.tool.inside === 'inside' || toolpath.tool.inside === 'outside' || toolpath.tool.inside === 'center')) {
+		return toolpath.tool.inside;
+	}
+
+	return 'pocket';
+}
+
+function drawToolpathShapePreview(svgpath, toolpath) {
+	if (!svgpath || svgpath.type === 'image') return;
+
+	updatePathScreenCache(svgpath);
+	var screenPath = svgpath._screenCache;
+	if (!screenPath || !screenPath.points || !screenPath.points.length) return;
+
+	var mode = getToolpathCutPreviewMode(toolpath);
+	var color = getToolpathShadeColor(toolpath?.toolpathProperties?.depth ?? toolpath?.tool?.depth);
+	var toolDiameter = Number(toolpath?.tool?.diameter) || 0;
+	var strokeWidth = Math.max(4, toolDiameter * viewScale * zoomLevel);
+	var compositeCtx = null;
+
+	ctx.save();
+
+	if (mode === 'pocket' && svgpath.closed !== false && traceClosedScreenPath(screenPath)) {
+		ctx.fillStyle = color;
+		ctx.fill();
+		ctx.restore();
+		return;
+	}
+
+	if (mode === 'inside' || mode === 'outside') {
+		compositeCtx = getPreviewCompositeContext();
+
+		if (!traceClosedScreenPath(screenPath, compositeCtx)) {
+			ctx.restore();
+			return;
+		}
+
+		compositeCtx.strokeStyle = color;
+		compositeCtx.lineWidth = strokeWidth;
+		compositeCtx.stroke();
+
+		compositeCtx.globalCompositeOperation = mode === 'inside' ? 'destination-in' : 'destination-out';
+		compositeCtx.fillStyle = '#000000';
+		traceClosedScreenPath(screenPath, compositeCtx);
+		compositeCtx.fill();
+		compositeCtx.globalCompositeOperation = 'source-over';
+
+		ctx.drawImage(previewCompositeCanvas, 0, 0);
+		ctx.restore();
+		return;
+	}
+
+	if (!traceClosedScreenPath(screenPath)) {
+		ctx.restore();
+		return;
+	}
+
+	ctx.strokeStyle = color;
+	ctx.lineWidth = strokeWidth;
+	ctx.stroke();
+
+	ctx.restore();
+}
+
+function drawActiveToolpathShapePreviews() {
+	if (!Array.isArray(toolpaths) || toolpaths.length === 0) return;
+
+	for (var i = 0; i < toolpaths.length; i++) {
+		var toolpath = toolpaths[i];
+		if (!toolpath || !toolpath.active) continue;
+
+		var sourceIds = Array.isArray(toolpath.svgIds) && toolpath.svgIds.length > 0
+			? toolpath.svgIds
+			: (toolpath.svgId ? [toolpath.svgId] : []);
+
+		for (var j = 0; j < sourceIds.length; j++) {
+			var svgpath = svgpaths.find(function(path) {
+				return path.id === sourceIds[j];
+			});
+			if (svgpath) {
+				drawToolpathShapePreview(svgpath, toolpath);
+			}
+		}
+	}
+}
+
+function drawStoredShapeCutPreviews() {
+	if (!Array.isArray(svgpaths) || svgpaths.length === 0) return;
+
+	for (var i = 0; i < svgpaths.length; i++) {
+		var path = svgpaths[i];
+		if (!path || path.type === 'image' || !path.visible || !path.toolpathProperties) continue;
+
+		var tool = null;
+		if (window.toolPathProperties && typeof window.toolPathProperties.getToolById === 'function') {
+			tool = window.toolPathProperties.getToolById(path.toolpathProperties.tool);
+		}
+
+		drawToolpathShapePreview(path, {
+			operation: path.toolpathProperties.operation,
+			toolpathProperties: path.toolpathProperties,
+			tool: tool || { diameter: 0 }
+		});
 	}
 }
 
@@ -975,7 +963,6 @@ function redrawCore() {
 		ctx.drawImage(simulationCanvas, 0, 0);
 	}
 	cncController.draw();
-	drawMinimap();
 }
 
 // Full redraw — marks static layer dirty and queues a frame
@@ -1087,6 +1074,9 @@ function drawSvgPaths() {
 	const showHoverHighlight = !!currentOperation;
 	const hoverStrokeColor = isSelectOperation ? selectColor : highlightColor;
 
+	drawStoredShapeCutPreviews();
+	drawActiveToolpathShapePreviews();
+
 	for (var i = 0; i < svgpaths.length; i++) {
 		if (svgpaths[i].visible) {
 			let path = svgpaths[i];
@@ -1132,6 +1122,10 @@ function depthToBlue(depth) {
 function drawToolPaths() {
 	for (var i = 0; i < toolpaths.length; i++) {
 		if (toolpaths[i].visible) {
+			if (toolpaths[i].active) {
+				continue;
+			}
+
 			var paths = toolpaths[i].paths;
 			// Determine color: active > selected > depth-based blue
 			var isActive = toolpaths[i].active;

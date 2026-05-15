@@ -1194,8 +1194,8 @@ window.do3dProfile = function() {
         updateTarget.pending = true;
         updateTarget.pendingKey = pendingKey;
         if (window.currentToolpathProperties) {
-            updateTarget.toolpathProperties = { ...window.currentToolpathProperties };
-            setToolpathLabel(updateTarget, window.currentToolpathProperties.toolpathName);
+            updateTarget.toolpathProperties = sanitizeToolpathProperties(window.currentToolpathProperties) || {};
+            setToolpathLabel(updateTarget, getToolpathPropertyName(window.currentToolpathProperties));
         }
         pendingToolpaths.push(updateTarget);
     } else {
@@ -1255,7 +1255,7 @@ window.do3dProfile = function() {
             const generated = result.toolpaths[i];
             const pendingToolpath = pendingToolpaths[i];
             pendingToolpath.paths = generated.paths;
-            pendingToolpath.operation = generated.operation;
+            pendingToolpath.operation = generated.displayOperation || generated.operation;
             pendingToolpath.name = generated.name;
             pendingToolpath.svgId = generated.svgId;
             pendingToolpath.svgIds = generated.svgIds;

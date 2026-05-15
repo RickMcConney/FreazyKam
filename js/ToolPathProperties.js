@@ -1,322 +1,397 @@
 /**
- * ToolPathProperties
+ * Simplified toolpath property model.
  *
- * Single entry point for all toolpath operation UI. Uses PropertiesManager
- * for converted operations. Delegates to the legacy ToolpathPropertiesManager
- * for operations not yet converted — remove each delegation case as operations
- * are ported, then delete ToolpathPropertiesManager entirely.
- *
- * Adding a new operation:
- *   1. Add compatible bit types to _compatibleBits
- *   2. Add default values to _operationDefaults
- *   3. Add a _buildXxxFields() method
- *   4. Add an entry in _operationMeta
- *   That's it — HTML generation, field collection, and validation are all automatic.
+ * The floating popup now exposes only the minimal persisted fields required by
+ * operations (`tool`, `depth`, `operationType`). Advanced machining settings are edited
+ * separately via the Cut settings panel and resolved transiently when toolpaths
+ * are generated or updated.
  */
-
 class ToolPathProperties {
-
     constructor() {
+        this._advancedDefaults = {
+            direction: 'climb',
+            plunge: 'vertical',
+            strategy: 'adaptive'
+        };
+
+        this._operationMeta = {
+            Profile: {
+                label: 'Cut',
+                description: 'Cut the selected shape using the chosen path side.',
+                noToolMsg: 'Please add an End Mill, Ball Nose, or VBit in the tool library.',
+                defaultOperationType: 'pocket',
+                operationTypeOptions: [
+                    { value: 'pocket', label: 'Clear out a pocket' },
+                    { value: 'center', label: 'Cut on shape path' },
+                    { value: 'outside', label: 'Cut outside shape path' },
+                    { value: 'inside', label: 'Cut inside shape path' }
+                ],
+                compatibleBits: ['End Mill', 'Ball Nose', 'VBit']
+            },
+            Pocket: {
+                label: 'Cut',
+                description: 'Clear material inside the selected shape.',
+                noToolMsg: 'Please add an End Mill or Ball Nose in the tool library.',
+                defaultOperationType: 'pocket',
+                operationTypeOptions: [
+                    { value: 'pocket', label: 'Clear out a pocket' }
+                ],
+                compatibleBits: ['End Mill', 'Ball Nose']
+            },
+            Drill: {
+                label: 'Cut',
+                description: 'Drill the selected points or circles.',
+                noToolMsg: 'Please add a Drill or End Mill in the tool library.',
+                defaultOperationType: 'drill',
+                operationTypeOptions: [
+                    { value: 'drill', label: 'Cut on shape path' }
+                ],
+                compatibleBits: ['Drill', 'End Mill']
+            },
+            VCarve: {
+                label: 'Cut',
+                description: 'V-carve the selected shape.',
+                noToolMsg: 'Please add a VBit in the tool library.',
+                defaultOperationType: 'pocket',
+                operationTypeOptions: [
+                    { value: 'pocket', label: 'Clear out a pocket' },
+                    { value: 'inside', label: 'Cut inside shape path' },
+                    { value: 'outside', label: 'Cut outside shape path' },
+                    { value: 'center', label: 'Cut on shape path' }
+                ],
+                compatibleBits: ['VBit']
+            }
+        };
     }
 
-    // All toolpath operations — converted ones use PM, rest delegate to legacy manager
-    _compatibleBits = {
-        'Profile':   ['End Mill', 'Ball Nose', 'VBit'],
-        'Pocket':    ['End Mill', 'Ball Nose'],
-        'VCarve':    ['VBit'],
-        'Drill':     ['Drill', 'End Mill'],
-        'Surfacing': ['End Mill'],
-        '3dProfile': ['Ball Nose'],
-        'Inlay':     ['End Mill', 'Ball Nose'],
-    };
+    hasOperation(operationName) {
+        return operationName in this._operationMeta;
+    }
 
-    // Per-operation metadata drives HTML generation, field collection, and validation.
-    // buildFields: function that returns the fields array for PropertiesManager
-    // extraValidate: optional function(data, errors) for operation-specific rules
-    get _operationMeta() {
+    getMeta(operationName) {
+        return this._operationMeta[operationName] || null;
+    }
+
+    getCompatibleTools(operationName) {
+        const compatibleBits = this._operationMeta[operationName]?.compatibleBits || [];
+        return (window.tools || []).filter(tool => compatibleBits.includes(tool.bit));
+    }
+
+    getToolById(toolId) {
+        const numericId = Number(toolId);
+        return (window.tools || []).find(tool => Number(tool.recid) === numericId) || null;
+    }
+
+    _getWorkpieceThickness() {
+        return typeof getOption === 'function' ? Number(getOption('workpieceThickness')) || 10 : 10;
+    }
+
+    _getSafeDefaultToolId(operationName) {
+        const compatibleTools = this.getCompatibleTools(operationName);
+        return compatibleTools[0]?.recid ?? null;
+    }
+
+    getAdvancedDefaults(operationName) {
+        const compatibleToolId = this._getSafeDefaultToolId(operationName);
+        const saved = PropertiesManager.loadSaved(`${operationName}.cutSettings`);
         return {
-            'Profile': {
-                label:       'Profile',
-                description: 'Cut along the profile of the selected path',
-                noToolMsg:   'Please add an End Mill, Ball Nose, or VBit in the tool library.',
-                buttonLabel: 'Update Toolpath',
-                buildFields: (d) => this._buildProfileFields(d),
-            },
-            'Pocket': {
-                label:       'Pocket',
-                description: 'Remove all material inside the path',
-                noToolMsg:   'Please add an End Mill or Ball Nose in the tool library.',
-                buttonLabel: 'Update Toolpath',
-                buildFields: (d) => this._buildPocketFields(d),
-            },
-            'VCarve': {
-                label:       'VCarve',
-                description: 'V-carve inside the path with tapered cuts',
-                noToolMsg:   'Please add a VBit in the tool library.',
-                buttonLabel: 'Update Toolpath',
-                buildFields: (d) => this._buildVCarveFields(d),
-            },
-            'Drill': {
-                label:       'Drill',
-                description: 'Drill holes at selected points or helical drill selected circles',
-                noToolMsg:   'Please add a Drill or End Mill in the tool library.',
-                buttonLabel: 'Update Toolpath',
-                buildFields: (d) => this._buildDrillFields(d),
-            },
-            '3dProfile': {
-                label:       '3D Profile',
-                description: 'Raster toolpath following STL surface with ball nose bit',
-                noToolMsg:   'Please add a Ball Nose in the tool library.',
-                buttonLabel: 'Generate 3D Profile',
-                buildFields: (d) => this._build3dProfileFields(d),
-            },
-            'Surfacing': {
-                label:       'Surfacing',
-                description: 'Surface the entire workpiece with parallel passes',
-                noToolMsg:   'Please add an End Mill in the tool library.',
-                buttonLabel: 'Apply Surfacing',
-                buildFields: (d) => this._buildSurfacingFields(d),
-            },
-            'Inlay': {
-                label:       'Inlay',
-                description: 'Create male plug or female socket for inlay work',
-                noToolMsg:   'Please add an End Mill or Ball Nose in the tool library.',
-                buttonLabel: 'Generate Inlay',
-                buildFields: (d) => this._buildInlayFields(d),
-                extraValidate(data, errors) {
-                    if (!data.finishingToolId) errors.push('Please select a finishing tool');
-                    if (data.clearance < 0)    errors.push('Clearance must be 0 or greater');
-                },
-            },
+            tool: compatibleToolId,
+            direction: this._advancedDefaults.direction,
+            plunge: this._advancedDefaults.plunge,
+            strategy: this._advancedDefaults.strategy,
+            ...saved,
+            tool: saved.tool ?? compatibleToolId
         };
-    }
-
-    // ── Defaults ──────────────────────────────────────────────────────────────
-
-    _operationDefaults(operationName) {
-        const thickness = typeof getOption === 'function' ? (getOption('workpieceThickness') || 10) : 10;
-        const base = {
-            toolId: null, depth: thickness, step: thickness * 0.25,
-            stepover: 25, angle: 0, inside: 'inside', direction: 'climb',
-            numLoops: 1, overCut: 0,
-        };
-        const overrides = {
-            'Pocket':    { strategy: 'adaptive' },
-            'Surfacing': { depth: 1, stepover: 75 },
-            '3dProfile': { stepover: 15, strategy: 'raster' },
-            'Inlay':     { inlayType: 'female', mirror: true, vcarveStrategy: 'profile',
-                           finishingToolId: null, clearance: 0.1, glueGap: 0.5, cutOut: false },
-        };
-        return { ...base, ...(overrides[operationName] || {}) };
-    }
-
-    _usesWorkpieceDepthDefault(operationName) {
-        return ['Drill', 'Profile', 'Pocket', 'VCarve', 'Inlay', '3dProfile'].includes(operationName);
     }
 
     getDefaults(operationName) {
-        const currentDefaults = this._operationDefaults(operationName);
+        const thickness = this._getWorkpieceThickness();
         const saved = PropertiesManager.loadSaved(operationName);
-        const defaults = { ...currentDefaults, ...saved };
+        const advanced = this.getAdvancedDefaults(operationName);
+        const savedOperationType = saved.operationType || (saved.operation === 'Pocket' ? 'pocket' : null);
+        const defaultOperationType = this._operationMeta[operationName]?.defaultOperationType
+            || this._operationMeta[operationName]?.operationTypeOptions?.[0]?.value
+            || 'center';
+        const defaults = {
+            depth: thickness,
+            extraDepth: 0,
+            operationType: savedOperationType || defaultOperationType,
+            ...saved,
+            tool: advanced.tool
+        };
 
-        if (this._usesWorkpieceDepthDefault(operationName)) {
-            defaults.depth = currentDefaults.depth;
-        }
-
+        defaults.depth = thickness;
         return defaults;
     }
 
     saveDefaults(operationName, values) {
+        const persisted = sanitizeToolpathProperties(values);
+        if (persisted) {
+            PropertiesManager.save(operationName, persisted, this.getFields(operationName));
+        }
+    }
+
+    saveAdvancedDefaults(operationName, values) {
+        PropertiesManager.save(`${operationName}.cutSettings`, values, this.getAdvancedFields(operationName));
+    }
+
+    getFields(operationName) {
+        const meta = this.getMeta(operationName);
         const defaults = this.getDefaults(operationName);
-        const fields = this._operationMeta[operationName]?.buildFields(defaults) ?? [];
-        PropertiesManager.save(operationName, values, fields);
+        return [
+            {
+                key: 'operationType',
+                label: 'Cut path',
+                type: 'choice',
+                default: defaults.operationType,
+                options: meta?.operationTypeOptions || []
+            },
+            {
+                key: 'depth',
+                label: 'Depth',
+                type: 'dimension',
+                default: defaults.depth,
+                min: 0,
+                max: this._getWorkpieceThickness()
+            },
+            {
+                key: 'extraDepth',
+                label: 'Extra depth',
+                type: 'dimension',
+                default: defaults.extraDepth,
+                min: 0
+            }
+        ];
     }
 
-    // ── Tool helpers ──────────────────────────────────────────────────────────
-
-    hasOperation(operationName) {
-        return operationName in this._compatibleBits;
-    }
-
-    getCompatibleTools(operationName) {
-        const bits = this._compatibleBits[operationName] || [];
-        return (window.tools || []).filter(t => bits.includes(t.bit));
-    }
-
-    getToolById(toolId) {
-        return (window.tools || []).find(t => t.recid === toolId) || null;
-    }
-
-    // ── Profile fields ────────────────────────────────────────────────────────
-
-    _buildProfileFields(defaults) {
-        const tools    = this.getCompatibleTools('Profile');
-        const toolOpts = tools.map(t => ({ value: t.recid, label: `${t.name} (${t.diameter}mm ${t.bit})` }));
+    getAdvancedFields(operationName) {
+        const defaults = this.getAdvancedDefaults(operationName);
+        const tools = this.getCompatibleTools(operationName);
+        const toolOptions = tools.map(tool => ({
+            value: tool.recid,
+            label: `${tool.name} (${tool.diameter}mm ${tool.bit})`
+        }));
 
         return [
-            { key: 'toolpathName', label: 'Name', persist: false,           type: 'text',      default: '', help: 'Leave empty to auto-name from the linked shape.' },
-            { key: 'toolId',       label: 'Tool',           type: 'choice',    default: tools[0]?.recid ?? null, options: toolOpts },
-            { key: 'inside',       label: 'Cutting Side',   type: 'choice',    default: defaults.inside,
-              options: [{ value: 'inside', label: 'Inside' }, { value: 'outside', label: 'Outside' }, { value: 'center', label: 'Center' }] },
-            { key: 'direction',    label: 'Direction',      type: 'choice',    default: defaults.direction,
-              options: [{ value: 'climb', label: 'Climb' }, { value: 'conventional', label: 'Conventional' }] },
-            { key: 'depth',        label: 'Depth',          type: 'dimension', default: defaults.depth,    help: 'Cutting depth' },
-            { key: 'step',         label: 'Step Down',      type: 'dimension', default: defaults.step,     help: 'Depth per pass' },
-            { key: 'numLoops',     label: 'Profile Loops',  type: 'number',    default: defaults.numLoops,
-              min: 1, step: 1, integer: true, help: 'Number of offset passes (1 = single pass)' },
-            { key: 'overCut',      label: 'Over/Under Cut', type: 'dimension', default: defaults.overCut,
-              help: '+ leaves stock, − cuts past the line' },
+            {
+                key: 'tool',
+                label: 'Tool',
+                type: 'choice',
+                default: defaults.tool,
+                options: toolOptions
+            },
+            {
+                key: 'direction',
+                label: 'Milling direction',
+                type: 'choice',
+                default: defaults.direction,
+                options: [
+                    { value: 'climb', label: 'Climb' },
+                    { value: 'conventional', label: 'Conventional' }
+                ]
+            },
+            {
+                key: 'plunge',
+                label: 'Plunge',
+                type: 'choice',
+                default: defaults.plunge,
+                options: [
+                    { value: 'vertical', label: 'Vertical' },
+                    { value: 'ramp-5', label: 'Ramp 5°' },
+                    { value: 'ramp-20', label: 'Ramp 20°' }
+                ]
+            },
+            {
+                key: 'strategy',
+                label: 'Fill method',
+                type: 'choice',
+                default: defaults.strategy,
+                options: [
+                    { value: 'adaptive', label: 'Adaptive' },
+                    { value: 'raster', label: 'Raster' },
+                    { value: 'contour', label: 'Contour' }
+                ]
+            }
         ];
     }
 
-    // ── Pocket fields ─────────────────────────────────────────────────────────
+    collectFormData(operationName) {
+        const values = PropertiesManager.collectValues(this.getFields(operationName));
+        const thickness = this._getWorkpieceThickness();
+        const baseDepth = Number(values.depth) || 0;
+        const extraDepth = Math.max(0, Number(values.extraDepth) || 0);
+        const resolvedDepth = Math.min(thickness, Math.max(0, baseDepth)) + extraDepth;
+        const operationType = values.operationType || this.getDefaults(operationName).operationType;
+        const resolvedOperationName = this._resolveOperationName(operationName, operationType);
+        const advanced = this.getAdvancedDefaults(resolvedOperationName);
 
-    _buildPocketFields(defaults) {
-        const tools    = this.getCompatibleTools('Pocket');
-        const toolOpts = tools.map(t => ({ value: t.recid, label: `${t.name} (${t.diameter}mm ${t.bit})` }));
-
-        return [
-            { key: 'toolpathName', label: 'Name', persist: false,          type: 'text',      default: '', help: 'Leave empty to auto-name from the linked shape.' },
-            { key: 'toolId',       label: 'Tool',          type: 'choice',    default: tools[0]?.recid ?? null, options: toolOpts },
-            { key: 'strategy',     label: 'Strategy',      type: 'choice',    default: defaults.strategy,
-              options: [{ value: 'adaptive', label: 'Adaptive' }, { value: 'raster', label: 'Raster' }, { value: 'contour', label: 'Contour' }],
-              help: 'Adaptive combines contour and raster for optimal clearing' },
-            { key: 'direction',    label: 'Direction',     type: 'choice',    default: defaults.direction,
-              options: [{ value: 'climb', label: 'Climb' }, { value: 'conventional', label: 'Conventional' }] },
-            { key: 'depth',        label: 'Depth',         type: 'dimension', default: defaults.depth,    help: 'Cutting depth' },
-            { key: 'step',         label: 'Step Down',     type: 'dimension', default: defaults.step,     help: 'Depth per pass' },
-            { key: 'stepover',     label: 'Stepover (%)',  type: 'number',    default: defaults.stepover,
-              min: 1, max: 100, step: 1, integer: true, help: 'Percentage of tool diameter to step over' },
-            { key: 'angle',        label: 'Infill Angle °', type: 'number',   default: defaults.angle,
-              min: 0, max: 180, step: 1, help: 'Angle of infill lines from horizontal (0–180°)' },
-        ];
+        return {
+            operation: resolvedOperationName,
+            tool: Number(advanced.tool) || null,
+            depth: resolvedDepth,
+            cutDepth: Math.min(thickness, Math.max(0, baseDepth)),
+            extraDepth,
+            operationType,
+            direction: advanced.direction,
+            plunge: advanced.plunge,
+            strategy: advanced.strategy,
+            inside: this._mapOperationTypeToInside(operationName, operationType),
+            toolId: Number(advanced.tool) || null,
+            angle: 0,
+            stepover: this.getToolById(advanced.tool)?.stepover ?? 25,
+            step: this.getToolById(advanced.tool)?.step ?? resolvedDepth,
+            numLoops: 1,
+            overCut: 0
+        };
     }
 
-    // ── VCarve fields ─────────────────────────────────────────────────────────
-
-    _buildVCarveFields(defaults) {
-        const tools    = this.getCompatibleTools('VCarve');
-        const toolOpts = tools.map(t => ({ value: t.recid, label: `${t.name} (${t.diameter}mm ${t.bit})` }));
-
-        return [
-            { key: 'toolpathName', label: 'Name', persist: false,           type: 'text',      default: '', help: 'Leave empty to auto-name from the linked shape.' },
-            { key: 'toolId',       label: 'Tool',           type: 'choice',    default: tools[0]?.recid ?? null, options: toolOpts },
-            { key: 'inside',       label: 'Cutting Side',   type: 'choice',    default: defaults.inside,
-              options: [{ value: 'inside', label: 'Inside' }, { value: 'outside', label: 'Outside' }, { value: 'center', label: 'Center' }] },
-            { key: 'depth',        label: 'Max Depth',      type: 'dimension', default: defaults.depth,   help: 'Maximum cutting depth' },
-            { key: 'overCut',      label: 'Over/Under Cut', type: 'dimension', default: defaults.overCut, help: '+ leaves stock, − cuts past the line' },
-        ];
+    collectAdvancedFormData(operationName) {
+        const values = PropertiesManager.collectValues(this.getAdvancedFields(operationName));
+        return {
+            tool: Number(values.tool) || null,
+            direction: values.direction || this._advancedDefaults.direction,
+            plunge: values.plunge || this._advancedDefaults.plunge,
+            strategy: values.strategy || this._advancedDefaults.strategy
+        };
     }
 
-    // ── Drill fields ──────────────────────────────────────────────────────────
-
-    _buildDrillFields(defaults) {
-        const tools    = this.getCompatibleTools('Drill');
-        const toolOpts = tools.map(t => ({ value: t.recid, label: `${t.name} (${t.diameter}mm ${t.bit})` }));
-
-        return [
-            { key: 'toolpathName', label: 'Name', persist: false,       type: 'text',      default: '', help: 'Leave empty to auto-name from the linked shape.' },
-            { key: 'toolId',       label: 'Tool',       type: 'choice',    default: tools[0]?.recid ?? null, options: toolOpts },
-            { key: 'depth',        label: 'Depth',      type: 'dimension', default: defaults.depth, help: 'Drilling depth' },
-            { key: 'step',         label: 'Step Down',  type: 'dimension', default: defaults.step,  help: 'Depth per pass (helical drill only)' },
-        ];
+    getDefaultShapeCutProperties(operationName = 'Profile') {
+        return sanitizeToolpathProperties(this.collectDefaultFormData(operationName, {
+            operationType: 'pocket'
+        }));
     }
 
-    // ── 3D Profile fields ─────────────────────────────────────────────────────
+    collectDefaultFormData(operationName, overrides = null) {
+        const defaults = this.getDefaults(operationName);
+        const thickness = this._getWorkpieceThickness();
+        const resolvedDefaults = {
+            ...defaults,
+            ...(overrides || {})
+        };
+        const baseDepth = Number(resolvedDefaults.depth) || 0;
+        const extraDepth = Math.max(0, Number(resolvedDefaults.extraDepth) || 0);
+        const resolvedDepth = Math.min(thickness, Math.max(0, baseDepth)) + extraDepth;
+        const operationType = resolvedDefaults.operationType || defaults.operationType || this.getDefaults(operationName).operationType;
+        const resolvedOperationName = this._resolveOperationName(operationName, operationType);
+        const advanced = this.getAdvancedDefaults(resolvedOperationName);
 
-    _build3dProfileFields(defaults) {
-        const tools    = this.getCompatibleTools('3dProfile');
-        const toolOpts = tools.map(t => ({ value: t.recid, label: `${t.name} (${t.diameter}mm ${t.bit})` }));
-
-        // Rest machining: unique Ball Nose diameters, largest first
-        const ballNoseDiameters = [...new Set((window.tools || [])
-            .filter(t => t.bit === 'Ball Nose').map(t => t.diameter))]
-            .sort((a, b) => b - a);
-        const restToolOpts = [
-            { value: 0, label: 'None (full cut from stock)' },
-            ...ballNoseDiameters.map(d => ({ value: d, label: `${d}mm Ball Nose` }))
-        ];
-
-        return [
-            { key: 'toolpathName',    label: 'Name',            type: 'text',    default: '', help: 'Leave empty to auto-name from the linked shape.' },
-            { key: 'strategy',        label: 'Strategy',        type: 'choice',  default: defaults.strategy,
-              options: [{ value: 'raster', label: 'Raster' }, { value: 'contour', label: 'Contour (Waterline)' }],
-              help: 'Raster for curved surfaces, Contour for vertical walls' },
-            { key: 'toolId',          label: 'Tool',            type: 'choice',  default: tools[0]?.recid ?? null, options: toolOpts },
-            { key: 'depth',           label: 'Max Depth',       type: 'dimension', default: defaults.depth,   help: 'Maximum cutting depth below surface' },
-            { key: 'step',            label: 'Step Down',       type: 'dimension', default: defaults.step,    help: 'Depth per pass' },
-            { key: 'stepover',        label: 'Stepover (%)',    type: 'number',  default: defaults.stepover,
-              min: 1, max: 100, step: 1, integer: true, help: 'Percentage of tool diameter to step over' },
-            { key: 'angle',           label: 'Infill Angle °',  type: 'number',  default: defaults.angle,
-              min: 0, max: 180, step: 1, help: 'Angle of raster lines from horizontal (0–180°)' },
-            { key: 'restToolDiameter',label: 'Previous Tool',   type: 'choice',  default: defaults.restToolDiameter ?? 0, options: restToolOpts,
-              help: 'Roughing tool used in a previous pass — skips air where that tool already cut' },
-        ];
+        return {
+            operation: resolvedOperationName,
+            tool: Number(advanced.tool) || null,
+            depth: resolvedDepth,
+            cutDepth: Math.min(thickness, Math.max(0, baseDepth)),
+            extraDepth,
+            operationType,
+            direction: advanced.direction,
+            plunge: advanced.plunge,
+            strategy: advanced.strategy,
+            inside: this._mapOperationTypeToInside(operationName, operationType),
+            toolId: Number(advanced.tool) || null,
+            angle: 0,
+            stepover: this.getToolById(advanced.tool)?.stepover ?? 25,
+            step: this.getToolById(advanced.tool)?.step ?? resolvedDepth,
+            numLoops: 1,
+            overCut: 0
+        };
     }
 
-    // ── Surfacing fields ──────────────────────────────────────────────────────
+    validateFormData(operationName, data) {
+        const errors = [];
+        const thickness = this._getWorkpieceThickness();
 
-    _buildSurfacingFields(defaults) {
-        const tools    = this.getCompatibleTools('Surfacing');
-        const toolOpts = tools.map(t => ({ value: t.recid, label: `${t.name} (${t.diameter}mm ${t.bit})` }));
+        if (!data.tool) {
+            errors.push('Please select a tool in Cut settings');
+        }
+        if (!Number.isFinite(data.depth) || data.depth <= 0) {
+            errors.push('Depth must be greater than 0');
+        }
+        if (!Number.isFinite(data.cutDepth) || data.cutDepth < 0 || data.cutDepth > thickness) {
+            errors.push('Cut depth must stay within the workpiece thickness');
+        }
+        if (!Number.isFinite(data.extraDepth) || data.extraDepth < 0) {
+            errors.push('Extra depth cannot be negative');
+        }
 
-        return [
-            { key: 'toolpathName', label: 'Name', persist: false,           type: 'text',    default: '' },
-            { key: 'toolId',       label: 'Tool',           type: 'choice',  default: tools[0]?.recid ?? null, options: toolOpts },
-            { key: 'depth',        label: 'Depth',          type: 'dimension', default: defaults.depth,    help: 'Cutting depth per pass' },
-            { key: 'stepover',     label: 'Stepover (%)',   type: 'number',  default: defaults.stepover,
-              min: 1, max: 100, step: 1, integer: true, help: 'Percentage of tool diameter to step over' },
-            { key: 'angle',        label: 'Infill Angle °', type: 'number',  default: defaults.angle,
-              min: 0, max: 180, step: 1, help: 'Angle of pass lines from horizontal (0–180°)' },
-        ];
+        return errors;
     }
 
-    // ── Inlay fields ──────────────────────────────────────────────────────────
-
-    _buildInlayFields(defaults) {
-        const pocketTools   = this.getCompatibleTools('Inlay');
-        const finishTools   = (window.tools || []).filter(t => ['End Mill', 'VBit', 'Ball Nose'].includes(t.bit));
-        const pocketOpts    = pocketTools.map(t => ({ value: t.recid, label: `${t.name} (${t.diameter}mm ${t.bit})` }));
-        const finishOpts    = finishTools.map(t => ({ value: t.recid, label: `${t.name} (${t.diameter}mm ${t.bit})` }));
-
-        return [
-            { key: 'toolpathName',   label: 'Name',              type: 'text',      default: '', help: 'Leave empty to auto-name from the linked shape.' },
-            { key: 'inlayType',      label: 'Inlay Type',        type: 'choice',    default: defaults.inlayType,
-              options: [{ value: 'female', label: 'Female Socket' }, { value: 'male', label: 'Male Plug' }],
-              help: 'Socket: pockets inside the path. Plug: pockets outside the path.' },
-            { key: 'mirror',         label: 'Mirror plug',       type: 'checkbox',  default: defaults.mirror,
-              help: 'Mirror the selected path horizontally before generating the male plug' },
-            { key: 'vcarveStrategy', label: 'V-Carve Strategy',  type: 'choice',    default: defaults.vcarveStrategy,
-              options: [{ value: 'profile', label: 'Profile' }, { value: 'center', label: 'Center (Medial Axis)' }],
-              help: 'Profile follows edges, Center uses medial axis (better for text/letters)' },
-            { key: 'toolId',         label: 'Pocketing Tool',    type: 'choice',    default: pocketTools[0]?.recid ?? null, options: pocketOpts },
-            { key: 'finishingToolId',label: 'Finishing Tool',    type: 'choice',    default: finishTools[0]?.recid ?? null, options: finishOpts,
-              help: 'Tool for the finishing profile pass (End Mill or V-Bit)' },
-            { key: 'depth',          label: 'Depth',             type: 'dimension', default: defaults.depth,    help: 'Cutting depth' },
-            { key: 'step',           label: 'Step Down',         type: 'dimension', default: defaults.step,     help: 'Depth per pass' },
-            { key: 'stepover',       label: 'Stepover (%)',      type: 'number',    default: defaults.stepover,
-              min: 1, max: 100, step: 1, integer: true, help: 'Percentage of tool diameter to step over' },
-            { key: 'clearance',      label: 'Clearance',         type: 'dimension', default: defaults.clearance, help: 'Gap between male and female parts for fit' },
-            { key: 'glueGap',        label: 'Glue Gap',          type: 'dimension', default: defaults.glueGap,   help: 'Vertical clearance between plug and socket bottom for glue (V-bit inlay)' },
-            { key: 'angle',          label: 'Infill Angle °',    type: 'number',    default: defaults.angle,
-              min: 0, max: 180, step: 1, help: 'Angle of infill lines from horizontal (0–180°)' },
-            { key: 'direction',      label: 'Direction',         type: 'choice',    default: defaults.direction,
-              options: [{ value: 'climb', label: 'Climb' }, { value: 'conventional', label: 'Conventional' }] },
-            { key: 'cutOut',         label: 'Cut out plug',      type: 'checkbox',  default: defaults.cutOut,
-              help: 'Profile around the plug at full material depth to separate it' },
-        ];
+    getOperationDescriptor(operationName, operationType) {
+        const normalizedType = operationType || this.getDefaults(operationName).operationType;
+        switch (this._resolveOperationName(operationName, normalizedType)) {
+            case 'Pocket':
+                return {
+                    executionOperation: 'Pocket',
+                    displayOperation: 'Pocket',
+                    sidebarLabel: 'Clear out a pocket',
+                    popupTitle: 'Pocket',
+                    icon: 'target'
+                };
+            case 'Drill':
+                return {
+                    executionOperation: 'Drill',
+                    displayOperation: 'Drill',
+                    sidebarLabel: 'Cut on shape path',
+                    popupTitle: 'Drill',
+                    icon: 'circle-plus'
+                };
+            case 'VCarve':
+                return {
+                    executionOperation: 'VCarve',
+                    displayOperation: 'VCarve',
+                    sidebarLabel: this._describeOperationType(normalizedType),
+                    popupTitle: this._describeOperationType(normalizedType),
+                    icon: 'star'
+                };
+            case 'Profile':
+            default:
+                return {
+                    executionOperation: 'Profile',
+                    displayOperation: this._mapProfileOperationTypeToDisplay(normalizedType),
+                    sidebarLabel: this._describeOperationType(normalizedType),
+                    popupTitle: this._describeOperationType(normalizedType),
+                    icon: 'circle'
+                };
+        }
     }
 
-    // ── HTML generation ───────────────────────────────────────────────────────
+    _mapOperationTypeToInside(operationName, operationType) {
+        const resolvedOperationName = this._resolveOperationName(operationName, operationType);
+        if (resolvedOperationName === 'Pocket') return 'inside';
+        if (resolvedOperationName === 'Drill') return 'center';
+        return operationType === 'outside' || operationType === 'inside' || operationType === 'center'
+            ? operationType
+            : 'center';
+    }
+
+    _mapProfileOperationTypeToDisplay(operationType) {
+        if (operationType === 'pocket') return 'Pocket';
+        if (operationType === 'inside') return 'Inside';
+        if (operationType === 'outside') return 'Outside';
+        return 'Center';
+    }
+
+    _resolveOperationName(operationName, operationType) {
+        if (operationType === 'pocket') return 'Pocket';
+        return operationName;
+    }
+
+    _describeOperationType(operationType) {
+        switch (operationType) {
+            case 'pocket': return 'Clear out a pocket';
+            case 'outside': return 'Cut outside shape path';
+            case 'inside': return 'Cut inside shape path';
+            case 'drill':
+            case 'center':
+            default:
+                return 'Cut on shape path';
+        }
+    }
 
     getPropertiesHTML(operationName, existingProperties = null, options = {}) {
-        const meta = this._operationMeta[operationName];
+        const meta = this.getMeta(operationName);
         if (!meta) return '<p class="text-danger">Unknown operation</p>';
 
-        const { showUpdateButton = true } = options;
-        const defaults = this.getDefaults(operationName);
-        const tools    = this.getCompatibleTools(operationName);
-
+        const tools = this.getCompatibleTools(operationName);
         if (tools.length === 0) {
             return `
                 <div class="alert alert-info mb-3">
@@ -325,70 +400,22 @@ class ToolPathProperties {
                 <p class="text-danger">No compatible tools available. ${meta.noToolMsg}</p>`;
         }
 
-        const fields = meta.buildFields(defaults);
-        const updateButtonHtml = showUpdateButton ? `
-            <div class="mb-3">
-                <button type="button" class="btn btn-primary btn-sm w-100" id="update-toolpath-button">
-                    <i data-lucide="refresh-cw"></i> ${meta.buttonLabel}
-                </button>
-            </div>` : '';
+        const defaults = this.getDefaults(operationName);
+        const values = {
+            ...defaults,
+            ...(existingProperties || {})
+        };
+
+        if (!values.operationType && existingProperties?.operation === 'Pocket') {
+            values.operationType = 'pocket';
+        }
 
         return `
             <div class="alert alert-info mb-3">
                 <strong>${meta.label}</strong><br>${meta.description}
             </div>
-            ${PropertiesManager.formHTML(fields, existingProperties, defaults)}
-            ${updateButtonHtml}`;
+            ${PropertiesManager.formHTML(this.getFields(operationName), values, defaults)}`;
     }
-
-    // ── Data collection ───────────────────────────────────────────────────────
-
-    collectFormData(operationName) {
-        const meta = this._operationMeta[operationName];
-        if (!meta) return {};
-
-        const defaults = this.getDefaults(operationName);
-        const fields   = meta.buildFields(defaults);
-        const data     = PropertiesManager.collectValues(fields);
-
-        // <select> returns a string from the DOM — convert tool IDs to int, diameters to float
-        if ('toolId' in data)           data.toolId           = parseInt(data.toolId)           || null;
-        if ('finishingToolId' in data)  data.finishingToolId  = parseInt(data.finishingToolId)  || null;
-        if ('restToolDiameter' in data) data.restToolDiameter = parseFloat(data.restToolDiameter) || 0;
-        return data;
-    }
-
-    // ── Validation ────────────────────────────────────────────────────────────
-
-    validateFormData(operationName, data) {
-        const meta   = this._operationMeta[operationName];
-        if (!meta) return [];
-
-        const errors  = [];
-        const defaults = this.getDefaults(operationName);
-        const fields   = meta.buildFields(defaults);
-        const keys     = new Set(fields.map(f => f.key));
-
-        if (keys.has('toolId') && !data.toolId)
-            errors.push('Please select a tool');
-        if (keys.has('depth') && (!data.depth || data.depth <= 0))
-            errors.push(`${operationName === 'VCarve' || operationName === '3dProfile' ? 'Max d' : 'D'}epth must be greater than 0`);
-        if (keys.has('step')) {
-            if (!data.step || data.step <= 0)
-                errors.push('Step down must be greater than 0');
-            else if (data.depth && data.step > data.depth)
-                errors.push('Step down cannot be greater than total depth');
-        }
-        if (keys.has('stepover') && (!data.stepover || data.stepover <= 0 || data.stepover > 100))
-            errors.push('Stepover must be between 1 and 100%');
-
-        meta.extraValidate?.(data, errors);
-        return errors;
-    }
-
-    // ══════════════════════════════════════════════════════════════════════════
-    // Post Processor (G-code Profile) properties
-    // ══════════════════════════════════════════════════════════════════════════
 
     _postProcessorFields() {
         return [
@@ -412,13 +439,12 @@ class ToolPathProperties {
             { key: 'useArcs',         label: 'Use Arc Commands',   type: 'checkbox', default: true,
               help: 'Detect arcs in toolpaths and output G2/G3 instead of many G1 segments' },
             { key: 'commentChar',     label: 'Comment Character',  type: 'text',     default: '(', maxlength: 1 },
-            { key: 'commentsEnabled', label: 'Enable Comments',    type: 'checkbox', default: true },
+            { key: 'commentsEnabled', label: 'Enable Comments',    type: 'checkbox', default: true }
         ];
     }
 
     getPostProcessorHTML(profile) {
-        const fields = this._postProcessorFields();
-        return PropertiesManager.formHTML(fields, profile, null);
+        return PropertiesManager.formHTML(this._postProcessorFields(), profile, null);
     }
 
     collectPostProcessorData() {

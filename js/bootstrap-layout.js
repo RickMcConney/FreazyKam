@@ -61,10 +61,6 @@ function importReferenceImage(dataUrl, filename) {
     img.src = dataUrl;
 }
 
-function setProjectName(name) {
-    const el = document.getElementById('project-name-display');
-    if (el) el.textContent = name || '';
-}
 // gcodeProfiles, currentGcodeProfile and the profile management functions
 // (load/save/initializeGcodeProfilesUI/populateGcodeProfileSelector/etc.)
 // extracted to js/bootstrap-layout/gcodeProfiles.js
@@ -305,6 +301,8 @@ fileInput.addEventListener('change', function (e) {
             var tab3D = document.getElementById('3d-tab');
             if (tab3D) {
                 tab3D.click();
+            } else if (typeof window.schedule3DViewRefresh === 'function') {
+                window.schedule3DViewRefresh({ preserveProgress: false, resetIfMissing: true, showLoading: true, force: true });
             }
         };
         reader.readAsText(file);
@@ -359,7 +357,6 @@ fileOpen.addEventListener('change', function (e) {
 
     var file = fileOpen.files[0];
     currentFileName = file.name.split('.').shift();
-    setProjectName(currentFileName);
 
     var reader = new FileReader();
     reader.onload = function (event) {
@@ -492,6 +489,13 @@ function removeBoundaryPaths(svgString) {
  */
 function collectOperationProperties(operation) {
     return PropertiesManager.collectValues(Object.values(operation?.fields ?? {}));
+}
+
+function getPropertyInputKey(input) {
+    if (!input) return null;
+    if (input.name) return input.name;
+    if (input.id && input.id.startsWith('pm-')) return input.id.slice(3);
+    return input.id || null;
 }
 
 /**
@@ -682,121 +686,12 @@ function initializeLayout() {
     createToolbar();
     createSidebar();
     cncController.operationManager.addOperations();
+    ensureMachiningOperationsInSidebar();
     createCanvasSidePanels();
     createModals();
     initializeGcodeView();
     lucide.createIcons();
     updateSnapButton();
-}
-
-function renderShapeToolsGroup() {
-    const drawToolsList = document.getElementById('draw-tools-list');
-    const shapeTools = [
-        ...(window.AVAILABLE_SHAPES || []),
-        { value: 'Pen', label: 'Pen', icon: 'pen-tool', tooltip: 'Draw straight-line paths. Click to add corner points. Click near the first point to close, or press Escape to finish.' },
-        { value: 'Curve', label: 'Curve', icon: 'spline', tooltip: 'Draw smooth Bezier curves. Click to add points, Alt+click for corners. Click near start to close, Escape to finish.' }
-    ];
-    if (!drawToolsList || shapeTools.length === 0) return;
-
-    const existingGroup = drawToolsList.querySelector('[data-shape-tools-group]');
-    if (existingGroup) existingGroup.remove();
-
-    const groupContainer = document.createElement('div');
-    groupContainer.dataset.shapeToolsGroup = 'true';
-    groupContainer.className = 'shape-tools-group mb-1';
-
-    const groupHeader = document.createElement('div');
-    groupHeader.className = 'sidebar-item fw-bold d-flex align-items-center justify-content-between';
-    groupHeader.dataset.shapeToolsToggle = 'true';
-    groupHeader.dataset.bsToggle = 'collapse';
-    groupHeader.dataset.bsTarget = '#shape-tools-collapse';
-    groupHeader.setAttribute('aria-expanded', 'false');
-    groupHeader.setAttribute('role', 'button');
-    groupHeader.title = 'Create basic shapes';
-    groupHeader.innerHTML = `
-        <span class="d-flex align-items-center gap-2">
-            <i data-lucide="pentagon"></i><span>Shape</span>
-        </span>
-        <i data-lucide="chevron-down" class="collapse-chevron"></i>`;
-
-    const collapseContainer = document.createElement('div');
-    collapseContainer.className = 'collapse';
-    collapseContainer.id = 'shape-tools-collapse';
-
-    shapeTools.forEach(shape => {
-        const item = document.createElement('div');
-        item.className = 'sidebar-item ms-4';
-        item.dataset.operation = shape.value;
-        item.dataset.shapeOperation = 'true';
-        item.dataset.bsToggle = 'tooltip';
-        item.dataset.bsPlacement = 'right';
-        item.title = shape.tooltip;
-        item.innerHTML = `<i data-lucide="${shape.icon}"></i><span>${shape.label}</span>`;
-        collapseContainer.appendChild(item);
-    });
-
-    groupContainer.appendChild(groupHeader);
-    groupContainer.appendChild(collapseContainer);
-
-    const insertBeforeNode = drawToolsList.querySelector('[data-operation="Text"]') || null;
-    drawToolsList.insertBefore(groupContainer, insertBeforeNode);
-    lucide.createIcons();
-}
-
-function renderModifyToolsGroup() {
-    const drawToolsList = document.getElementById('draw-tools-list');
-    const modifyTools = [
-        { value: 'Move', icon: 'move', label: 'Move', tooltip: 'Move, scale, and rotate selected objects' },
-        { value: 'Edit', icon: 'edit', label: 'Edit', tooltip: 'Edit individual points of a path (move, add, delete)' },
-        { value: 'Boolean', icon: 'squares-unite', label: 'Boolean', tooltip: 'Perform boolean operations (union, intersect, subtract) on selected paths' },
-        { value: 'Pattern', icon: 'grid-3x3', label: 'Pattern', tooltip: 'Create linear or circular arrays of selected paths' },
-        { value: 'Offset', icon: 'fullscreen', label: 'Offset', tooltip: 'Create an offset copy of selected paths (inward or outward)' }
-    ];
-    if (!drawToolsList) return;
-
-    const existingGroup = drawToolsList.querySelector('[data-modify-tools-group]');
-    if (existingGroup) existingGroup.remove();
-
-    const groupContainer = document.createElement('div');
-    groupContainer.dataset.modifyToolsGroup = 'true';
-    groupContainer.className = 'modify-tools-group mb-1';
-
-    const groupHeader = document.createElement('div');
-    groupHeader.className = 'sidebar-item fw-bold d-flex align-items-center justify-content-between';
-    groupHeader.dataset.modifyToolsToggle = 'true';
-    groupHeader.dataset.bsToggle = 'collapse';
-    groupHeader.dataset.bsTarget = '#modify-tools-collapse';
-    groupHeader.setAttribute('aria-expanded', 'false');
-    groupHeader.setAttribute('role', 'button');
-    groupHeader.title = 'Modify existing paths';
-    groupHeader.innerHTML = `
-        <span class="d-flex align-items-center gap-2">
-            <i data-lucide="wand-sparkles"></i><span>Modify</span>
-        </span>
-        <i data-lucide="chevron-down" class="collapse-chevron"></i>`;
-
-    const collapseContainer = document.createElement('div');
-    collapseContainer.className = 'collapse';
-    collapseContainer.id = 'modify-tools-collapse';
-
-    modifyTools.forEach(tool => {
-        const item = document.createElement('div');
-        item.className = 'sidebar-item ms-4';
-        item.dataset.operation = tool.value;
-        item.dataset.modifyOperation = 'true';
-        item.dataset.bsToggle = 'tooltip';
-        item.dataset.bsPlacement = 'right';
-        item.title = tool.tooltip;
-        item.innerHTML = `<i data-lucide="${tool.icon}"></i><span>${tool.label}</span>`;
-        collapseContainer.appendChild(item);
-    });
-
-    groupContainer.appendChild(groupHeader);
-    groupContainer.appendChild(collapseContainer);
-
-    const insertBeforeNode = drawToolsList.querySelector('[data-operation="Text"]') || null;
-    drawToolsList.insertBefore(groupContainer, insertBeforeNode);
-    lucide.createIcons();
 }
 
 // Toolbar creation
@@ -919,7 +814,6 @@ function createToolbar() {
                     tab.show();
                 }
                 currentFileName = "none";
-                setProjectName('');
                 window._importedGcode = null;
                 newProject();
                 const drawToolsTab = document.getElementById('draw-tools-tab');
@@ -992,28 +886,10 @@ function updateSidebarCompactMode() {
     const sidebar = document.getElementById('sidebar');
     if (!sidebar) return;
 
-    const width = parseInt(window.getComputedStyle(sidebar).width, 10) || sidebar.offsetWidth || 0;
-    const isIconOnly = width < 175;
-    const isTabsIconOnly = width >= 175 && width < 260;
+    sidebar.classList.add('is-icon-only');
+    sidebar.classList.remove('is-tabs-icon-only');
+    sidebar.style.width = '86px';
 
-    sidebar.classList.toggle('is-icon-only', isIconOnly);
-    sidebar.classList.toggle('is-tabs-icon-only', isTabsIconOnly);
-
-    const compactCollapses = [
-        { toggle: '[data-shape-tools-toggle]', target: '#shape-tools-collapse' },
-        { toggle: '[data-modify-tools-toggle]', target: '#modify-tools-collapse' }
-    ];
-
-    compactCollapses.forEach(({ toggle, target }) => {
-        const toggleNode = sidebar.querySelector(toggle);
-        const collapseNode = sidebar.querySelector(target);
-        if (!toggleNode || !collapseNode) return;
-
-        if (isIconOnly) {
-            collapseNode.classList.add('show');
-            toggleNode.setAttribute('aria-expanded', 'true');
-        }
-    });
 }
 
 function createSidebar() {
@@ -1023,9 +899,6 @@ function createSidebar() {
         <nav class="nav nav-tabs border-bottom flex-shrink-0" id="sidebar-tabs" role="tablist">
             <button class="nav-link active" id="draw-tools-tab" data-bs-toggle="tab" data-bs-target="#draw-tools" type="button" role="tab" title="Draw Tools" aria-label="Draw Tools">
                 <i data-lucide="drafting-compass"></i><span>Draw Tools</span>
-            </button>
-            <button class="nav-link" id="operations-tab" data-bs-toggle="tab" data-bs-target="#operations" type="button" role="tab" title="Operations" aria-label="Operations">
-                <i data-lucide="cog"></i><span>Operations</span>
             </button>
         </nav>
 
@@ -1037,63 +910,16 @@ function createSidebar() {
                     <!-- Draw Tools will be added dynamically -->
                 </div>
 
-                <!-- Tool Properties Editor (rendered inside floating popup) -->
-                <div id="tool-properties-editor" class="floating-properties-content p-3" style="display: none;">
-                    <!-- Properties form will be injected here -->
-                    <div id="tool-properties-form"></div>
-
-                    <!-- Help section -->
-                    <div class="mt-4">
-                        <h6 class="text-muted mb-2" style="font-weight: bold; margin-top:10px;">
-                            How to use
-                        </h6>
-                        <div id="tool-help-content" class="small text-muted mb-3">
-                            Select a tool to see instructions here.
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Operations Tab -->
-            <div class="tab-pane fade h-100" id="operations" role="tabpanel">
-                <div id="operations-list" class="p-3">
-                    <div class="sidebar-item" data-operation="Drill" data-bs-toggle="tooltip" data-bs-placement="right" title="Drill holes at selected points">
-                        <i data-lucide="circle-plus"></i><span>Drill</span>
-                    </div>
-                    <div class="sidebar-item" data-operation="Profile" data-bs-toggle="tooltip" data-bs-placement="right" title="Cut inside or outside the selected path">
-                        <i data-lucide="circle"></i><span>Profile</span>
-                    </div>
-
-                    <div class="sidebar-item" data-operation="Pocket" data-bs-toggle="tooltip" data-bs-placement="right" title="Remove material inside the path">
-                        <i data-lucide="target"></i><span>Pocket</span>
-                    </div>
-                    <div class="sidebar-item" data-operation="VCarve" data-bs-toggle="tooltip" data-bs-placement="right" title="V-carve inside or outside the path">
-                        <i data-lucide="star"></i><span>V-Carve</span>
-                    </div>
-                    <div class="sidebar-item" data-operation="Inlay" data-bs-toggle="tooltip" data-bs-placement="right" title="Create male plug or female socket for inlay work">
-                        <i data-lucide="inlay"></i><span>Inlay</span>
-                    </div>
-                    <div class="sidebar-item" data-operation="Surfacing" data-bs-toggle="tooltip" data-bs-placement="right" title="Surface the entire workpiece with parallel passes">
-                        <i data-lucide="align-justify"></i><span>Surfacing</span>
-                    </div>
-                    <div class="sidebar-item" data-operation="3dProfile" data-bs-toggle="tooltip" data-bs-placement="right" title="3D raster toolpath following STL surface with ball nose bit">
-                        <i data-lucide="mountain"></i><span>3D Profile</span>
-                    </div>
-                </div>
                 <!-- Operation Properties Editor (rendered inside floating popup) -->
                 <div id="operation-properties-editor" class="floating-properties-content p-3" style="display: none;">
                     <!-- Operation properties form will be injected here -->
                     <div id="operation-properties-form"></div>
+                </div>
 
-                    <!-- Help section -->
-                    <div class="mt-4">
-                        <h6 class="text-muted mb-2" style="font-weight: bold; margin-top:10px;">
-                            How to use
-                        </h6>
-                        <div id="operation-help-content" class="small text-muted mb-3">
-                            Select an operation to see instructions here.
-                        </div>
-                    </div>
+                <!-- Tool Properties Editor (rendered inside floating popup) -->
+                <div id="tool-properties-editor" class="floating-properties-content p-3" style="display: none;">
+                    <!-- Properties form will be injected here -->
+                    <div id="tool-properties-form"></div>
                 </div>
             </div>
         </div>
@@ -1152,7 +978,7 @@ function getToolpathDisplayName(toolpath) {
 }
 
 function getToolpathDepthLabel(toolpath) {
-    const depth = toolpath?.tool?.depth;
+    const depth = toolpath?.toolpathProperties?.depth ?? toolpath?.tool?.depth;
     if (typeof depth !== 'number' || !isFinite(depth)) return '';
     if (depth <= 0) return '';
     return formatDimension(depth, false);
@@ -1609,9 +1435,7 @@ function showReorderOperationsModal() {
 }
 
 function setupSidebarEventHandlers(sidebar) {
-    const eventRoots = [sidebar, document.getElementById('canvas-object-tree')].filter(Boolean);
-
-    eventRoots.forEach(eventRoot => eventRoot.addEventListener('click', function (e) {
+    sidebar.addEventListener('click', function (e) {
         const item = e.target.closest('.sidebar-item');
         const objectChevron = e.target.closest('.sidebar-object-chevron');
         const visibilityToggle = e.target.closest('.sidebar-visibility-toggle');
@@ -1653,7 +1477,12 @@ function setupSidebarEventHandlers(sidebar) {
         }
 
         if (operation) {
-            const isDrawTool = ['Select', 'Move', 'Edit', 'Pen', 'Curve', 'Shape', 'Boolean', 'Text', 'Tabs', 'Offset', 'Pattern', ...(window.SHAPE_TOOL_NAMES || [])].includes(operation);
+            const isDrawTool = ['Select', 'Move', 'Edit', 'Shape', 'Boolean', 'Tabs', 'Offset', 'Pattern', ...(window.SHAPE_TOOL_NAMES || [])].includes(operation);
+
+            if (item.dataset.autoCreateShape === 'true') {
+                createShapeAtCanvasCenter(operation);
+                return;
+            }
 
             if (isDrawTool) {
                 showToolPropertiesEditor(operation);
@@ -1672,9 +1501,9 @@ function setupSidebarEventHandlers(sidebar) {
         } else if (pathId) {
             handlePathClick(pathId);
         }
-    }));
+    });
 
-    eventRoots.forEach(eventRoot => eventRoot.addEventListener('contextmenu', function (e) {
+    sidebar.addEventListener('contextmenu', function (e) {
         const item = e.target.closest('.sidebar-item');
         if (!item) return;
 
@@ -1703,20 +1532,19 @@ function setupSidebarEventHandlers(sidebar) {
             e.preventDefault();
             showContextMenu(e, item.dataset.pathId);
         }
-    }));
+    });
 
-    eventRoots.forEach(eventRoot => eventRoot.addEventListener('dblclick', function (e) {
+    sidebar.addEventListener('dblclick', function (e) {
         const item = e.target.closest('#svg-paths-section .sidebar-toolpath-item[data-path-id]');
         if (!item) return;
         const pathId = item.dataset.pathId;
         const toolpath = toolpaths.find(tp => tp.id === pathId);
         if (toolpath) showToolpathPropertiesEditor(toolpath);
-    }));
+    });
 }
 
 function setupSidebarTabHandlers() {
     const drawToolsTab = document.getElementById('draw-tools-tab');
-    const operationsTab = document.getElementById('operations-tab');
 
     drawToolsTab.addEventListener('shown.bs.tab', function () {
         autoCloseToolProperties('tab switch to Draw Tools');
@@ -1728,36 +1556,26 @@ function setupSidebarTabHandlers() {
         }
     });
 
-    operationsTab.addEventListener('shown.bs.tab', function () {
-        autoCloseToolProperties('tab switch to Operations');
-        showBottomPanel();
-        const canvas2DView = document.getElementById('2d-view');
-        if (canvas2DView && canvas2DView.classList.contains('active')) {
-            const overlay2D = document.getElementById('simulation-overlay-2d');
-            if (overlay2D) overlay2D.classList.remove('d-none');
-        }
-    });
-
-    // Initialize panel visibility based on current active tab
-    const activeTab = document.querySelector('#sidebar-tabs .nav-link.active');
-    if (activeTab && activeTab.id === 'operations-tab') {
-        showBottomPanel();
-        const canvas2DView = document.getElementById('2d-view');
-        if (canvas2DView && canvas2DView.classList.contains('active')) {
-            const overlay2D = document.getElementById('simulation-overlay-2d');
-            if (overlay2D) overlay2D.classList.remove('d-none');
-        }
-    } else {
-        hideBottomPanel();
-        const overlay2D = document.getElementById('simulation-overlay-2d');
-        if (overlay2D) overlay2D.classList.add('d-none');
-    }
+    hideBottomPanel();
+    const overlay2D = document.getElementById('simulation-overlay-2d');
+    if (overlay2D) overlay2D.classList.add('d-none');
 }
 
 function setupCanvasTabHandlers() {
     const canvas2DTab = document.getElementById('2d-tab');
     const canvas3DTab = document.getElementById('3d-tab');
     const canvasToolsTab = document.getElementById('tools-tab');
+
+    if (!canvas2DTab && !canvas3DTab) {
+        const overlay2D = document.getElementById('simulation-overlay-2d');
+        if (overlay2D) overlay2D.classList.add('d-none');
+        const overlay3D = document.getElementById('simulation-overlay-3d');
+        if (overlay3D) overlay3D.classList.remove('d-none');
+        if (typeof update3DSimulationOverlayLayout === 'function') update3DSimulationOverlayLayout();
+        if (typeof updateSimulation3DUI === 'function') updateSimulation3DUI();
+        if (typeof updateSimulation3DDisplays === 'function') updateSimulation3DDisplays();
+        return;
+    }
 
     if (canvas2DTab) {
         canvas2DTab.addEventListener('shown.bs.tab', function () {
@@ -1766,8 +1584,6 @@ function setupCanvasTabHandlers() {
 
             const currentSidebarTab = document.querySelector('#sidebar-tabs .nav-link.active');
             const overlay2D = document.getElementById('simulation-overlay-2d');
-            const canvasObjectTree = document.getElementById('canvas-object-tree');
-            if (canvasObjectTree) canvasObjectTree.classList.remove('d-none');
             if (overlay2D) {
                 if (currentSidebarTab && currentSidebarTab.id === 'draw-tools-tab') {
                     overlay2D.classList.add('d-none');
@@ -1797,8 +1613,6 @@ function setupCanvasTabHandlers() {
             }
 
             const overlay2D = document.getElementById('simulation-overlay-2d');
-            const canvasObjectTree = document.getElementById('canvas-object-tree');
-            if (canvasObjectTree) canvasObjectTree.classList.add('d-none');
             if (overlay2D) overlay2D.classList.add('d-none');
             const overlay3D = document.getElementById('simulation-overlay-3d');
             if (overlay3D) overlay3D.classList.remove('d-none');
@@ -1810,7 +1624,6 @@ function setupCanvasTabHandlers() {
 
         canvas3DTab.addEventListener('hidden.bs.tab', function () {
             if (typeof stopSimulation3D === 'function') stopSimulation3D();
-            if (typeof cleanup3DView === 'function') cleanup3DView();
         });
     }
 
@@ -1953,13 +1766,141 @@ function extractPropertiesPanelMeta(htmlContent) {
 
 function syncFloatingPropertiesPopupText(meta) {
     const elements = getFloatingPropertiesElements();
-    if (!elements.title || !elements.subtitle) return;
+    if (!elements.title) return;
  
     elements.title.innerHTML = meta?.titleHtml || 'Properties';
-    elements.subtitle.textContent = meta?.subtitle || 'Move this window anywhere in the workspace.';
+    if (elements.subtitle) {
+        elements.subtitle.textContent = '';
+    }
     if (window.lucide && typeof window.lucide.createIcons === 'function') {
         window.lucide.createIcons();
     }
+}
+
+function getFloatingPopupFooter() {
+    return document.getElementById('floating-properties-footer');
+}
+
+function clearFloatingPopupFooter() {
+    const footer = getFloatingPopupFooter();
+    if (!footer) return;
+    footer.innerHTML = '';
+    footer.classList.remove('is-visible');
+}
+
+function setFloatingPopupFooterContent(content) {
+    const footer = getFloatingPopupFooter();
+    if (!footer) return;
+
+    if (!content) {
+        clearFloatingPopupFooter();
+        return;
+    }
+
+    footer.innerHTML = content;
+    footer.classList.add('is-visible');
+}
+
+function getSelectedSvgPathIds() {
+    return selectMgr.selectedPaths()
+        .filter(path => svgpaths.includes(path))
+        .map(path => path.id);
+}
+
+function getCanvasCenterWorld() {
+    const canvas = document.getElementById('canvas');
+    if (!canvas) return { x: 0, y: 0 };
+
+    return screenToWorld(canvas.width / 2, canvas.height / 2);
+}
+
+function createShapeAtCanvasCenter(shapeName) {
+    const shapeOperation = window.cncController?.operationManager?.getOperation(shapeName);
+    if (!shapeOperation || typeof shapeOperation.makeShape !== 'function') {
+        return null;
+    }
+
+    const center = getCanvasCenterWorld();
+    const createdPath = shapeOperation.makeShape(shapeName, center.x, center.y, null, null);
+    if (!createdPath) return null;
+
+    openPathEditor(createdPath);
+    return createdPath;
+}
+
+function buildShapeCutPopupHTML(shapeOperation, path, operationName) {
+    const toolpathProperties = window.toolPathProperties;
+    const cutHtml = toolpathProperties.getPropertiesHTML(operationName, path?.toolpathProperties || null, {
+        showUpdateButton: false
+    });
+    const cutMeta = extractPropertiesPanelMeta(cutHtml);
+
+    return {
+        html: `
+            <div class="shape-cut-popup">
+                <ul class="nav nav-tabs shape-cut-tabs mb-3" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="shape-cut-tab-shape" data-bs-toggle="tab" data-bs-target="#shape-cut-panel-shape" type="button" role="tab" aria-controls="shape-cut-panel-shape" aria-selected="true">Shape</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="shape-cut-tab-cut" data-bs-toggle="tab" data-bs-target="#shape-cut-panel-cut" type="button" role="tab" aria-controls="shape-cut-panel-cut" aria-selected="false">Cut</button>
+                    </li>
+                </ul>
+                <div class="tab-content shape-cut-tab-content">
+                    <div class="tab-pane fade show active" id="shape-cut-panel-shape" role="tabpanel" aria-labelledby="shape-cut-tab-shape">
+                        <div id="shape-properties-panel">
+                            ${shapeOperation.renderGeometryFields(path ? shapeOperation.getPathShapeProperties(path) : null)}
+                        </div>
+                    </div>
+                    <div class="tab-pane fade" id="shape-cut-panel-cut" role="tabpanel" aria-labelledby="shape-cut-tab-cut">
+                        <div id="shape-cut-properties-panel">
+                            ${cutMeta.cleanedHtml || ''}
+                        </div>
+                    </div>
+                </div>
+            </div>`,
+        cutMeta
+    };
+}
+
+function bindShapeCutPopup(path, shapeOperation, operationName) {
+    const form = document.getElementById('tool-properties-form');
+    if (!form) return;
+
+    if (typeof shapeOperation.bindPropertiesUI === 'function') {
+        const shapePanel = form.querySelector('#shape-properties-panel') || form;
+        shapeOperation.bindPropertiesUI(shapePanel);
+    }
+
+    form.querySelectorAll('#shape-properties-panel input, #shape-properties-panel select, #shape-properties-panel textarea').forEach(input => {
+        function handleShapeChange() {
+            updateExistingPath(path, form, getPropertyInputKey(input));
+        }
+
+        input.addEventListener('change', handleShapeChange);
+        if (input.type === 'text' || input.type === 'number' || input.tagName === 'TEXTAREA') {
+            input.addEventListener('input', handleShapeChange);
+        }
+    });
+
+    form.querySelectorAll('#shape-cut-properties-panel input, #shape-cut-properties-panel select, #shape-cut-properties-panel textarea').forEach(input => {
+        function handleCutChange() {
+            if (!path) return;
+            const data = window.toolPathProperties.collectFormData(operationName);
+            const sanitized = sanitizeToolpathProperties(data);
+            path.toolpathProperties = sanitized || {};
+            path.toolpathProperties.operation = data.operation || operationName;
+            redraw();
+            scheduleShapeMachiningToolpathSync(path, { createIfMissing: true });
+        }
+
+        input.addEventListener('change', handleCutChange);
+        if (input.type === 'text' || input.type === 'number' || input.tagName === 'TEXTAREA') {
+            input.addEventListener('input', handleCutChange);
+        }
+    });
+
+    redraw();
 }
 
 function setFloatingPropertiesPopupContext(context = null) {
@@ -2017,6 +1958,7 @@ function hideFloatingPropertiesPopup() {
     });
 
     elements.popup.style.display = 'none';
+    clearFloatingPopupFooter();
     setFloatingPropertiesPopupContext(null);
 }
 
@@ -2025,9 +1967,8 @@ function showToolPropertiesEditor(operationName) {
     const propertiesEditor = document.getElementById('tool-properties-editor');
     const operationPropertiesEditor = document.getElementById('operation-properties-editor');
     const form = document.getElementById('tool-properties-form');
-    const helpContent = document.getElementById('tool-help-content');
 
-    clearFloatingPropertiesFooter();
+    clearFloatingPopupFooter();
  
     // Keep tools list visible while preparing popup content
     toolsList.style.display = 'block';
@@ -2053,13 +1994,17 @@ function showToolPropertiesEditor(operationName) {
         const propertiesMeta = extractPropertiesPanelMeta(operation.getPropertiesHTML());
         form.innerHTML = propertiesMeta.cleanedHtml || '';
 
+        if (operation && typeof operation.bindPropertiesUI === 'function') {
+            operation.bindPropertiesUI(form);
+        }
+
         // Add event listeners directly to input elements
         const inputs = form.querySelectorAll('input, select, textarea');
         inputs.forEach(input => {
             function handleInputChange() {
                 if (operation && typeof operation.updateFromProperties === 'function') {
                     const data = collectOperationProperties(operation);
-                    operation.updateFromProperties(data);
+                    operation.updateFromProperties(data, { changedKey: getPropertyInputKey(input) });
                     if (operation.fields)
                         PropertiesManager.save(operation.name, data, Object.values(operation.fields));
                 }
@@ -2067,7 +2012,7 @@ function showToolPropertiesEditor(operationName) {
 
             // Add both change and input events for real-time updates
             input.addEventListener('change', handleInputChange);
-            if ((input.type === 'text' || input.tagName === 'TEXTAREA') && input.dataset.dimensionInput !== 'true') {
+            if (input.type === 'text' || input.type === 'number' || input.tagName === 'TEXTAREA') {
                 input.addEventListener('input', handleInputChange);
             }
         });
@@ -2113,8 +2058,6 @@ function showToolPropertiesEditor(operationName) {
         });
     }
 
-    // Help content is managed by StepWiseHelpSystem when operation.start() is called
-    // No need to set it here - it will be updated automatically
 }
 
 /**
@@ -2207,6 +2150,207 @@ function findExistingToolpathsForSelection(operationName, selectedSvgIds) {
 	return matchedToolpaths;
 }
 
+const pendingShapeMachiningSyncs = new Map();
+
+function getShapePreviewToolpaths(pathId) {
+    if (!pathId || !Array.isArray(toolpaths)) {
+        return [];
+    }
+
+    return toolpaths.filter(toolpath => {
+        if (!toolpath || toolpath.isShapePreviewToolpath !== true) {
+            return false;
+        }
+
+        const sourceIds = getToolpathSourceIds(toolpath);
+        return sourceIds.length === 1 && sourceIds[0] === pathId;
+    });
+}
+
+function markShapePreviewToolpaths(pathId, toolpathsToMark) {
+    if (!pathId || !Array.isArray(toolpathsToMark)) {
+        return;
+    }
+
+    toolpathsToMark.forEach(toolpath => {
+        if (!toolpath) return;
+        toolpath.isShapePreviewToolpath = true;
+        toolpath.shapePreviewSourceId = pathId;
+    });
+}
+
+function syncShapeMachiningToolpath(path, options = {}) {
+    if (!path || !path.id || !path.toolpathProperties || !window.toolPathProperties) {
+        return false;
+    }
+
+    const data = sanitizeToolpathProperties(path.toolpathProperties);
+    if (!data) {
+        return false;
+    }
+
+    if (typeof console !== 'undefined' && typeof console.debug === 'function') {
+        console.debug('[ShapePreview] sync request', {
+            pathId: path.id,
+            operationType: data.operationType,
+            depth: data.depth,
+            tool: data.tool,
+            createIfMissing: options.createIfMissing === true
+        });
+    }
+
+    const descriptor = window.toolPathProperties.getOperationDescriptor('Profile', data.operationType);
+    const selectedTool = window.toolPathProperties.getToolById(data.tool);
+    if (!descriptor || !selectedTool) {
+        return false;
+    }
+
+    const executionOperation = descriptor.executionOperation || 'Profile';
+    if (executionOperation !== 'Profile' && executionOperation !== 'Pocket') {
+        return false;
+    }
+
+    if (path.visible === false) {
+        return false;
+    }
+
+    const previewToolpaths = getShapePreviewToolpaths(path.id);
+    if (previewToolpaths.some(toolpath => toolpath.pending === true)) {
+        if (typeof console !== 'undefined' && typeof console.debug === 'function') {
+            console.debug('[ShapePreview] skip sync because preview generation is pending', {
+                pathId: path.id,
+                previewCount: previewToolpaths.length
+            });
+        }
+        return false;
+    }
+
+    if (previewToolpaths.length === 0 && options.createIfMissing !== true) {
+        if (typeof console !== 'undefined' && typeof console.debug === 'function') {
+            console.debug('[ShapePreview] skip sync because no preview toolpath exists yet', {
+                pathId: path.id
+            });
+        }
+        return false;
+    }
+
+    const savedSelectionIds = selectMgr.selectedPaths().map(selectedPath => selectedPath.id);
+    const originalTool = window.currentTool;
+    const originalToolpathProperties = window.currentToolpathProperties;
+    const originalToolpathDescriptor = window.currentToolpathDescriptor;
+    const originalUpdateTargets = window.toolpathUpdateTargets;
+    const beforeCount = toolpaths.length;
+
+    selectMgr.unselectAll();
+    selectMgr.selectPath(path);
+
+    window.currentTool = {
+        ...selectedTool,
+        depth: data.depth,
+        step: selectedTool.step,
+        stepover: selectedTool.stepover,
+        inside: data.inside,
+        direction: data.direction,
+        numLoops: 1,
+        overCut: 0,
+        plunge: data.plunge,
+        strategy: data.strategy
+    };
+    window.currentToolpathProperties = data;
+    window.currentToolpathDescriptor = descriptor;
+    window.toolpathUpdateTargets = previewToolpaths.slice();
+
+    try {
+        if (executionOperation === 'Pocket') {
+            doPocket();
+        } else {
+            doProfile();
+        }
+    } finally {
+        window.currentTool = originalTool;
+        window.currentToolpathProperties = originalToolpathProperties;
+        window.currentToolpathDescriptor = originalToolpathDescriptor;
+        window.toolpathUpdateTargets = originalUpdateTargets;
+
+        selectMgr.unselectAll();
+        savedSelectionIds.forEach(pathId => {
+            const selectedPath = svgpaths.find(svgPath => svgPath.id === pathId);
+            if (selectedPath) {
+                selectMgr.selectPath(selectedPath);
+            }
+        });
+    }
+
+    const newPreviewToolpaths = toolpaths.slice(beforeCount).filter(toolpath => {
+        const sourceIds = getToolpathSourceIds(toolpath);
+        return sourceIds.length === 1 && sourceIds[0] === path.id;
+    });
+    markShapePreviewToolpaths(path.id, previewToolpaths.concat(newPreviewToolpaths));
+
+    if (typeof console !== 'undefined' && typeof console.debug === 'function') {
+        const finalPreviewToolpaths = getShapePreviewToolpaths(path.id);
+        console.debug('[ShapePreview] sync result', {
+            pathId: path.id,
+            previewCount: finalPreviewToolpaths.length,
+            operations: finalPreviewToolpaths.map(toolpath => toolpath.operation),
+            pending: finalPreviewToolpaths.map(toolpath => toolpath.pending === true),
+            pathCounts: finalPreviewToolpaths.map(toolpath => Array.isArray(toolpath.paths) ? toolpath.paths.length : 0)
+        });
+    }
+
+    if (typeof refreshToolPathsDisplay === 'function') {
+        refreshToolPathsDisplay();
+    }
+
+    return true;
+}
+
+function scheduleShapeMachiningToolpathSync(path, options = {}) {
+    if (!path || !path.id) {
+        return;
+    }
+
+    const existingTimeoutId = pendingShapeMachiningSyncs.get(path.id);
+    if (existingTimeoutId) {
+        clearTimeout(existingTimeoutId);
+    }
+
+    const delay = Number.isFinite(options.delay) ? options.delay : 120;
+    const timeoutId = window.setTimeout(() => {
+        pendingShapeMachiningSyncs.delete(path.id);
+        const changed = syncShapeMachiningToolpath(path, options);
+        if (changed) {
+            refresh3DPreviewForShape(path);
+        }
+    }, Math.max(0, delay));
+
+    pendingShapeMachiningSyncs.set(path.id, timeoutId);
+}
+
+function refresh3DPreviewForShape(path) {
+    if (!path || path.visible === false || typeof window.schedule3DViewRefresh !== 'function') {
+        return;
+    }
+
+    if (typeof console !== 'undefined' && typeof console.debug === 'function') {
+        console.debug('[ShapePreview] refresh 3D preview', {
+            pathId: path.id,
+            linkedPreviewToolpaths: getShapePreviewToolpaths(path.id).map(toolpath => ({
+                id: toolpath.id,
+                operation: toolpath.operation,
+                pending: toolpath.pending === true,
+                segments: Array.isArray(toolpath.paths) ? toolpath.paths.length : 0
+            }))
+        });
+    }
+
+    window.schedule3DViewRefresh({
+        preserveProgress: false,
+        resetIfMissing: true,
+        seekToLatestState: true
+    });
+}
+
 function generateToolpathForSelection() {
     // Collect form data
     if (currentOperationName == null) return;
@@ -2233,7 +2377,8 @@ function generateToolpathForSelection() {
 
     window.toolPathProperties.saveDefaults(currentOperationName, data);
 
-    const selectedTool = window.toolPathProperties.getToolById(data.toolId);
+    const descriptor = window.toolPathProperties.getOperationDescriptor(currentOperationName, data.operationType);
+    const selectedTool = window.toolPathProperties.getToolById(data.tool);
     if (!selectedTool) {
         notify('Selected tool not found', 'error');
         return null;
@@ -2244,26 +2389,30 @@ function generateToolpathForSelection() {
     window.currentTool = {
         ...selectedTool,
         depth: data.depth,
-        step: data.step,
-        stepover: data.stepover,
+        step: selectedTool.step,
+        stepover: selectedTool.stepover,
         inside: data.inside,
         direction: data.direction,
-        numLoops: data.numLoops || 1,
-        overCut: data.overCut || 0
+        numLoops: 1,
+        overCut: 0,
+        plunge: data.plunge,
+        strategy: data.strategy
     };
 
     // Store the properties for later reference (to be used by pushToolPath)
-    window.currentToolpathProperties = { ...data };
+    window.currentToolpathProperties = sanitizeToolpathProperties(data);
+    window.currentToolpathDescriptor = descriptor;
 
     // Store before toolpath count to detect ALL new toolpaths
     const beforeCount = toolpaths.length;
 
     // Execute the operation
     try {
-        handleOperationClick(currentOperationName);
+        handleOperationClick(descriptor.executionOperation || currentOperationName);
     } finally {
         // Restore original tool
         window.currentTool = originalTool;
+        window.currentToolpathDescriptor = null;
     }
 
     // Find ALL newly created toolpaths (not just the last one)
@@ -2276,15 +2425,15 @@ function generateToolpathForSelection() {
         // Use centralized helper to set active state
         setActiveToolpaths(newToolpaths);
 
-        const editedOperationName = getToolpathDisplayName(newToolpaths[0]) || currentOperationName;
-        const operationIcon = getOperationIcon(currentOperationName);
+        const editedOperationName = getToolpathDisplayName(newToolpaths[0]) || descriptor.popupTitle || currentOperationName;
+        const operationIcon = descriptor.icon || getOperationIcon(descriptor.displayOperation || currentOperationName);
         syncFloatingPopupOperationName(operationIcon, editedOperationName);
 
         const popupContextSvgIds = newToolpaths.flatMap(tp => getToolpathSourceIds(tp));
         setFloatingPropertiesPopupContext({
             type: 'toolpath',
             id: newToolpaths[0]?.id || null,
-            operationName: currentOperationName,
+            operationName: descriptor.executionOperation,
             svgIds: Array.from(new Set(popupContextSvgIds))
         });
 
@@ -2303,11 +2452,13 @@ function generateToolpathForSelection() {
 
         // Clear the properties after successful generation
         window.currentToolpathProperties = null;
+        window.currentToolpathDescriptor = null;
 
         return newToolpaths;
     }
     // Clear the properties even if generation failed
     window.currentToolpathProperties = null;
+    window.currentToolpathDescriptor = null;
     redraw();
     return null;
 }
@@ -2326,8 +2477,7 @@ function syncFloatingPopupOperationName(operationIcon, name) {
 }
 
 function wireDepthToNameAutoUpdate(operationName, operationIcon = null) {
-    const depthInput = document.getElementById('pm-depth') || document.getElementById('depth-input');
-    const nameInput  = document.getElementById('pm-toolpathName') || document.getElementById('toolpath-name-input');
+    const nameInput  = document.getElementById('pm-name') || document.getElementById('pm-toolpathName') || document.getElementById('toolpath-name-input');
     if (!nameInput) return;
 
     const syncTitleFromInput = () => {
@@ -2340,21 +2490,20 @@ function wireDepthToNameAutoUpdate(operationName, operationIcon = null) {
 }
 
 function showOperationPropertiesEditor(operationName) {
-    const operationsList = document.getElementById('operations-list');
+    const toolsList = document.getElementById('draw-tools-list');
     const propertiesEditor = document.getElementById('operation-properties-editor');
     const toolPropertiesEditor = document.getElementById('tool-properties-editor');
     const form = document.getElementById('operation-properties-form');
-    const helpContent = document.getElementById('operation-help-content');
 
-    clearFloatingPropertiesFooter();
+    clearFloatingPopupFooter();
 
-    document.querySelectorAll('#operations-list .sidebar-item.selected').forEach(el => el.classList.remove('selected'));
-    const selectedOperationItem = document.querySelector(`#operations-list [data-operation="${operationName}"]`);
+    document.querySelectorAll('#draw-tools-list .sidebar-item.selected').forEach(el => el.classList.remove('selected'));
+    const selectedOperationItem = document.querySelector(`#draw-tools-list [data-operation="${operationName}"]`);
     if (selectedOperationItem) selectedOperationItem.classList.add('selected');
     syncGroupedToolSelection();
  
-    // Keep operations list visible while preparing popup content
-    operationsList.style.display = 'block';
+    // Keep tools list visible while preparing popup content
+    toolsList.style.display = 'block';
     if (toolPropertiesEditor) toolPropertiesEditor.style.display = 'none';
  
     currentOperationName = operationName;
@@ -2382,16 +2531,10 @@ function showOperationPropertiesEditor(operationName) {
         if (hasAssociatedShape) {
             setActiveToolpaths(existingToolpaths);
             setupToolpathUpdateButton(operationName);
-        } else {
-            const footer = document.getElementById('floating-properties-footer');
-            if (footer) {
-                footer.innerHTML = '';
-                footer.classList.remove('is-visible');
-            }
         }
  
         const creationTitle = `${operationName} tool`;
-        const editingTitle = (document.getElementById('pm-toolpathName') || document.getElementById('toolpath-name-input'))?.value || operationName;
+        const editingTitle = (document.getElementById('pm-name') || document.getElementById('pm-toolpathName') || document.getElementById('toolpath-name-input'))?.value || operationName;
  
         // Auto-update name when depth changes and keep popup title in sync with the name field
         if (hasAssociatedShape) {
@@ -2421,13 +2564,17 @@ function showOperationPropertiesEditor(operationName) {
             const propertiesMeta = extractPropertiesPanelMeta(operation.getPropertiesHTML());
             form.innerHTML = propertiesMeta.cleanedHtml || '';
 
+            if (operation && typeof operation.bindPropertiesUI === 'function') {
+                operation.bindPropertiesUI(form);
+            }
+
             // Add event listeners directly to input elements
             const inputs = form.querySelectorAll('input, select, textarea');
             inputs.forEach(input => {
                 function handleInputChange() {
                     if (operation && typeof operation.updateFromProperties === 'function') {
                         const data = collectOperationProperties(operation);
-                        operation.updateFromProperties(data);
+                        operation.updateFromProperties(data, { changedKey: getPropertyInputKey(input) });
                         if (operation.fields)
                             PropertiesManager.save(operation.name, data, Object.values(operation.fields));
                     }
@@ -2435,7 +2582,7 @@ function showOperationPropertiesEditor(operationName) {
 
                 // Add both change and input events for real-time updates
                 input.addEventListener('change', handleInputChange);
-                if ((input.type === 'text' || input.tagName === 'TEXTAREA') && input.dataset.dimensionInput !== 'true') {
+                if (input.type === 'text' || input.type === 'number' || input.tagName === 'TEXTAREA') {
                     input.addEventListener('input', handleInputChange);
                 }
             });
@@ -2471,9 +2618,12 @@ function updateSurfacingToolpath(operationName, activeToolpaths, selectedTool, d
     window.currentTool = {
         ...selectedTool,
         depth: data.depth,
-        stepover: data.stepover
+        stepover: selectedTool.stepover,
+        direction: data.direction,
+        strategy: data.strategy,
+        plunge: data.plunge
     };
-    window.currentToolpathProperties = { ...data };
+    window.currentToolpathProperties = sanitizeToolpathProperties(data);
     window.toolpathUpdateTargets = [...activeToolpaths];
 
     try {
@@ -2486,18 +2636,20 @@ function updateSurfacingToolpath(operationName, activeToolpaths, selectedTool, d
         window.currentTool = originalTool;
         window.currentToolpathProperties = null;
         window.toolpathUpdateTargets = null;
+        window.currentToolpathDescriptor = null;
     }
 }
 
 function updateHelicalDrillToolpath(activeToolpaths, selectedTool, data) {
     for (const toolpath of activeToolpaths) {
         if (toolpath.operation !== 'HelicalDrill') continue;
-        toolpath.toolpathProperties = { ...data };
-        setToolpathLabel(toolpath, data.toolpathName);
+        toolpath.toolpathProperties = sanitizeToolpathProperties(data) || {};
+        setToolpathLabel(toolpath, getToolpathPropertyName(data) || toolpath.label);
         toolpath.tool = {
             ...selectedTool,
             depth: data.depth,
-            step: data.step
+            step: selectedTool.step,
+            plunge: data.plunge
         };
 
         const svgPath = svgpaths.find(p => p.id === toolpath.svgId);
@@ -2523,15 +2675,16 @@ function updateHelicalDrillToolpath(activeToolpaths, selectedTool, data) {
 
 function updateDrillToolpath(activeToolpaths, selectedTool, data) {
     for (const toolpath of activeToolpaths) {
-        toolpath.toolpathProperties = { ...data };
-        setToolpathLabel(toolpath, data.toolpathName);
+        toolpath.toolpathProperties = sanitizeToolpathProperties(data) || {};
+        setToolpathLabel(toolpath, getToolpathPropertyName(data) || toolpath.label);
         toolpath.tool = {
             ...selectedTool,
             depth: data.depth,
-            step: data.step,
-            stepover: data.stepover,
+            step: selectedTool.step,
+            stepover: selectedTool.stepover,
             inside: data.inside,
-            direction: data.direction
+            direction: data.direction,
+            plunge: data.plunge
         };
 
         if (selectedTool.diameter) {
@@ -2630,27 +2783,30 @@ function regenerateToolpathFromSvg(operationName, activeToolpaths, selectedTool,
     window.currentTool = {
         ...selectedTool,
         depth: data.depth,
-        step: data.step,
-        stepover: data.stepover,
+        step: selectedTool.step,
+        stepover: selectedTool.stepover,
         inside: data.inside,
         direction: data.direction,
-        numLoops: data.numLoops || 1,
-        overCut: data.overCut || 0
+        numLoops: 1,
+        overCut: 0,
+        strategy: data.strategy,
+        plunge: data.plunge
     };
-    window.currentToolpathProperties = { ...data };
+    window.currentToolpathProperties = sanitizeToolpathProperties(data);
     window.toolpathUpdateTargets = [...activeToolpaths];
 
     try {
-        handleOperationClick(operationName);
+        handleOperationClick(window.currentToolpathDescriptor?.executionOperation || operationName);
     } finally {
         window.currentTool = originalTool;
         window.currentToolpathProperties = null;
         window.toolpathUpdateTargets = null;
+        window.currentToolpathDescriptor = null;
     }
 
     const updatedOperationIcon = getOperationIcon(operationName);
-    const updatedNameInput = document.getElementById('pm-toolpathName') || document.getElementById('toolpath-name-input');
-    syncFloatingPopupOperationName(updatedOperationIcon, updatedNameInput?.value?.trim() || operationName);
+        const updatedNameInput = document.getElementById('pm-name') || document.getElementById('pm-toolpathName') || document.getElementById('toolpath-name-input');
+        syncFloatingPopupOperationName(updatedOperationIcon, updatedNameInput?.value?.trim() || operationName);
  
     if (typeof refreshToolPathsDisplay === 'function') {
         refreshToolPathsDisplay();
@@ -2667,7 +2823,7 @@ function regenerateToolpathFromSvg(operationName, activeToolpaths, selectedTool,
 
 function setupToolpathUpdateButton(operationName) {
     const bodyButton = document.getElementById('update-toolpath-button');
-    const footer = document.getElementById('floating-properties-footer');
+    const footer = getFloatingPopupFooter();
     if (!bodyButton || !footer) return;
 
     footer.innerHTML = '';
@@ -2702,11 +2858,14 @@ function setupToolpathUpdateButton(operationName) {
 
         window.toolPathProperties.saveDefaults(operationName, data);
 
-        const selectedTool = window.toolPathProperties.getToolById(data.toolId);
+        const selectedTool = window.toolPathProperties.getToolById(data.tool);
         if (!selectedTool) {
             notify('Selected tool not found', 'error');
+            window.currentToolpathDescriptor = null;
             return;
         }
+
+        window.currentToolpathDescriptor = window.toolPathProperties.getOperationDescriptor(operationName, data.operationType);
 
         if (operationName === 'Surfacing' || operationName === '3dProfile') {
             updateSurfacingToolpath(operationName, activeToolpaths, selectedTool, data);
@@ -2714,23 +2873,23 @@ function setupToolpathUpdateButton(operationName) {
             updateHelicalDrillToolpath(activeToolpaths, selectedTool, data);
         } else if (operationName === 'Drill') {
             updateDrillToolpath(activeToolpaths, selectedTool, data);
+            window.currentToolpathDescriptor = null;
         } else {
             regenerateToolpathFromSvg(operationName, activeToolpaths, selectedTool, data);
         }
 
         refreshToolPathsDisplay();
         notify(`${activeToolpaths.length} toolpath(s) updated`, 'success');
+        window.currentToolpathDescriptor = null;
         redraw();
     });
 }
 
 function clearFloatingPropertiesFooter() {
-    const footer = document.getElementById('floating-properties-footer');
-    if (!footer) return;
-
-    footer.innerHTML = '';
-    footer.classList.remove('is-visible');
+    clearFloatingPopupFooter();
 }
+
+window.clearFloatingPropertiesFooter = clearFloatingPropertiesFooter;
 
 /**
  * Regenerate all toolpaths linked to the given svgpath IDs.
@@ -2875,22 +3034,22 @@ function showToolpathPropertiesEditor(toolpath) {
         redraw();
     }
 
-    // Switch to operations tab
-    const operationsTab = document.getElementById('operations-tab');
-    const operationsPane = document.getElementById('operations');
+    // Switch to draw tools tab
+    const drawToolsTab = document.getElementById('draw-tools-tab');
+    const drawToolsPane = document.getElementById('draw-tools');
 
     document.querySelectorAll('#sidebar-tabs .nav-link').forEach(tab => tab.classList.remove('active'));
     document.querySelectorAll('#sidebar-tabs ~ .sidebar-tab-content .tab-pane').forEach(pane => pane.classList.remove('show', 'active'));
 
-    operationsTab.classList.add('active');
-    operationsPane.classList.add('show', 'active');
+    drawToolsTab.classList.add('active');
+    drawToolsPane.classList.add('show', 'active');
 
     // Show the operation properties editor
-    const operationsList = document.getElementById('operations-list');
+    const toolsList = document.getElementById('draw-tools-list');
     const propertiesEditor = document.getElementById('operation-properties-editor');
     const form = document.getElementById('operation-properties-form');
 
-    operationsList.style.display = 'block';
+    toolsList.style.display = 'block';
  
     // Map HelicalDrill to Drill for properties panel
     const propsOperation = toolpath.operation === 'HelicalDrill' ? 'Drill' : toolpath.operation;
@@ -2901,19 +3060,28 @@ function showToolpathPropertiesEditor(toolpath) {
     // Generate properties HTML with existing values
     if (window.toolPathProperties?.hasOperation(propsOperation)) {
         // Build properties from the toolpath's own stored data
-        let properties = toolpath.toolpathProperties ? { ...toolpath.toolpathProperties } : {
-            toolId: toolpath.tool.recid,
-            depth: toolpath.tool.depth,
-            step: toolpath.tool.step,
-            stepover: toolpath.tool.stepover
-        };
-        // Fill in any missing fields from the tool object
-        if (properties.inside === undefined && toolpath.tool.inside) properties.inside = toolpath.tool.inside;
-        if (properties.direction === undefined && toolpath.tool.direction) properties.direction = toolpath.tool.direction;
-        if (properties.numLoops === undefined && toolpath.tool.numLoops) properties.numLoops = toolpath.tool.numLoops;
-        if (properties.overCut === undefined && toolpath.tool.overCut !== undefined) properties.overCut = toolpath.tool.overCut;
-        if (properties.angle === undefined && toolpath.tool.angle !== undefined) properties.angle = toolpath.tool.angle;
-        if (toolpath.label) properties.toolpathName = toolpath.label;
+        const descriptor = window.toolPathProperties.getOperationDescriptor(
+            propsOperation,
+            toolpath.operation === 'Pocket'
+                ? 'pocket'
+                : toolpath.operation === 'Inside'
+                    ? 'inside'
+                    : toolpath.operation === 'Outside'
+                        ? 'outside'
+                        : 'center'
+        );
+        let properties = toolpath.toolpathProperties ? { ...toolpath.toolpathProperties } : {};
+        if (properties.tool === undefined && toolpath.tool?.recid) properties.tool = toolpath.tool.recid;
+        if (properties.depth === undefined && toolpath.tool?.depth !== undefined) properties.depth = toolpath.tool.depth;
+        if (properties.operationType === undefined) {
+            properties.operationType = toolpath.operation === 'Pocket'
+                ? 'pocket'
+                : toolpath.operation === 'Inside'
+                    ? 'inside'
+                    : toolpath.operation === 'Outside'
+                        ? 'outside'
+                        : 'center';
+        }
 
         propertiesMeta = extractPropertiesPanelMeta(window.toolPathProperties.getPropertiesHTML(propsOperation, properties, {
             showUpdateButton: true
@@ -2924,7 +3092,7 @@ function showToolpathPropertiesEditor(toolpath) {
         setupToolpathUpdateButton(propsOperation);
 
         // Auto-update name when depth changes and keep popup title in sync with the name field
-        wireDepthToNameAutoUpdate(propsOperation, getOperationIcon(propsOperation));
+        wireDepthToNameAutoUpdate(propsOperation, descriptor.icon || getOperationIcon(propsOperation));
 
         // Update help content
         if (window.stepWiseHelp) {
@@ -2936,8 +3104,8 @@ function showToolpathPropertiesEditor(toolpath) {
         form.innerHTML = '<p class="text-muted">This toolpath cannot be edited.</p>';
     }
 
-    const toolpathOperationIcon = getOperationIcon(propsOperation);
-    const editedOperationName = (document.getElementById('pm-toolpathName') || document.getElementById('toolpath-name-input'))?.value
+    const toolpathOperationIcon = getOperationIcon(toolpath.operation);
+    const editedOperationName = (document.getElementById('pm-name') || document.getElementById('pm-toolpathName') || document.getElementById('toolpath-name-input'))?.value
         || toolpath.label
         || buildLinkedToolpathName(toolpath)
         || (toolpath.operation === 'HelicalDrill' ? 'Helical Drill' : propsOperation);
@@ -2972,26 +3140,18 @@ function autoCloseToolProperties(reason) {
 function showToolsList() {
     currentOperationName = null;
     hideFloatingPropertiesPopup();
-    const activeTab = document.querySelector('#sidebar-tabs .nav-link.active');
     const form = document.getElementById('tool-properties-form');
     form.innerHTML = "";
 
     document.querySelectorAll('#draw-tools-list .sidebar-item.selected').forEach(el => el.classList.remove('selected'));
     syncGroupedToolSelection();
 
-    if (activeTab && activeTab.id === 'draw-tools-tab') {
-        const toolsList = document.getElementById('draw-tools-list');
-        const propertiesEditor = document.getElementById('tool-properties-editor');
- 
-        toolsList.style.display = 'block';
-        propertiesEditor.style.setProperty('display', 'none', 'important');
-    } else if (activeTab && activeTab.id === 'operations-tab') {
-        const operationsList = document.getElementById('operations-list');
-        const propertiesEditor = document.getElementById('operation-properties-editor');
- 
-        operationsList.style.display = 'block';
-        propertiesEditor.style.setProperty('display', 'none', 'important');
-    }
+    const toolsList = document.getElementById('draw-tools-list');
+    const toolPropertiesEditor = document.getElementById('tool-properties-editor');
+    const operationPropertiesEditor = document.getElementById('operation-properties-editor');
+    toolsList.style.display = 'block';
+    toolPropertiesEditor.style.setProperty('display', 'none', 'important');
+    operationPropertiesEditor.style.setProperty('display', 'none', 'important');
  
     selectMgr.unselectAll();
     if (window.toolpaths) {
@@ -3011,9 +3171,8 @@ function showPathPropertiesEditor(path) {
     const propertiesEditor = document.getElementById('tool-properties-editor');
     const operationPropertiesEditor = document.getElementById('operation-properties-editor');
     const form = document.getElementById('tool-properties-form');
-    const helpContent = document.getElementById('tool-help-content');
 
-    clearFloatingPropertiesFooter();
+    clearFloatingPopupFooter();
 
     // Keep tools list visible while preparing popup content
     toolsList.style.display = 'block';
@@ -3023,6 +3182,9 @@ function showPathPropertiesEditor(path) {
     const operation = window.cncController?.operationManager?.getOperation(path.creationTool);
     const operationLabel = operation?.displayName || path.creationTool;
     currentOperationName = path.creationTool;
+
+    const isShapePath = path.creationTool === 'Shape' || (window.SHAPE_TOOL_NAMES || []).includes(path.creationTool);
+    const shapeCutOperationName = 'Profile';
 
     // Get properties HTML from the operation
     let propertiesHTML = '';
@@ -3035,7 +3197,22 @@ function showPathPropertiesEditor(path) {
     };
 
     // Now get the properties HTML (works for both edit and creation modes)
-    if (operation && typeof operation.getPropertiesHTML === 'function') {
+    if (isShapePath && operation && typeof operation.renderGeometryFields === 'function') {
+        if (typeof operation.setEditPath === 'function') {
+            operation.setEditPath(path);
+        }
+
+        const popupConfig = buildShapeCutPopupHTML(operation, path, shapeCutOperationName);
+        form.innerHTML = popupConfig.html;
+        bindShapeCutPopup(path, operation, shapeCutOperationName);
+
+        propertiesMeta = {
+            titleHtml: operation?.icon
+                ? `<i data-lucide="${operation.icon}"></i> Edit ${path.name}`
+                : `Edit ${path.name}`,
+            subtitle: ''
+        };
+    } else if (operation && typeof operation.getPropertiesHTML === 'function') {
         if (operation && typeof operation.setEditPath === 'function') {
             operation.setEditPath(path);
             //operation.onPropertiesChanged(path.creationProperties.properties); // Ensure properties are synced
@@ -3052,6 +3229,10 @@ function showPathPropertiesEditor(path) {
         
         if (operation && typeof operation.update === 'function') {
             operation.update(path);
+        }
+
+        if (operation && typeof operation.bindPropertiesUI === 'function') {
+            operation.bindPropertiesUI(form);
         }
         // Set the edit context before getting properties HTML
 
@@ -3070,32 +3251,26 @@ function showPathPropertiesEditor(path) {
         subtitle: propertiesMeta.subtitle
     });
 
-    // Add event listeners directly to input elements for path editing
-    const inputs = form.querySelectorAll('input, select, textarea');
-    inputs.forEach(input => {
-        function handlePathEditChange() {
-            updateExistingPath(path, form);
-        }
+    if (!isShapePath) {
+        // Add event listeners directly to input elements for path editing
+        const inputs = form.querySelectorAll('input, select, textarea');
+        inputs.forEach(input => {
+            function handlePathEditChange() {
+                updateExistingPath(path, form, getPropertyInputKey(input));
+            }
 
-        // Add both change and input events for real-time updates
-        input.addEventListener('change', handlePathEditChange);
-        if ((input.type === 'text' || input.tagName === 'TEXTAREA') && input.dataset.dimensionInput !== 'true') {
-            input.addEventListener('input', handlePathEditChange);
-        }
-    });
-
-    // Update help content
-    helpContent.innerHTML = `
-        <div class="help-step">
-            <div class="help-text">Editing existing ${operationLabel.toLowerCase()}. Changes will update the path in real-time.</div>
-        </div>
-    `;
+            input.addEventListener('change', handlePathEditChange);
+            if (input.type === 'text' || input.type === 'number' || input.tagName === 'TEXTAREA') {
+                input.addEventListener('input', handlePathEditChange);
+            }
+        });
+    }
 
     lucide.createIcons();
 }
 
 // Function to update an existing path with new properties
-function updateExistingPath(path, form) {
+function updateExistingPath(path, form, changedKey = null) {
     const operation = window.cncController?.operationManager?.getOperation(path.creationTool);
     const data = collectOperationProperties(operation);
 
@@ -3107,17 +3282,17 @@ function updateExistingPath(path, form) {
     }
     else if (path.creationTool === 'Shape' || (window.SHAPE_TOOL_NAMES || []).includes(path.creationTool)) {
         // For shapes, update in place
-        updateShapeInPlace(path, data);
+        updateShapeInPlace(path, data, changedKey);
     }
 
 
     redraw();
 }
 
-function updateShapeInPlace(path, data) {
+function updateShapeInPlace(path, data, changedKey = null) {
     const operation = window.cncController?.operationManager?.getOperation(path.creationTool);
     operation.setEditPath(path);
-    operation.onPropertiesChanged(data);
+    operation.onPropertiesChanged(data, { changedKey });
 }
 
 
@@ -3147,8 +3322,8 @@ function createToolPanel(targetId) {
                         <th><i data-lucide="diameter" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Diameter"></i>Diameter (<span id="tool-table-unit">${getUnitLabel()}</span>)</th>
                         <th><i data-lucide="hash" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Number of cutting edges"></i> Flutes</th>
                         <th><i data-lucide="gauge" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Spindle speed (RPM)"></i> RPM</th>
-                        <th><i data-lucide="move" data-bs-toggle="tooltip" data-bs-placement="bottom" title="XY Feed"></i> XY Feed (<span id="tool-table-feed-unit">${getUnitLabel()}/min</span>)</th>
-                        <th><i data-lucide="arrow-down" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Z Feed"></i> Z Feed (<span id="tool-table-zfeed-unit">${getUnitLabel()}/min</span>)</th>
+                        <th><i data-lucide="move" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Feed rate"></i> Feed rate (<span id="tool-table-feed-unit">${getUnitLabel()}/min</span>)</th>
+                        <th><i data-lucide="arrow-down" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Plunge rate"></i> Plunge rate (<span id="tool-table-zfeed-unit">${getUnitLabel()}/min</span>)</th>
                         <th><i data-lucide="triangle" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Angle"></i> Angle</th>
                     </tr>
                 </thead>
@@ -3225,7 +3400,7 @@ function createWorkpiecePanel(targetId) {
         }
 
         input.addEventListener('change', handleInputChange);
-        if ((input.type === 'text' || input.tagName === 'TEXTAREA') && input.dataset.dimensionInput !== 'true') {
+        if (input.type === 'text' || input.type === 'number' || input.tagName === 'TEXTAREA') {
             input.addEventListener('input', handleInputChange);
         }
     });
@@ -3730,12 +3905,6 @@ function handleOperationClick(operation) {
             doBoolean();
             cncController.setMode("Select");
             break;
-        case 'Pen':
-            doPen();
-            break;
-        case 'Curve':
-            doCurve();
-            break;
         case 'Shape':
             doShape('Shape');
             break;
@@ -3808,6 +3977,58 @@ function handleOperationClick(operation) {
 
 }
 
+function canEditCreatedPath(path) {
+    if (!path || !path.creationTool || !path.creationProperties) {
+        return false;
+    }
+
+    return path.creationTool === 'Text'
+        || path.creationTool === 'Shape'
+        || (window.SHAPE_TOOL_NAMES || []).includes(path.creationTool)
+        || path.creationTool === 'Offset'
+        || path.creationTool === 'Pattern';
+}
+
+function openPathEditor(path) {
+    if (!canEditCreatedPath(path)) {
+        return false;
+    }
+
+    const sidebarNode = document.querySelector(`#svg-paths-section [data-path-id="${path.id}"]`);
+    const parentCollapse = sidebarNode ? sidebarNode.closest('.collapse') : null;
+    if (parentCollapse && !parentCollapse.classList.contains('show')) {
+        parentCollapse.classList.add('show');
+    }
+
+    const drawToolsTab = document.getElementById('draw-tools-tab');
+    const drawToolsPane = document.getElementById('draw-tools');
+
+    document.querySelectorAll('#sidebar-tabs .nav-link').forEach(tab => tab.classList.remove('active'));
+    document.querySelectorAll('#sidebar-tabs ~ .sidebar-tab-content .tab-pane').forEach(pane => pane.classList.remove('show', 'active'));
+
+    drawToolsTab.classList.add('active');
+    drawToolsPane.classList.add('show', 'active');
+
+    cncController.setMode(path.creationTool);
+
+    showPathPropertiesEditor(path);
+
+    if ((path.creationTool === 'Offset' || path.creationTool === 'Pattern') && path.creationProperties.sourceIds) {
+        selectMgr.unselectAll();
+        const sourceIds = path.creationProperties.sourceIds;
+        svgpaths.filter(p => p.creationTool === path.creationTool && p.creationProperties &&
+            p.creationProperties.sourceIds && arraysEqual(p.creationProperties.sourceIds, sourceIds))
+            .forEach(p => selectMgr.selectPath(p));
+        sourceIds.forEach(srcId => {
+            const srcPath = svgpaths.find(p => p.id === srcId);
+            if (srcPath) selectMgr.selectPath(srcPath);
+        });
+        redraw();
+    }
+
+    return true;
+}
+
 function handlePathClick(pathId) {
     // If a machining operation panel is open, replace selection and regenerate
     if (currentOperationName && window.toolPathProperties?.hasOperation(currentOperationName)) {
@@ -3840,55 +4061,8 @@ function handlePathClick(pathId) {
         }
     }
 
-    const sidebarNode = document.querySelector(`#svg-paths-section [data-path-id="${pathId}"]`);
-    const parentCollapse = sidebarNode ? sidebarNode.closest('.collapse') : null;
-    if (parentCollapse && !parentCollapse.classList.contains('show')) {
-        parentCollapse.classList.add('show');
-    }
-
-    // Check if this path has creation properties for editing
     const path = svgpaths.find(p => p.id === pathId);
-    if (path && path.creationTool && path.creationProperties) {
-        // Only show properties editor if this is a draw tool that supports editing
-        if (path.creationTool === 'Text' || path.creationTool === 'Shape' || (window.SHAPE_TOOL_NAMES || []).includes(path.creationTool) || path.creationTool === 'Offset' || path.creationTool === 'Pattern' || path.creationTool === 'Curve' || path.creationTool === 'Pen') {
-            // Always switch to Draw Tools tab when editing from paths list
-            const drawToolsTab = document.getElementById('draw-tools-tab');
-            const drawToolsPane = document.getElementById('draw-tools');
-
-            // Switch to draw tools tab
-            document.querySelectorAll('#sidebar-tabs .nav-link').forEach(tab => tab.classList.remove('active'));
-            document.querySelectorAll('#sidebar-tabs ~ .sidebar-tab-content .tab-pane').forEach(pane => pane.classList.remove('show', 'active'));
-
-            drawToolsTab.classList.add('active');
-            drawToolsPane.classList.add('show', 'active');
-
-            cncController.setMode(path.creationTool);
-
-            // For Curve/Pen: enter edit mode first so getPropertiesHTML shows editing status
-            if (path.creationTool === 'Curve' || path.creationTool === 'Pen') {
-                const op = cncController.operationManager.getOperation(path.creationTool);
-                if (op) op.enterEditMode(path);
-            }
-
-            showPathPropertiesEditor(path);
-
-            // For Offset/Pattern: select generated paths first (red), source paths last (magenta)
-            if ((path.creationTool === 'Offset' || path.creationTool === 'Pattern') && path.creationProperties.sourceIds) {
-                selectMgr.unselectAll();
-                // Select generated paths first (they'll draw red)
-                const sourceIds = path.creationProperties.sourceIds;
-                svgpaths.filter(p => p.creationTool === path.creationTool && p.creationProperties &&
-                    p.creationProperties.sourceIds && arraysEqual(p.creationProperties.sourceIds, sourceIds))
-                    .forEach(p => selectMgr.selectPath(p));
-                // Select source paths last (they'll draw magenta)
-                sourceIds.forEach(srcId => {
-                    const srcPath = svgpaths.find(p => p.id === srcId);
-                    if (srcPath) selectMgr.selectPath(srcPath);
-                });
-                redraw();
-            }
-        }
-    }
+    openPathEditor(path);
 }
 
 // Move a toolpath one position earlier within its tool group
@@ -4265,6 +4439,9 @@ function refreshToolPathsDisplay() {
         if (typeof lucide !== 'undefined' && typeof lucide.createIcons === 'function') {
             lucide.createIcons();
         }
+        if (typeof window.schedule3DViewRefresh === 'function') {
+            window.schedule3DViewRefresh({ preserveProgress: true, resetIfMissing: true });
+        }
         return;
     }
 
@@ -4321,6 +4498,10 @@ function refreshToolPathsDisplay() {
     section.replaceChildren(fragment);
     if (typeof lucide !== 'undefined' && typeof lucide.createIcons === 'function') {
         lucide.createIcons();
+    }
+
+    if (typeof window.schedule3DViewRefresh === 'function') {
+        window.schedule3DViewRefresh({ preserveProgress: true, resetIfMissing: true });
     }
 }
 
@@ -4393,61 +4574,42 @@ function syncToolGroupSelection(groupSelector, itemSelector, headerSelector) {
     }
 }
 
-function syncShapeGroupSelection() {
-    const shapeGroup = document.querySelector('[data-shape-tools-group]');
-    if (!shapeGroup) return;
+function syncGroupedToolSelection() {
+    const drawToolsList = document.getElementById('draw-tools-list');
+    if (!drawToolsList) return;
 
-    const shapeChildren = shapeGroup.querySelectorAll('.sidebar-item[data-shape-operation]');
-    const hasSelectedChild = Array.from(shapeChildren).some(item => item.classList.contains('selected'));
-    const groupHeader = shapeGroup.querySelector('[data-shape-tools-toggle]');
-
-    if (groupHeader) {
-        groupHeader.classList.toggle('selected', hasSelectedChild);
-    }
-}
-
-function syncModifyGroupSelection() {
-    syncToolGroupSelection(
-        '[data-modify-tools-group]',
-        '.sidebar-item[data-modify-operation]',
-        '[data-modify-tools-toggle]'
-    );
-}
-
-function syncOperationsToolSelection() {
-    const operationsGroup = document.getElementById('operations-list');
-    if (!operationsGroup) return;
-
-    const selectedOperation = operationsGroup.querySelector('.sidebar-item.selected[data-operation]');
+    const selectedOperation = drawToolsList.querySelector('.sidebar-item.selected[data-operation]');
     const selectedOperationName = selectedOperation ? selectedOperation.dataset.operation : null;
 
-    operationsGroup.querySelectorAll('.sidebar-item.selected[data-operation]').forEach(item => {
+    drawToolsList.querySelectorAll('.sidebar-item.selected[data-operation]').forEach(item => {
         if (item.dataset.operation !== selectedOperationName) {
             item.classList.remove('selected');
         }
     });
 }
 
-function syncGroupedToolSelection() {
-    syncShapeGroupSelection();
-    syncModifyGroupSelection();
-    syncOperationsToolSelection();
+function ensureMachiningOperationsInSidebar() {
+    const machiningOperations = [
+        { name: 'Drill', icon: 'circle-plus', tooltip: 'Drill holes at selected points', displayName: 'Drill' },
+        { name: 'Profile', icon: 'circle', tooltip: 'Cut inside or outside the selected path', displayName: 'Profile' },
+        { name: 'Pocket', icon: 'target', tooltip: 'Remove material inside the path', displayName: 'Pocket' },
+        { name: 'VCarve', icon: 'star', tooltip: 'V-carve inside or outside the path', displayName: 'V-Carve' }
+    ];
+
+    machiningOperations.forEach(operation => {
+        if (!document.querySelector(`#draw-tools-list [data-operation="${operation.name}"]`)) {
+            addOperation(operation.name, operation.icon, operation.tooltip, operation.displayName);
+        }
+    });
 }
 
 // Compatibility function for operation manager
 function addOperation(name, icon, tooltip, displayName = name) {
 
-    if ((window.SHAPE_TOOL_NAMES || []).includes(name) || ['Pen', 'Curve'].includes(name)) {
-        renderShapeToolsGroup();
-        return;
-    }
+    const hiddenOperations = ['Move', 'Edit', 'Boolean', 'Pattern', 'Offset', 'Text', 'Shape'];
+    const machiningOperations = ['Drill', 'Profile', 'Pocket', 'VCarve'];
 
-    if (['Move', 'Edit', 'Boolean', 'Pattern', 'Offset'].includes(name)) {
-        renderModifyToolsGroup();
-        return;
-    }
-
-    if (name === 'Shape') {
+    if (hiddenOperations.includes(name)) {
         return;
     }
 
@@ -4461,12 +4623,35 @@ function addOperation(name, icon, tooltip, displayName = name) {
         item.dataset.bsToggle = 'tooltip';
         item.dataset.bsPlacement = 'right';
         item.title = tooltip;
+        if ((window.SHAPE_TOOL_NAMES || []).includes(name)) {
+            item.dataset.shapeOperation = 'true';
+        }
+        if (machiningOperations.includes(name)) {
+            item.dataset.machiningOperation = 'true';
+        }
         item.appendChild(createBootstrapLayoutIconNode(icon));
 
         const label = document.createElement('span');
         label.textContent = displayName;
         item.appendChild(label);
-        drawToolsList.appendChild(item);
+
+        if ((window.SHAPE_TOOL_NAMES || []).includes(name)) {
+            item.dataset.autoCreateShape = 'true';
+        }
+
+        const tabsItem = drawToolsList.querySelector('[data-operation="Tabs"]');
+        if (machiningOperations.includes(name) && tabsItem) {
+            if (!drawToolsList.querySelector('[data-machining-operation][data-shape-tools-separator]')) {
+                item.dataset.shapeToolsSeparator = 'true';
+            }
+            let insertAfter = tabsItem;
+            while (insertAfter.nextElementSibling?.dataset?.machiningOperation === 'true') {
+                insertAfter = insertAfter.nextElementSibling;
+            }
+            insertAfter.insertAdjacentElement('afterend', item);
+        } else {
+            drawToolsList.appendChild(item);
+        }
 
         if (typeof lucide !== 'undefined' && typeof lucide.createIcons === 'function') {
             lucide.createIcons();
@@ -4498,6 +4683,12 @@ function getIconForPath(sp) {
 }
 
 function getPathIcon(name) {
+    if (name.includes('Right triangle')) return 'triangle';
+    if (name.includes('Half circle')) return 'circle';
+    if (name.includes('Right Triangle')) return 'triangle';
+    if (name.includes('Half Circle')) return 'circle';
+    if (name.includes('Triangle')) return 'triangle';
+    if (name.includes('Square')) return 'square';
     if (name.includes('Circle')) return 'circle';
     if (name.includes('Ellipse')) return 'ellipse';
     if (name.includes('RoundRect')) return 'squircle';
@@ -4872,6 +5063,151 @@ function initializeResizeHandles() {
     const bottomResize = document.getElementById('bottom-resize');
     const sidebar = document.getElementById('sidebar');
     const toolPanelContainer = document.querySelector('.tool-panel-container');
+    const canvasLayout = document.getElementById('canvasTabContent');
+    const canvasSplitter = document.getElementById('canvas-splitter');
+
+    function notifyWorkspaceResize() {
+        if (typeof updateCanvasCenter === 'function') {
+            updateCanvasCenter();
+            if (typeof redraw === 'function') {
+                redraw();
+            }
+        }
+
+        if (typeof window.requestThreeRender === 'function') {
+            window.requestThreeRender();
+        }
+    }
+
+    function initializeCanvasSplitter() {
+        if (!canvasLayout || !canvasSplitter) {
+            return;
+        }
+
+        const SPLITTER_SIZE = 12;
+        const MIN_PANE_SIZE = 260;
+        const STACK_BREAKPOINT = 1100;
+        let isDragging = false;
+        let activePointerId = null;
+
+        function isStackedLayout() {
+            return window.innerWidth <= STACK_BREAKPOINT;
+        }
+
+        function clampRatio(rawRatio, availableSize) {
+            if (availableSize <= MIN_PANE_SIZE * 2) {
+                return 0.5;
+            }
+
+            const minRatio = MIN_PANE_SIZE / availableSize;
+            const maxRatio = 1 - minRatio;
+            return Math.min(maxRatio, Math.max(minRatio, rawRatio));
+        }
+
+        function setSplitterRatio(rawRatio) {
+            const rect = canvasLayout.getBoundingClientRect();
+            const stacked = isStackedLayout();
+            const totalSize = stacked ? rect.height : rect.width;
+            const availableSize = totalSize - SPLITTER_SIZE;
+            const ratio = clampRatio(rawRatio, availableSize);
+
+            canvasLayout.dataset.splitRatio = String(ratio);
+            canvasSplitter.setAttribute('aria-orientation', stacked ? 'horizontal' : 'vertical');
+            canvasSplitter.setAttribute('aria-valuenow', String(Math.round(ratio * 100)));
+
+            if (stacked) {
+                canvasLayout.style.gridTemplateColumns = '1fr';
+                canvasLayout.style.gridTemplateRows = `minmax(${MIN_PANE_SIZE}px, ${ratio}fr) ${SPLITTER_SIZE}px minmax(${MIN_PANE_SIZE}px, ${1 - ratio}fr)`;
+            } else {
+                canvasLayout.style.gridTemplateRows = '';
+                canvasLayout.style.gridTemplateColumns = `minmax(${MIN_PANE_SIZE}px, ${ratio}fr) ${SPLITTER_SIZE}px minmax(${MIN_PANE_SIZE}px, ${1 - ratio}fr)`;
+            }
+        }
+
+        function applyRatioFromPointer(clientX, clientY) {
+            const rect = canvasLayout.getBoundingClientRect();
+            const stacked = isStackedLayout();
+            const position = stacked ? (clientY - rect.top) : (clientX - rect.left);
+            const availableSize = (stacked ? rect.height : rect.width) - SPLITTER_SIZE;
+
+            if (availableSize <= 0) {
+                return;
+            }
+
+            setSplitterRatio(position / availableSize);
+            notifyWorkspaceResize();
+        }
+
+        function stopDragging(event) {
+            if (!isDragging || (event && event.pointerId !== activePointerId)) {
+                return;
+            }
+
+            if (event && canvasSplitter.hasPointerCapture && canvasSplitter.hasPointerCapture(event.pointerId)) {
+                canvasSplitter.releasePointerCapture(event.pointerId);
+            }
+
+            isDragging = false;
+            activePointerId = null;
+            canvasSplitter.classList.remove('is-dragging');
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+            notifyWorkspaceResize();
+        }
+
+        canvasSplitter.addEventListener('pointerdown', function (event) {
+            isDragging = true;
+            activePointerId = event.pointerId;
+            canvasSplitter.classList.add('is-dragging');
+            canvasSplitter.setPointerCapture(event.pointerId);
+            document.body.style.cursor = isStackedLayout() ? 'row-resize' : 'col-resize';
+            document.body.style.userSelect = 'none';
+            event.preventDefault();
+        });
+
+        canvasSplitter.addEventListener('pointermove', function (event) {
+            if (!isDragging || event.pointerId !== activePointerId) {
+                return;
+            }
+
+            applyRatioFromPointer(event.clientX, event.clientY);
+            event.preventDefault();
+        });
+
+        canvasSplitter.addEventListener('pointerup', stopDragging);
+        canvasSplitter.addEventListener('pointercancel', stopDragging);
+
+        canvasSplitter.addEventListener('keydown', function (event) {
+            const stacked = isStackedLayout();
+            const step = event.shiftKey ? 0.08 : 0.04;
+            const currentRatio = Number(canvasLayout.dataset.splitRatio || '0.575');
+            let nextRatio = currentRatio;
+
+            if ((!stacked && event.key === 'ArrowLeft') || (stacked && event.key === 'ArrowUp')) {
+                nextRatio -= step;
+            } else if ((!stacked && event.key === 'ArrowRight') || (stacked && event.key === 'ArrowDown')) {
+                nextRatio += step;
+            } else if (event.key === 'Home') {
+                nextRatio = 0.5;
+            } else if (event.key === 'End') {
+                nextRatio = 0.7;
+            } else {
+                return;
+            }
+
+            setSplitterRatio(nextRatio);
+            notifyWorkspaceResize();
+            event.preventDefault();
+        });
+
+        setSplitterRatio(Number(canvasLayout.dataset.splitRatio || '0.575'));
+
+        window.addEventListener('resize', function () {
+            setSplitterRatio(Number(canvasLayout.dataset.splitRatio || '0.575'));
+        });
+    }
+
+    initializeCanvasSplitter();
 
     // Sidebar horizontal resize
     if (sidebarResize && sidebar) {

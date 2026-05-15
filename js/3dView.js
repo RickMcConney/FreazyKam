@@ -37,6 +37,8 @@ let renderRequested = false;  // Track pending on-demand renders
 let resizeObserver3D = null;  // Track active ResizeObserver instance
 let threeLoadingUI = null;
 let threeViewLoadToken = 0;
+let pending3DRefreshFrameId = null;
+let pending3DRefreshOptions = null;
 let simulation3DUIElements = null;
 let simulation3DUIState = {
   lastUpdateTime: 0,
@@ -78,6 +80,255 @@ function setThreeLoadingState(isLoading, message = 'Chargement de la vue 3D...')
 
   ui.overlay.classList.toggle('d-none', !isLoading);
 }
+
+function getCurrentSimulation3DGcode() {
+  if (window._importedGcode) {
+    return window._importedGcode;
+  }
+
+  if (window._cachedGcode) {
+    return window._cachedGcode;
+  }
+
+  if (!window.toolpaths || window.toolpaths.length === 0 || typeof toGcode !== 'function') {
+    return null;
+  }
+
+  const hasReadyVisibleToolpath = window.toolpaths.some((toolpath) => {
+    return toolpath && toolpath.visible !== false && toolpath.pending !== true && Array.isArray(toolpath.paths) && toolpath.paths.length > 0;
+  });
+
+  if (!hasReadyVisibleToolpath) {
+    return null;
+  }
+
+  try {
+    const gcode = toGcode();
+    if (typeof console !== 'undefined' && typeof console.debug === 'function') {
+      console.debug('[3DView] generated G-code for refresh', {
+        visibleToolpaths: window.toolpaths
+          .filter((toolpath) => toolpath && toolpath.visible !== false)
+          .map((toolpath) => ({
+            id: toolpath.id,
+            operation: toolpath.operation,
+            pending: toolpath.pending === true,
+            pathCount: Array.isArray(toolpath.paths) ? toolpath.paths.length : 0,
+            depth: toolpath?.toolpathProperties?.depth ?? toolpath?.tool?.depth ?? null,
+            svgIds: Array.isArray(toolpath.svgIds) ? toolpath.svgIds.slice() : (toolpath.svgId ? [toolpath.svgId] : [])
+          })),
+        gcodeLength: gcode.length
+      });
+    }
+    return gcode;
+  } catch (error) {
+    console.error('Failed to generate G-code for 3D view refresh:', error);
+    return null;
+  }
+}
+
+function seek3DViewToCompletedState() {
+  if (!toolpathAnimation || !Array.isArray(toolpathAnimation.movementTiming) || toolpathAnimation.movementTiming.length === 0) {
+    return false;
+  }
+
+  if (toolpathAnimation.voxelGrid) {
+    toolpathAnimation.voxelGrid.reset();
+    toolpathAnimation.voxelMaterialRemover.reset();
+  }
+
+  toolpathAnimation.currentToolInfo = null;
+  toolpathAnimation.currentMovementIndex = 0;
+  toolpathAnimation.currentGcodeLineNumber = 0;
+  toolpathAnimation.elapsedTime = 0;
+  toolpathAnimation.previousElapsedTime = 0;
+
+  toolpathAnimation._replayFromMovementIndexToIndex(0, toolpathAnimation.movementTiming.length - 1);
+
+  const lastMovementIndex = toolpathAnimation.movementTiming.length - 1;
+  const lastMovement = toolpathAnimation.movementTiming[lastMovementIndex];
+  toolpathAnimation.currentMovementIndex = lastMovementIndex;
+  toolpathAnimation.currentGcodeLineNumber = lastMovement.gcodeLineNumber || 0;
+  toolpathAnimation.currentFeedRate = lastMovement.feedRate || 0;
+  toolpathAnimation.elapsedTime = 0;
+  toolpathAnimation.previousElapsedTime = 0;
+  toolpathAnimation.wasStopped = true;
+
+  toolpathAnimation.updateToolPositionAtCoordinates(
+    lastMovement.x,
+    lastMovement.y,
+    lastMovement.z,
+    false,
+    lastMovement.gcodeLineNumber || 0
+  );
+
+  if (toolpathAnimation.voxelGrid) {
+    toolpathAnimation.voxelGrid.flushVisualUpdates();
+  }
+
+  if (typeof console !== 'undefined' && typeof console.debug === 'function') {
+    console.debug('[3DView] seek to completed state', {
+      movementCount: toolpathAnimation.movementTiming.length,
+      lastMovementIndex,
+      lastLine: lastMovement.gcodeLineNumber || 0,
+      lastPosition: { x: lastMovement.x, y: lastMovement.y, z: lastMovement.z }
+    });
+  }
+
+  updateSimulation3DUI();
+  updateSimulation3DDisplays();
+  requestThreeRender();
+  return true;
+}
+
+function storePending3DRefreshOptions(options = {}) {
+  pending3DRefreshOptions = {
+    ...(pending3DRefreshOptions || {}),
+    ...(options || {})
+  };
+
+  return pending3DRefreshOptions;
+}
+
+function consumePending3DRefreshOptions() {
+  const options = pending3DRefreshOptions;
+  pending3DRefreshOptions = null;
+  return options;
+}
+
+window.consumePending3DRefreshOptions = consumePending3DRefreshOptions;
+
+async function reload3DViewFromCurrentState(options = {}) {
+  const {
+    preserveProgress = true,
+    resetIfMissing = false,
+    showLoading = false,
+    force = false,
+    seekToLatestState = false
+  } = options;
+
+  if (!scene || !toolpathAnimation || !workpieceManager) {
+    return false;
+  }
+
+  const previousLineNumber = preserveProgress ? toolpathAnimation.currentGcodeLineNumber : 0;
+  const wasPlaying = !!toolpathAnimation.isPlaying;
+
+  toolpathAnimation.pause();
+
+  const gcode = getCurrentSimulation3DGcode();
+  if (!gcode) {
+    if (resetIfMissing) {
+      toolpathAnimation.clearToolpath();
+      if (toolpathAnimation.voxelGrid) {
+        toolpathAnimation.voxelGrid.reset();
+        toolpathAnimation.voxelMaterialRemover.reset();
+        toolpathAnimation.voxelGrid.flushVisualUpdates();
+      }
+      if (workpieceManager.mesh) {
+        workpieceManager.mesh.visible = true;
+      }
+      if (toolpathAnimation.workpieceOutlineBox) {
+        scene.remove(toolpathAnimation.workpieceOutlineBox);
+        if (typeof toolpathAnimation.workpieceOutlineBox.dispose === 'function') {
+          toolpathAnimation.workpieceOutlineBox.dispose();
+        } else {
+          toolpathAnimation.workpieceOutlineBox.geometry?.dispose?.();
+          toolpathAnimation.workpieceOutlineBox.material?.dispose?.();
+        }
+        toolpathAnimation.workpieceOutlineBox = null;
+      }
+      toolpathAnimation.movementTiming = [];
+      toolpathAnimation.totalGcodeLines = 0;
+      toolpathAnimation.currentMovementIndex = 0;
+      toolpathAnimation.currentGcodeLineNumber = 0;
+      toolpathAnimation.totalAnimationTime = 0;
+      toolpathAnimation.currentFeedRate = 0;
+      toolpathAnimation.elapsedTime = 0;
+      updateSimulation3DUI();
+      updateSimulation3DDisplays();
+      requestThreeRender();
+    }
+    return false;
+  }
+
+  if (showLoading) {
+    setThreeLoadingState(true, 'Mise a jour du resultat 3D...');
+    await waitForNextFrame();
+  }
+
+  const nextGcode = force ? gcode : gcode;
+  window._cachedGcode = nextGcode;
+
+  try {
+    await toolpathAnimation.loadFromGcodeAsync(nextGcode);
+
+    if (typeof console !== 'undefined' && typeof console.debug === 'function') {
+      console.debug('[3DView] reload from current state', {
+        preserveProgress,
+        seekToLatestState,
+        totalGcodeLines: toolpathAnimation.totalGcodeLines,
+        movementCount: Array.isArray(toolpathAnimation.movementTiming) ? toolpathAnimation.movementTiming.length : 0
+      });
+    }
+
+    const targetLine = preserveProgress
+      ? Math.min(previousLineNumber, Math.max(0, toolpathAnimation.totalGcodeLines - 1))
+      : 0;
+
+    if (seekToLatestState && toolpathAnimation.totalGcodeLines > 0) {
+      seek3DViewToCompletedState();
+    } else if (toolpathAnimation.totalGcodeLines > 0) {
+      toolpathAnimation.setProgress(targetLine, true);
+    }
+
+    if (wasPlaying && toolpathAnimation.totalGcodeLines > 0) {
+      toolpathAnimation.play();
+      if (animationLoopActive && animationFrameId === null) {
+        animationFrameId = requestAnimationFrame(animate);
+      }
+    } else {
+      updateSimulation3DUI();
+      updateSimulation3DDisplays();
+      requestThreeRender();
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Failed to reload 3D view:', error);
+    return false;
+  } finally {
+    if (showLoading) {
+      setThreeLoadingState(false);
+    }
+  }
+}
+
+window.reload3DViewFromCurrentState = reload3DViewFromCurrentState;
+
+function schedule3DViewRefresh(options = {}) {
+  const mergedOptions = storePending3DRefreshOptions(options);
+
+  if (!scene || !toolpathAnimation || !workpieceManager) {
+    if (typeof console !== 'undefined' && typeof console.debug === 'function') {
+      console.debug('[3DView] defer refresh until 3D view is ready', mergedOptions);
+    }
+    return;
+  }
+
+  if (pending3DRefreshFrameId !== null) {
+    cancelAnimationFrame(pending3DRefreshFrameId);
+  }
+
+  pending3DRefreshFrameId = requestAnimationFrame(() => {
+    pending3DRefreshFrameId = null;
+    const nextOptions = consumePending3DRefreshOptions() || mergedOptions;
+    reload3DViewFromCurrentState(nextOptions).catch((error) => {
+      console.error('Scheduled 3D refresh failed:', error);
+    });
+  });
+}
+
+window.schedule3DViewRefresh = schedule3DViewRefresh;
 
 function waitForNextFrame() {
   return new Promise((resolve) => requestAnimationFrame(resolve));
@@ -456,7 +707,13 @@ function setupTabListener() {
       }
       redrawImmediate();
     });
+    return;
   }
+
+  animationLoopActive = true;
+  requestAnimationFrame(() => {
+    startThreeViewLoad();
+  });
 }
 
 function refreshToolpath() {
@@ -498,6 +755,8 @@ function refreshToolpath() {
   toolpathAnimation.setProgress(0);
   sync3DVisibilityControls();
 }
+
+window.refreshToolpath = refreshToolpath;
 
 async function initThree(loadToken = threeViewLoadToken) {
   const container = document.getElementById('3d-canvas-container');
@@ -631,7 +890,7 @@ async function initThree(loadToken = threeViewLoadToken) {
   }
 
   // Load toolpaths from generated G-code or imported G-code file
-  const gcode = window._cachedGcode || window._importedGcode || (window.toolpaths && window.toolpaths.length > 0 && typeof toGcode === 'function' ? toGcode() : null);
+  const gcode = getCurrentSimulation3DGcode();
   window._cachedGcode = null;
   if (!isThreeViewLoadCurrent(loadToken)) {
     return;
@@ -650,6 +909,14 @@ async function initThree(loadToken = threeViewLoadToken) {
     if (!isThreeViewLoadCurrent(loadToken)) {
       return;
     }
+
+    const pendingRefresh = consumePending3DRefreshOptions();
+    if (pendingRefresh?.seekToLatestState === true) {
+      if (typeof console !== 'undefined' && typeof console.debug === 'function') {
+        console.debug('[3DView] applying deferred completed-state refresh on init', pendingRefresh);
+      }
+      seek3DViewToCompletedState();
+    }
   } else {
     console.warn('No toolpaths found - create some in the 2D view first');
     // Still create voxel grid so workpiece appearance is consistent (solid voxels vs bare mesh)
@@ -659,6 +926,9 @@ async function initThree(loadToken = threeViewLoadToken) {
   }
 
   sync3DVisibilityControls({ deferSTL: true });
+  if (typeof window.addPendingSTLMeshes === 'function') {
+    window.addPendingSTLMeshes();
+  }
   updateSimulation3DUI();
   updateSimulation3DDisplays();
   setThreeLoadingState(false);
@@ -1058,6 +1328,7 @@ function updateWorkpiece3D(width, length, thickness, originPosition, material) {
 
     if (toolpathAnimation) {
       toolpathAnimation.workpieceManager = workpieceManager;
+      toolpathAnimation.lastVoxelConfig = null;
     }
   } else {
     // Origin change only: keep the workpiece fixed and move only the axes helper
@@ -1320,6 +1591,11 @@ function animate() {
  * Called when switching away from 3D view tab
  */
 function cleanup3DView() {
+
+  if (pending3DRefreshFrameId !== null) {
+    cancelAnimationFrame(pending3DRefreshFrameId);
+    pending3DRefreshFrameId = null;
+  }
 
   if (deferredSTLVisibilitySyncId) {
     clearTimeout(deferredSTLVisibilitySyncId);

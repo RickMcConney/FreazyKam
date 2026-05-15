@@ -70,8 +70,11 @@ function makePendingToolpath(svgIds, name, operation, pendingKey, overrides) {
 		pendingKey: pendingKey
 	};
 	if (window.currentToolpathProperties) {
-		pendingToolpath.toolpathProperties = { ...window.currentToolpathProperties };
-		setToolpathLabel(pendingToolpath, window.currentToolpathProperties.toolpathName);
+		pendingToolpath.toolpathProperties = sanitizeToolpathProperties(window.currentToolpathProperties) || {};
+		setToolpathLabel(pendingToolpath, getToolpathPropertyName(window.currentToolpathProperties));
+	}
+	if (window.currentToolpathDescriptor?.displayOperation) {
+		pendingToolpath.operation = window.currentToolpathDescriptor.displayOperation;
 	}
 	if (overrides && typeof overrides === 'object') {
 		Object.assign(pendingToolpath, overrides);
@@ -163,10 +166,8 @@ document.addEventListener('keydown', function (evt) {
 		if (typeof cncController !== 'undefined' &&
 			cncController.operationManager &&
 			cncController.operationManager.currentOperation &&
-			(cncController.operationManager.currentOperation.name === 'Edit' ||
-			 cncController.operationManager.currentOperation.name === 'Tabs' ||
-			 cncController.operationManager.currentOperation.name === 'Curve' ||
-			 cncController.operationManager.currentOperation.name === 'Pen')) {
+            (cncController.operationManager.currentOperation.name === 'Edit' ||
+             cncController.operationManager.currentOperation.name === 'Tabs')) {
 			// Let PathEdit/TabEditor handle the delete key for deleting points/tabs
 			return;
 		}
@@ -308,6 +309,9 @@ function setVisibility(id, visible, options) {
 	if (!options.suppressRedraw) {
 		redraw();
 	}
+	if (typeof window.schedule3DViewRefresh === 'function') {
+		window.schedule3DViewRefresh({ preserveProgress: true, resetIfMissing: true });
+	}
 }
 
 function doRemoveToolPath(id) {
@@ -351,6 +355,9 @@ function doRemoveToolPath(id) {
 	}
 
 	redraw();
+	if (typeof window.schedule3DViewRefresh === 'function') {
+		window.schedule3DViewRefresh({ preserveProgress: true, resetIfMissing: true });
+	}
 }
 
 function deleteSelected() {
@@ -458,11 +465,7 @@ function restoreProject(project) {
 	if (project.svgpaths) restoreSvgpaths(project.svgpaths, project.selectedIds);
 	var editOp = cncController && cncController.operationManager && cncController.operationManager.getOperation('Edit');
 	if (editOp) { editOp.originalPathBeforeRadius = null; editOp.originalPathBeforeRadiusId = null; }
-	['Curve', 'Pen'].forEach(name => {
-		var op = cncController && cncController.operationManager && cncController.operationManager.getOperation(name);
-		if (op && typeof op.refreshEditPath === 'function') op.refreshEditPath();
-	});
-	onPathsChanged(null);
+    onPathsChanged(null);
 }
 
 function doUndo() {
@@ -783,7 +786,7 @@ function doProfile() {
 		if (updateTarget) {
 			updateTarget.paths = [];
 			updateTarget.visible = true;
-			updateTarget.operation = 'Profile';
+			updateTarget.operation = window.currentToolpathDescriptor?.displayOperation || 'Profile';
 			updateTarget.name = config.name;
 			updateTarget.tool = { ...currentTool };
 			updateTarget.svgId = entry.svgpath.id;
@@ -791,8 +794,8 @@ function doProfile() {
 			updateTarget.pending = true;
 			updateTarget.pendingKey = entry.pendingKey;
 			if (window.currentToolpathProperties) {
-				updateTarget.toolpathProperties = { ...window.currentToolpathProperties };
-				setToolpathLabel(updateTarget, window.currentToolpathProperties.toolpathName);
+				updateTarget.toolpathProperties = sanitizeToolpathProperties(window.currentToolpathProperties) || {};
+				setToolpathLabel(updateTarget, getToolpathPropertyName(window.currentToolpathProperties));
 			}
 			return updateTarget;
 		}
@@ -832,7 +835,7 @@ function doProfile() {
 			const generated = result.toolpaths[i];
 			const pendingToolpath = pendingToolpaths[i];
 			pendingToolpath.paths = generated.paths;
-			pendingToolpath.operation = generated.operation;
+			pendingToolpath.operation = generated.displayOperation || generated.operation;
 			pendingToolpath.name = generated.name;
 			pendingToolpath.svgId = generated.svgId;
 			pendingToolpath.svgIds = generated.svgIds;
@@ -897,16 +900,6 @@ function doEditPoints() {
 
 function doBoolean() {
 	cncController.setMode("Boolean");
-}
-
-function doPen() {
-	cncController.setMode("Pen");
-	selectMgr.unselectAll();
-}
-
-function doCurve() {
-	cncController.setMode("Curve");
-	selectMgr.unselectAll();
 }
 
 function doShape(shapeToolName) {
@@ -990,7 +983,7 @@ function doSurfacing() {
 
 	const radius = toolRadius();
 	const stepover = 2 * radius * currentTool.stepover / 100;
-	const angle = window.currentToolpathProperties?.angle || 0;
+	const angle = 0;
 
 	if (stepover <= 0) {
 		notify('Invalid tool or stepover value');
@@ -1022,8 +1015,8 @@ function doSurfacing() {
 		updateTarget.pending = true;
 		updateTarget.pendingKey = pendingKey;
 		if (window.currentToolpathProperties) {
-			updateTarget.toolpathProperties = { ...window.currentToolpathProperties };
-			setToolpathLabel(updateTarget, window.currentToolpathProperties.toolpathName);
+			updateTarget.toolpathProperties = sanitizeToolpathProperties(window.currentToolpathProperties) || {};
+			setToolpathLabel(updateTarget, getToolpathPropertyName(window.currentToolpathProperties));
 		}
 		pendingToolpaths.push(updateTarget);
 	} else {
@@ -1069,11 +1062,11 @@ function doSurfacing() {
 
 		const result = event.data.result || { toolpaths: [], createdCount: 0 };
 		for (let i = 0; i < result.toolpaths.length && i < pendingToolpaths.length; i++) {
-			const generated = result.toolpaths[i];
-			const pendingToolpath = pendingToolpaths[i];
-			pendingToolpath.paths = generated.paths;
-			pendingToolpath.operation = generated.operation;
-			pendingToolpath.name = generated.name;
+		const generated = result.toolpaths[i];
+		const pendingToolpath = pendingToolpaths[i];
+		pendingToolpath.paths = generated.paths;
+		pendingToolpath.operation = generated.displayOperation || generated.operation;
+		pendingToolpath.name = generated.name;
 			pendingToolpath.svgId = generated.svgId;
 			pendingToolpath.svgIds = generated.svgIds;
 			pendingToolpath.pending = false;
@@ -2321,7 +2314,7 @@ function doInlay() {
 	const groupStates = selectionGroups.map(function(group) {
 		const svgIds = group.paths.map(function(path) { return path.id; });
 		const svgIdsKey = svgIds.slice().sort().join(',');
-		const fallbackBaseLabel = (window.currentToolpathProperties && window.currentToolpathProperties.toolpathName)
+		const fallbackBaseLabel = getToolpathPropertyName(window.currentToolpathProperties)
 			|| ('Inlay ' + (props?.inlayType === 'male' ? 'Plug' : 'Socket'));
 		const pendingTargets = [];
 		const matchingUpdateTargets = groupedUpdateTargets.get(svgIdsKey) || [];
@@ -2338,7 +2331,7 @@ function doInlay() {
 			updateTarget.pendingKey = group.pendingKey;
 			setToolpathLabel(updateTarget, fallbackBaseLabel);
 			if (window.currentToolpathProperties) {
-				updateTarget.toolpathProperties = { ...window.currentToolpathProperties };
+				updateTarget.toolpathProperties = sanitizeToolpathProperties(window.currentToolpathProperties) || {};
 			}
 			pendingTargets.push(updateTarget);
 		}
@@ -2515,8 +2508,8 @@ function doPocket() {
 			updateTarget.pending = true;
 			updateTarget.pendingKey = group.pendingKey;
 			if (window.currentToolpathProperties) {
-				updateTarget.toolpathProperties = { ...window.currentToolpathProperties };
-				setToolpathLabel(updateTarget, window.currentToolpathProperties.toolpathName);
+				updateTarget.toolpathProperties = sanitizeToolpathProperties(window.currentToolpathProperties) || {};
+				setToolpathLabel(updateTarget, getToolpathPropertyName(window.currentToolpathProperties));
 			}
 			pendingToolpaths.push(updateTarget);
 			continue;
@@ -2534,8 +2527,8 @@ function doPocket() {
 			pendingKey: group.pendingKey
 		};
 		if (window.currentToolpathProperties) {
-			pendingToolpath.toolpathProperties = { ...window.currentToolpathProperties };
-			setToolpathLabel(pendingToolpath, window.currentToolpathProperties.toolpathName);
+			pendingToolpath.toolpathProperties = sanitizeToolpathProperties(window.currentToolpathProperties) || {};
+			setToolpathLabel(pendingToolpath, getToolpathPropertyName(window.currentToolpathProperties));
 		}
 		toolpaths.push(pendingToolpath);
 		toolpathId++;
@@ -2579,12 +2572,12 @@ function doPocket() {
 
 		const result = event.data.result;
 		for (let i = 0; i < result.toolpaths.length && i < pendingToolpaths.length; i++) {
-			const generated = result.toolpaths[i];
-			const pendingToolpath = pendingToolpaths[i];
-			pendingToolpath.paths = generated.paths;
-			pendingToolpath.operation = generated.operation;
-			pendingToolpath.svgId = generated.svgId;
-			pendingToolpath.svgIds = generated.svgIds;
+		const generated = result.toolpaths[i];
+		const pendingToolpath = pendingToolpaths[i];
+		pendingToolpath.paths = generated.paths;
+		pendingToolpath.operation = generated.displayOperation || generated.operation;
+		pendingToolpath.svgId = generated.svgId;
+		pendingToolpath.svgIds = generated.svgIds;
 			pendingToolpath.pending = false;
 			delete pendingToolpath.pendingKey;
 		}
@@ -2657,8 +2650,8 @@ function startVcarveGeneration(config) {
 			updateTarget.pending = true;
 			updateTarget.pendingKey = pendingKey;
 			if (window.currentToolpathProperties) {
-				updateTarget.toolpathProperties = { ...window.currentToolpathProperties };
-				setToolpathLabel(updateTarget, window.currentToolpathProperties.toolpathName);
+				updateTarget.toolpathProperties = sanitizeToolpathProperties(window.currentToolpathProperties) || {};
+				setToolpathLabel(updateTarget, getToolpathPropertyName(window.currentToolpathProperties));
 			}
 			pendingToolpaths.push(updateTarget);
 			continue;
@@ -2697,7 +2690,7 @@ function startVcarveGeneration(config) {
 			const generated = result.toolpaths[i];
 			const pendingToolpath = pendingToolpaths[i];
 			pendingToolpath.paths = generated.paths;
-			pendingToolpath.operation = generated.operation;
+			pendingToolpath.operation = generated.displayOperation || generated.operation;
 			pendingToolpath.name = generated.name;
 			pendingToolpath.svgId = generated.svgId;
 			pendingToolpath.svgIds = generated.svgIds;
@@ -2765,7 +2758,7 @@ function doVcarveCenter() {
 		return;
 	}
 	setMode("VCarve Center");
-	startVcarveGeneration({ mode: 'center', name: 'VCarve Center', outside: false });
+	startVcarveGeneration({ mode: 'center', name: 'Center', outside: false });
 }
 
 function doVcarveIn() {
@@ -2774,7 +2767,7 @@ function doVcarveIn() {
 		return;
 	}
 	setMode("VCarve In");
-	startVcarveGeneration({ mode: 'inside', name: 'VCarve In', outside: false });
+	startVcarveGeneration({ mode: 'inside', name: 'Inside', outside: false });
 }
 
 function doVcarveOut() {
@@ -2783,7 +2776,7 @@ function doVcarveOut() {
 		return;
 	}
 	setMode("VCarve Out");
-	startVcarveGeneration({ mode: 'outside', name: 'VCarve Out', outside: true });
+	startVcarveGeneration({ mode: 'outside', name: 'Outside', outside: true });
 }
 
 var link = document.createElement('a');

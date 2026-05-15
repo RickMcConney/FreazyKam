@@ -93,6 +93,7 @@ self.onmessage = function(event) {
 				toolpaths.push({
 					name: 'Drill',
 					operation: 'Drill',
+					displayOperation: 'Center',
 					svgId: null,
 					svgIds: [],
 					paths: [{
@@ -112,6 +113,7 @@ self.onmessage = function(event) {
 				toolpaths.push({
 					name: 'Helical Drill',
 					operation: 'HelicalDrill',
+					displayOperation: 'Center',
 					svgId: request.svgId || null,
 					svgIds: request.svgId ? [request.svgId] : [],
 					paths: [{ tpath: helixPath, path: helixPath }]

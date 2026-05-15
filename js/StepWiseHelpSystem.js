@@ -212,61 +212,40 @@ class StepWiseHelpSystem {
                 'Select Multiple paths',
                 'Select Operation and click Apply',
             ],
-            'Pen': [
-                'Click on the canvas to set the first point of the path',
-                'Click to add more points and create line segments',
-                'To close the path, click near the first point when the green circle appears',
-                'Press Escape to finish the path without closing'
-            ],
-            'Polygon': [
-                'Set the number of sides in the properties panel',
-                'Click to place the center point of the polygon and drag outwards to size it',
-                'Polygon created! Adjust properties or close panel'
-            ],
             'Shape': [
-                'Set the shape properties',
+                'Choose one of the available shapes and set X, Y, width, height and angle',
                 'Click to place the center point of the shape',
                 'Shape created! Adjust properties or close panel'
             ],
-            'Belt': [
-                'Set the two pulley radii and their spacing in the properties panel',
-                'Click to place the center point of the belt shape',
-                'Belt created! Adjust properties or close panel'
-            ],
             'Circle': [
-                'Set the circle radius in the properties panel',
+                'Set X, Y, width, height and angle in the properties panel',
                 'Click to place the center point of the circle',
                 'Circle created! Adjust properties or close panel'
             ],
-            'Ellipse': [
-                'Set the ellipse radii in the properties panel',
-                'Click to place the center point of the ellipse',
-                'Ellipse created! Adjust properties or close panel'
+            'Square': [
+                'Set X, Y, width, height and angle in the properties panel',
+                'Click to place the center point of the square',
+                'Square created! Adjust properties or close panel'
             ],
-            'Heart': [
-                'Set the heart radius and angle in the properties panel',
-                'Click to place the center point of the heart',
-                'Heart created! Adjust properties or close panel'
-            ],
-            'Rectangle': [
-                'Set the rectangle width and height in the properties panel',
-                'Click to place the center point of the rectangle',
-                'Rectangle created! Adjust properties or close panel'
-            ],
-            'RoundRectangle': [
-                'Set the width, height and corner radius in the properties panel',
-                'Click to place the center point of the rounded rectangle',
-                'Rounded rectangle created! Adjust properties or close panel'
-            ],
-            'Sign': [
-                'Set the sign width, height and corner radius in the properties panel',
-                'Click to place the center point of the sign blank',
-                'Sign created! Adjust properties or close panel'
+            'Triangle': [
+                'Set X, Y, width, height and angle in the properties panel',
+                'Click to place the center point of the triangle',
+                'Triangle created! Adjust properties or close panel'
             ],
             'Star': [
-                'Set the number of points and inner/outer radii in the properties panel',
+                'Set X, Y, width, height and angle in the properties panel',
                 'Click to place the center point of the star',
                 'Star created! Adjust properties or close panel'
+            ],
+            'HalfCircle': [
+                'Set X, Y, width, height and angle in the properties panel',
+                'Click to place the center point of the half circle',
+                'Half circle created! Adjust properties or close panel'
+            ],
+            'RightTriangle': [
+                'Set X, Y, width, height and angle in the properties panel',
+                'Click to place the center point of the right triangle',
+                'Right triangle created! Adjust properties or close panel'
             ],
             'Text': [
                 'Enter your text in the properties panel',
@@ -292,14 +271,6 @@ class StepWiseHelpSystem {
                 'Set cutting depth, stepdown and stepover percentage',
                 'You can change infill angle to match the grain direction for better results',
                 'Pocket toolpath generated with multiple passes'
-            ],
-            'Surfacing': [
-                'No path selection needed — surfacing covers the entire workpiece automatically',
-                'Select an End Mill tool from the dropdown',
-                'Set the cutting depth (typically 0.5–1mm per pass)',
-                'Adjust stepover percentage — higher values are faster, lower values give a smoother finish',
-                'Set the infill angle to match the grain direction for a smoother cut (0° = along X axis, 90° = along Y axis)',
-                'Click Apply Surfacing to generate the toolpath'
             ],
             'VCarve': [
                 'Select paths for V-carving',

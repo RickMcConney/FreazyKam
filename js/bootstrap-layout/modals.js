@@ -208,7 +208,6 @@ function createModals() {
                                 </ul>
                                 <p class="mb-2 mt-3"><strong>Path Editing:</strong></p>
                                 <ul>
-                                    <li>Use "Edit" tool to modify path vertices</li>
                                     <li>Text objects can be re-edited after creation</li>
                                     <li>Shape properties can be changed after creation</li>
                                 </ul>
@@ -287,6 +286,26 @@ function createModals() {
         </div>
     `;
     body.appendChild(reorderOperationsModal);
+
+    const cutSettingsModal = document.createElement('div');
+    cutSettingsModal.innerHTML = `
+        <div class="modal fade" id="cutSettingsModal" tabindex="-1" aria-labelledby="cut-settings-modal-title" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="cut-settings-modal-title">Cut settings</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body" id="cut-settings-modal-body"></div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                        <button type="button" class="btn btn-primary" id="save-cut-settings-button">Save</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    body.appendChild(cutSettingsModal);
 
     // Delete Profile Confirmation Modal
     const deleteConfirmModal = document.createElement('div');
@@ -522,7 +541,7 @@ function renderOptionsWorkpieceSettings() {
         }
 
         input.addEventListener('change', handleInputChange);
-        if ((input.type === 'text' || input.tagName === 'TEXTAREA') && input.dataset.dimensionInput !== 'true') {
+        if (input.type === 'text' || input.type === 'number' || input.tagName === 'TEXTAREA') {
             input.addEventListener('input', handleInputChange);
         }
     });

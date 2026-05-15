@@ -132,13 +132,8 @@
     <div id="layout">
         <div class="main-row">
             <!-- Full Height Sidebar -->
-            <div id="sidebar" class="bg-light border-end" style="width: 260px; flex-shrink: 0;">
+            <div id="sidebar" class="bg-light border-end" style="width: 86px; flex-shrink: 0;">
 
-            </div>
-
-            <!-- Horizontal Resize Handle -->
-            <div class="resize-handle resize-handle-horizontal" id="sidebar-resize">
-                <div class="resize-handle-bar"></div>
             </div>
 
             <!-- Right Panel Stack -->
@@ -149,63 +144,40 @@
                         </nav>
                     </div>
 
-                    <!-- Canvas Area with Tabs -->
+                    <!-- Split 2D / 3D Workspace -->
                     <div class="canvas-container border-bottom d-flex flex-column">
-                        <!-- Tab Navigation -->
-                        <ul class="nav nav-tabs position-relative canvas-tab-header" id="canvasTabs" role="tablist" style="flex-shrink: 0;">
-                            <li class="nav-item" role="presentation">
-                                <button class="nav-link active canvas-view-toggle" id="2d-tab" data-bs-toggle="tab" data-bs-target="#2d-view" type="button" role="tab" aria-controls="2d-view" aria-selected="true">Sketch</button>
-                            </li>
-                            <li class="nav-item" role="presentation">
-                                <button class="nav-link canvas-view-toggle" id="3d-tab" data-bs-toggle="tab" data-bs-target="#3d-view" type="button" role="tab" aria-controls="3d-view" aria-selected="false">Simulate</button>
-                            </li>
-                            <li class="nav-item" style="position:absolute;left:50%;transform:translateX(-50%);display:flex;align-items:center;height:100%;pointer-events:none;">
-                                <span id="project-name-display" style="font-size:0.875rem;color:#6c757d;font-style:italic;"></span>
-                            </li>
-                        </ul>
-
-                        <aside id="canvas-object-tree" class="canvas-object-tree" aria-label="Project objects overlay">
-                            <div class="canvas-object-tree-panel">
-                                <div class="collapse show canvas-object-tree-content" id="svg-paths-section">
-                                    <!-- Objects and linked toolpaths will be added dynamically -->
-                                </div>
-                            </div>
-                        </aside>
- 
-                        <!-- Tab Content -->
-                        <div class="tab-content flex-grow-1 canvas-tab-content" id="canvasTabContent" style="min-height: 0;">
-<!-- 2D View Tab -->
-                            <div class="tab-pane fade show active h-100 position-relative" id="2d-view" role="tabpanel" aria-labelledby="2d-tab">
-                                <canvas id="canvas" width="2000" height="2000" style="width: 100%; height: 100%; display: block;"></canvas>
-                                <div class="canvas-overlay-controls">
-                                    <div class="canvas-minimap-card">
-                                        <canvas id="canvas-minimap" width="180" height="120" class="canvas-minimap" aria-label="Canvas minimap"></canvas>
+                        <div class="canvas-split-layout flex-grow-1" id="canvasTabContent" style="min-height: 0;">
+                            <section class="canvas-pane canvas-pane-2d" id="canvas-pane-2d" aria-label="Sketch 2D">
+                                <div class="canvas-pane-body position-relative" id="2d-view">
+                                    <canvas id="canvas" width="2000" height="2000" style="width: 100%; height: 100%; display: block;"></canvas>
+                                    <div class="canvas-overlay-controls">
                                         <div id="canvas-unit-toggle" class="canvas-unit-toggle" role="group" aria-label="Display units">
                                             <button type="button" class="canvas-unit-toggle-button" data-unit="mm" aria-pressed="true">mm</button>
                                             <button type="button" class="canvas-unit-toggle-button" data-unit="in" aria-pressed="false">inch</button>
                                         </div>
                                     </div>
-                                </div>
-                                <!-- 2D Simulation Controls Overlay -->
-                                <div id="simulation-overlay-2d" class="simulation-overlay d-none">
-                                    <div id="2d-simulation-controls"></div>
-                                </div>
-                            </div>
- 
-                            <!-- 3D View Tab -->
-                            <div class="tab-pane fade h-100 position-relative" id="3d-view" role="tabpanel" aria-labelledby="3d-tab">
-                                <div id="3d-canvas-container" style="width: 100%; height: 100%;"></div>
-                                <div id="3d-loading-overlay" class="three-loading-overlay d-none" aria-live="polite" aria-busy="true">
-                                    <div class="three-loading-card">
-                                        <div class="three-loading-spinner" aria-hidden="true"></div>
-                                        <div id="3d-loading-message" class="three-loading-message">Chargement de la vue 3D...</div>
+                                    <div id="simulation-overlay-2d" class="simulation-overlay d-none">
+                                        <div id="2d-simulation-controls"></div>
                                     </div>
                                 </div>
-                                <!-- 3D Simulation Controls Overlay -->
-                                <div id="simulation-overlay-3d" class="simulation-overlay d-none">
-                                    <div id="3d-simulation-controls"></div>
+                            </section>
+
+                            <div class="canvas-splitter" id="canvas-splitter" role="separator" aria-label="Resize 2D and 3D workspace" aria-orientation="vertical" aria-controls="canvas-pane-2d canvas-pane-3d" aria-valuemin="25" aria-valuemax="75" aria-valuenow="58" tabindex="0"></div>
+
+                            <section class="canvas-pane canvas-pane-3d" id="canvas-pane-3d" aria-label="Result 3D">
+                                <div class="canvas-pane-body position-relative" id="3d-view">
+                                    <div id="3d-canvas-container" style="width: 100%; height: 100%;"></div>
+                                    <div id="3d-loading-overlay" class="three-loading-overlay d-none" aria-live="polite" aria-busy="true">
+                                        <div class="three-loading-card">
+                                            <div class="three-loading-spinner" aria-hidden="true"></div>
+                                            <div id="3d-loading-message" class="three-loading-message">Chargement de la vue 3D...</div>
+                                        </div>
+                                    </div>
+                                    <div id="simulation-overlay-3d" class="simulation-overlay d-none">
+                                        <div id="3d-simulation-controls"></div>
+                                    </div>
                                 </div>
-                            </div>
+                            </section>
                         </div>
                     </div>
                 </div>
@@ -219,7 +191,6 @@
             <div id="floating-properties-header" class="floating-properties-header">
                 <div class="floating-properties-header-main">
                     <h5 id="floating-properties-popup-title" class="floating-properties-popup-title mb-0">Properties</h5>
-                    <small id="floating-properties-popup-subtitle" class="text-muted">Move this window anywhere in the workspace.</small>
                 </div>
                 <button type="button" class="btn-close" id="floating-properties-close" aria-label="Close"></button>
             </div>

@@ -137,6 +137,7 @@ function buildCenterVcarveToolpaths(payload) {
 			paths: [{ path: clonePathWithRadius(circles), tpath: clonePathWithRadius(tpath) }],
 			name: payload.name,
 			operation: 'VCarve',
+			displayOperation: payload.name === 'Inside' ? 'Inside' : (payload.name === 'Outside' ? 'Outside' : 'Center'),
 			svgId: item.id,
 			svgIds: [item.id].concat(item.holeSvgIds)
 		});
@@ -187,6 +188,7 @@ function buildProfileVcarveToolpaths(payload) {
 			paths: [{ path: clonePathWithRadius(finalCircles), tpath: clonePathWithRadius(finalTpath) }],
 			name: payload.name,
 			operation: 'VCarve',
+			displayOperation: payload.name === 'Inside' ? 'Inside' : (payload.name === 'Outside' ? 'Outside' : 'Center'),
 			svgId: svgpath.id,
 			svgIds: [svgpath.id]
 		});
