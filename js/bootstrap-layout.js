@@ -1895,7 +1895,7 @@ function bindShapeCutPopup(path, shapeOperation, operationName) {
         }
 
         input.addEventListener('change', handleCutChange);
-        if (input.type === 'text' || input.type === 'number' || input.tagName === 'TEXTAREA') {
+        if (input.type === 'text' || input.type === 'number' || input.type === 'range' || input.tagName === 'TEXTAREA') {
             input.addEventListener('input', handleCutChange);
         }
     });
@@ -2012,7 +2012,7 @@ function showToolPropertiesEditor(operationName) {
 
             // Add both change and input events for real-time updates
             input.addEventListener('change', handleInputChange);
-            if (input.type === 'text' || input.type === 'number' || input.tagName === 'TEXTAREA') {
+            if (input.type === 'text' || input.type === 'number' || input.type === 'range' || input.tagName === 'TEXTAREA') {
                 input.addEventListener('input', handleInputChange);
             }
         });
@@ -2179,6 +2179,35 @@ function markShapePreviewToolpaths(pathId, toolpathsToMark) {
     });
 }
 
+function removeShapePreviewToolpaths(pathId) {
+    if (!pathId) {
+        return 0;
+    }
+
+    let removedCount = 0;
+    for (let index = toolpaths.length - 1; index >= 0; index--) {
+        const toolpath = toolpaths[index];
+        if (!toolpath || toolpath.isShapePreviewToolpath !== true) {
+            continue;
+        }
+
+        const sourceIds = getToolpathSourceIds(toolpath);
+        if (sourceIds.length === 1 && sourceIds[0] === pathId) {
+            toolpaths.splice(index, 1);
+            removedCount++;
+        }
+    }
+
+    if (removedCount > 0) {
+        if (typeof refreshToolPathsDisplay === 'function') {
+            refreshToolPathsDisplay();
+        }
+        redraw();
+    }
+
+    return removedCount;
+}
+
 function syncShapeMachiningToolpath(path, options = {}) {
     if (!path || !path.id || !path.toolpathProperties || !window.toolPathProperties) {
         return false;
@@ -2187,6 +2216,10 @@ function syncShapeMachiningToolpath(path, options = {}) {
     const data = sanitizeToolpathProperties(path.toolpathProperties);
     if (!data) {
         return false;
+    }
+
+    if (data.operationType === 'none') {
+        return removeShapePreviewToolpaths(path.id) > 0;
     }
 
     if (typeof console !== 'undefined' && typeof console.debug === 'function') {
@@ -2582,7 +2615,7 @@ function showOperationPropertiesEditor(operationName) {
 
                 // Add both change and input events for real-time updates
                 input.addEventListener('change', handleInputChange);
-                if (input.type === 'text' || input.type === 'number' || input.tagName === 'TEXTAREA') {
+                if (input.type === 'text' || input.type === 'number' || input.type === 'range' || input.tagName === 'TEXTAREA') {
                     input.addEventListener('input', handleInputChange);
                 }
             });
@@ -3260,7 +3293,7 @@ function showPathPropertiesEditor(path) {
             }
 
             input.addEventListener('change', handlePathEditChange);
-            if (input.type === 'text' || input.type === 'number' || input.tagName === 'TEXTAREA') {
+            if (input.type === 'text' || input.type === 'number' || input.type === 'range' || input.tagName === 'TEXTAREA') {
                 input.addEventListener('input', handlePathEditChange);
             }
         });

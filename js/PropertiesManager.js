@@ -145,7 +145,18 @@ class PropertiesManager {
             if (el.type === 'checkbox') {
                 el.checked = !!value;
             } else if (el.tagName === 'INPUT' || el.tagName === 'SELECT' || el.tagName === 'TEXTAREA') {
-                el.value = value;
+                const display = document.getElementById(`pm-${key}-display`);
+                if (el.type === 'range' && display) {
+                    const isDimension = el.dataset.dimensionRange === 'true';
+                    const mmPerUnit = parseFloat(el.dataset.mmPerUnit || '1') || 1;
+                    const sliderValue = isDimension ? Number(value) / mmPerUnit : value;
+                    el.value = sliderValue;
+                    display.textContent = isDimension
+                        ? formatDimension(Number(value), true)
+                        : value;
+                } else {
+                    el.value = value;
+                }
             } else {
                 el.textContent = value;
             }
@@ -294,14 +305,22 @@ class PropertiesManager {
         const oninput     = field.dimension
             ? `formatDimension(parseFloat(this.value)*${mmPerUnit},true)`
             : `this.value`;
+        const orientationClass = field.vertical ? ' pm-range--vertical' : '';
+        const orientationAttrs = field.vertical
+            ? ' orient="vertical" aria-orientation="vertical"'
+            : '';
         return `<div class="mb-3 pm-field">
-            <label for="pm-${field.key}" class="form-label small">
+            <label for="pm-${field.key}" class="form-label small pm-range-label${orientationClass}">
                 <strong>${field.label}:</strong> <span id="pm-${field.key}-display">${displayNow}</span>
             </label>
-            <input type="range" class="form-range"
-                   id="pm-${field.key}" name="${field.key}"
-                   min="${min}" max="${max}" step="${step}" value="${sliderValue}"
-                   oninput="document.getElementById('pm-${field.key}-display').textContent=${oninput}">${field.help ? `
+            <div class="pm-range-wrap${orientationClass}">
+                <input type="range" class="form-range${orientationClass}"
+                       id="pm-${field.key}" name="${field.key}"
+                       data-dimension-range="${field.dimension ? 'true' : 'false'}"
+                       data-mm-per-unit="${mmPerUnit}"
+                       min="${min}" max="${max}" step="${step}" value="${sliderValue}"
+                       oninput="document.getElementById('pm-${field.key}-display').textContent=${oninput}"${orientationAttrs}>
+            </div>${field.help ? `
             <div class="form-text">${field.help}</div>` : ''}
         </div>`;
     }

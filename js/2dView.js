@@ -531,12 +531,16 @@ function drawSvgPath(svgpath, color, lineWidth) {
 function getToolpathShadeColor(depth) {
 	var maxDepth = (typeof getOption === 'function' ? Number(getOption('workpieceThickness')) : 19) || 19;
 	var ratio = Math.min(Math.max((Number(depth) || 0) / maxDepth, 0), 1);
+	//return 'rgba(0, 0, 0, ' + ratio + ')';
 	var channel = Math.round(235 * (1 - ratio));
 	return 'rgb(' + channel + ', ' + channel + ', ' + channel + ')';
 }
 
 function getToolpathCutPreviewMode(toolpath) {
 	var operationType = toolpath && toolpath.toolpathProperties ? toolpath.toolpathProperties.operationType : null;
+	if (operationType === 'none') {
+		return null;
+	}
 	if (operationType === 'pocket' || operationType === 'inside' || operationType === 'outside' || operationType === 'center') {
 		return operationType;
 	}
@@ -560,6 +564,7 @@ function drawToolpathShapePreview(svgpath, toolpath) {
 	if (!screenPath || !screenPath.points || !screenPath.points.length) return;
 
 	var mode = getToolpathCutPreviewMode(toolpath);
+	if (!mode) return;
 	var color = getToolpathShadeColor(toolpath?.toolpathProperties?.depth ?? toolpath?.tool?.depth);
 	var toolDiameter = Number(toolpath?.tool?.diameter) || 0;
 	var strokeWidth = Math.max(4, toolDiameter * viewScale * zoomLevel);

@@ -541,7 +541,7 @@ function renderOptionsWorkpieceSettings() {
         }
 
         input.addEventListener('change', handleInputChange);
-        if (input.type === 'text' || input.type === 'number' || input.tagName === 'TEXTAREA') {
+        if (input.type === 'text' || input.type === 'number' || input.type === 'range' || input.tagName === 'TEXTAREA') {
             input.addEventListener('input', handleInputChange);
         }
     });

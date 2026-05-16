@@ -19,8 +19,9 @@ class ToolPathProperties {
                 label: 'Cut',
                 description: 'Cut the selected shape using the chosen path side.',
                 noToolMsg: 'Please add an End Mill, Ball Nose, or VBit in the tool library.',
-                defaultOperationType: 'pocket',
+                defaultOperationType: 'none',
                 operationTypeOptions: [
+                    { value: 'none', label: 'None' },
                     { value: 'pocket', label: 'Clear out a pocket' },
                     { value: 'center', label: 'Cut on shape path' },
                     { value: 'outside', label: 'Cut outside shape path' },
@@ -106,6 +107,7 @@ class ToolPathProperties {
 
     getDefaults(operationName) {
         const thickness = this._getWorkpieceThickness();
+        const defaultDepth = thickness / 2;
         const saved = PropertiesManager.loadSaved(operationName);
         const advanced = this.getAdvancedDefaults(operationName);
         const savedOperationType = saved.operationType || (saved.operation === 'Pocket' ? 'pocket' : null);
@@ -113,14 +115,14 @@ class ToolPathProperties {
             || this._operationMeta[operationName]?.operationTypeOptions?.[0]?.value
             || 'center';
         const defaults = {
-            depth: thickness,
+            depth: defaultDepth,
             extraDepth: 0,
             operationType: savedOperationType || defaultOperationType,
             ...saved,
             tool: advanced.tool
         };
 
-        defaults.depth = thickness;
+        defaults.depth = defaultDepth;
         return defaults;
     }
 
@@ -138,6 +140,14 @@ class ToolPathProperties {
     getFields(operationName) {
         const meta = this.getMeta(operationName);
         const defaults = this.getDefaults(operationName);
+        const thickness = this._getWorkpieceThickness();
+        const useInches = typeof getOption === 'function' ? !!getOption('Inches') : false;
+        const mmPerUnit = useInches ? 25.4 : 1;
+        const sliderMax = thickness / mmPerUnit;
+        const sliderStep = sliderMax > 0
+            ? Math.max(Number((sliderMax / 100).toFixed(useInches ? 4 : 2)), useInches ? 0.001 : 0.1)
+            : (useInches ? 0.001 : 0.1);
+
         return [
             {
                 key: 'operationType',
@@ -149,10 +159,14 @@ class ToolPathProperties {
             {
                 key: 'depth',
                 label: 'Depth',
-                type: 'dimension',
+                type: 'range',
                 default: defaults.depth,
+                dimension: true,
+                vertical: true,
                 min: 0,
-                max: this._getWorkpieceThickness()
+                max: sliderMax,
+                step: sliderStep,
+                mmPerUnit
             },
             {
                 key: 'extraDepth',
@@ -257,7 +271,7 @@ class ToolPathProperties {
 
     getDefaultShapeCutProperties(operationName = 'Profile') {
         return sanitizeToolpathProperties(this.collectDefaultFormData(operationName, {
-            operationType: 'pocket'
+            operationType: 'none'
         }));
     }
 
@@ -299,6 +313,10 @@ class ToolPathProperties {
         const errors = [];
         const thickness = this._getWorkpieceThickness();
 
+        if (operationName === 'Profile' && data.operationType === 'none') {
+            errors.push('Please select a cut path');
+        }
+
         if (!data.tool) {
             errors.push('Please select a tool in Cut settings');
         }
@@ -317,6 +335,9 @@ class ToolPathProperties {
 
     getOperationDescriptor(operationName, operationType) {
         const normalizedType = operationType || this.getDefaults(operationName).operationType;
+        if (normalizedType === 'none') {
+            return null;
+        }
         switch (this._resolveOperationName(operationName, normalizedType)) {
             case 'Pocket':
                 return {
@@ -355,6 +376,7 @@ class ToolPathProperties {
     }
 
     _mapOperationTypeToInside(operationName, operationType) {
+        if (operationType === 'none') return null;
         const resolvedOperationName = this._resolveOperationName(operationName, operationType);
         if (resolvedOperationName === 'Pocket') return 'inside';
         if (resolvedOperationName === 'Drill') return 'center';
@@ -364,6 +386,7 @@ class ToolPathProperties {
     }
 
     _mapProfileOperationTypeToDisplay(operationType) {
+        if (operationType === 'none') return 'None';
         if (operationType === 'pocket') return 'Pocket';
         if (operationType === 'inside') return 'Inside';
         if (operationType === 'outside') return 'Outside';
@@ -377,6 +400,7 @@ class ToolPathProperties {
 
     _describeOperationType(operationType) {
         switch (operationType) {
+            case 'none': return 'None';
             case 'pocket': return 'Clear out a pocket';
             case 'outside': return 'Cut outside shape path';
             case 'inside': return 'Cut inside shape path';

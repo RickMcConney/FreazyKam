@@ -32,6 +32,42 @@
     display: inline-block;
 }
 
+.pm-range-wrap {
+    width: 100%;
+}
+
+.pm-range-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.pm-range-wrap.pm-range--vertical {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 160px;
+    width: 42px;
+    flex: 0 0 42px;
+}
+
+.pm-range-label.pm-range--vertical {
+    width: auto;
+    min-width: 68px;
+    align-self: stretch;
+    justify-content: center;
+    text-align: center;
+    flex-direction: column;
+}
+
+.form-range.pm-range--vertical {
+    width: 150px;
+    height: 24px;
+    margin: 0;
+    transform: rotate(90deg);
+    transform-origin: center;
+}
+
 /* PropertiesManager radio-grid layout */
 .pm-radio-grid { max-width: 150px; margin: 0 auto; }
 .pm-radio-cell {
@@ -266,6 +302,35 @@ html, body {
 
 .floating-properties-body .form-check-label {
     margin: 0;
+}
+
+.floating-properties-body .pm-field:has(.pm-range--vertical) {
+    align-items: stretch;
+}
+
+.floating-properties-body .pm-field > .pm-range-wrap.pm-range--vertical,
+.floating-properties-body .pm-field > .form-text {
+    flex-shrink: 0;
+}
+
+.floating-properties-body .pm-field > .pm-range-wrap.pm-range--vertical {
+    width: 42px;
+    flex-basis: 42px;
+}
+
+.floating-properties-body .pm-field > .form-label.pm-range--vertical {
+    width: 68px;
+    min-width: 68px;
+}
+
+#tool-properties-editor .pm-field:has(.pm-range--vertical),
+#operation-properties-editor .pm-field:has(.pm-range--vertical) {
+    align-items: stretch;
+}
+
+#tool-properties-editor .pm-range-wrap.pm-range--vertical,
+#operation-properties-editor .pm-range-wrap.pm-range--vertical {
+    min-height: 170px;
 }
 
 .floating-properties-body .pm-field:has(#pm-lockObject) {
