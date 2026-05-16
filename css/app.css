@@ -152,6 +152,69 @@ html, body {
     gap: 8px;
 }
 
+.canvas-overlay-nav {
+    position: absolute;
+    right: 16px;
+    bottom: 16px;
+    z-index: 20;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 1px;
+}
+
+.canvas-nav-button {
+    width: 25px;
+    min-width: 25px;
+    height: 25px;
+    padding: 0;
+    border: 1px solid rgba(15, 23, 42, 0.12);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.92);
+    color: rgba(15, 23, 42, 0.88);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.95rem;
+    font-weight: 700;
+    line-height: 1;
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease, background-color 120ms ease;
+}
+
+.canvas-nav-button:hover {
+    transform: translateY(-1px);
+    border-color: rgba(37, 99, 235, 0.28);
+    background: rgba(255, 255, 255, 0.98);
+    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.16);
+}
+
+.canvas-nav-button:focus-visible {
+    outline: 2px solid rgba(37, 99, 235, 0.45);
+    outline-offset: 2px;
+}
+
+.canvas-nav-button:active {
+    transform: translateY(0);
+    box-shadow: 0 6px 18px rgba(15, 23, 42, 0.12);
+}
+
+.canvas-nav-button-home {
+    font-size: 0;
+}
+
+.canvas-nav-button-home svg {
+    width: 16px;
+    height: 16px;
+    stroke: currentColor;
+    stroke-width: 1.9;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    fill: none;
+}
+
 .floating-properties-popup {
     position: fixed;
     inset: 0;

@@ -1,6 +1,5 @@
 TODO
 
-- Mouse to pan 2D view, pinch to zoom.
 - Lock floating-properties-popup on the right side of the 2D view.
 - Add range input for cut depth
 - Do not generate GCode automatically
@@ -10,3 +9,4 @@ TODO
 - Add TEXT tool
 - Add PEN tool
 - Add Aligment panel.
+- Fix: Cut on path is twice as large as cut outside path

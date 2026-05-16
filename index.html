@@ -156,6 +156,17 @@
                                             <button type="button" class="canvas-unit-toggle-button" data-unit="in" aria-pressed="false">inch</button>
                                         </div>
                                     </div>
+                                    <div class="canvas-overlay-nav" aria-label="Navigation vue 2D">
+                                        <button type="button" id="canvas-zoom-in" class="canvas-nav-button" aria-label="Zoomer">+</button>
+                                        <button type="button" id="canvas-zoom-out" class="canvas-nav-button" aria-label="Dezoomer">-</button>
+                                        <button type="button" id="canvas-home" class="canvas-nav-button canvas-nav-button-home" aria-label="Revenir a la vue generale">
+                                            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                                <path d="M4 10.5L12 4l8 6.5"></path>
+                                                <path d="M6.5 9.5V20h11V9.5"></path>
+                                                <path d="M10 20v-5h4v5"></path>
+                                            </svg>
+                                        </button>
+                                    </div>
                                     <div id="simulation-overlay-2d" class="simulation-overlay d-none">
                                         <div id="2d-simulation-controls"></div>
                                     </div>

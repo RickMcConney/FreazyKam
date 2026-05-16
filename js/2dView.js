@@ -66,6 +66,9 @@ var simulationDirty = true;
 var previewCompositeCanvas = null;
 var previewCompositeCtx = null;
 var unitToggleElement = document.getElementById('canvas-unit-toggle');
+var zoomInButtonElement = document.getElementById('canvas-zoom-in');
+var zoomOutButtonElement = document.getElementById('canvas-zoom-out');
+var homeButtonElement = document.getElementById('canvas-home');
 var canvasResizeObserver = null;
 var pendingCanvasResizeFrame = null;
 var geometryCacheDirty = true;
@@ -159,13 +162,90 @@ function refreshVisibleGeometryCaches() {
 	geometryCacheDirty = false;
 }
 
-// Mousewheel zoom (standard 'wheel' event works across all browsers including Safari)
+var TRACKPAD_PAN_DELTA_THRESHOLD = 40;
+var TRACKPAD_ZOOM_SENSITIVITY = 0.0025;
+var safariGestureScale = 1;
+
+function normalizeWheelDelta(delta, deltaMode) {
+	if (deltaMode === WheelEvent.DOM_DELTA_LINE) {
+		return delta * 16;
+	}
+
+	if (deltaMode === WheelEvent.DOM_DELTA_PAGE) {
+		return delta * getViewportSize().height;
+	}
+
+	return delta;
+}
+
+function isLikelyTrackpadWheelEvent(evt) {
+	var deltaX = Math.abs(normalizeWheelDelta(evt.deltaX, evt.deltaMode));
+	var deltaY = Math.abs(normalizeWheelDelta(evt.deltaY, evt.deltaMode));
+
+	if (evt.ctrlKey) {
+		return true;
+	}
+
+	return evt.deltaMode === WheelEvent.DOM_DELTA_PIXEL
+		&& (deltaX > 0 || deltaY < TRACKPAD_PAN_DELTA_THRESHOLD || Math.floor(deltaY) !== deltaY);
+}
+
+function applyPanDelta(deltaX, deltaY) {
+	var clampedPan = clampPanToWorkpiece(panX - deltaX, panY - deltaY);
+	panX = clampedPan.panX;
+	panY = clampedPan.panY;
+	markGeometryCacheDirty();
+	redraw();
+}
+
+// Mouse wheel and trackpad gestures.
 canvas.addEventListener('wheel', function (evt) {
 	var rect = canvas.getBoundingClientRect();
-	var zoomX = evt.clientX - rect.left;
-	var zoomY = evt.clientY - rect.top;
+	var pointerX = evt.clientX - rect.left;
+	var pointerY = evt.clientY - rect.top;
+	var normalizedDeltaX = normalizeWheelDelta(evt.deltaX, evt.deltaMode);
+	var normalizedDeltaY = normalizeWheelDelta(evt.deltaY, evt.deltaMode);
+
+	if (evt.ctrlKey) {
+		setZoomLevelAtPoint(zoomLevel * Math.exp(-normalizedDeltaY * TRACKPAD_ZOOM_SENSITIVITY), pointerX, pointerY);
+		evt.preventDefault();
+		return;
+	}
+
+	if (isLikelyTrackpadWheelEvent(evt)) {
+		applyPanDelta(normalizedDeltaX, normalizedDeltaY);
+		evt.preventDefault();
+		return;
+	}
+
 	var delta = evt.deltaY < 0 ? 1 : -1;
-	newZoom(delta, zoomX, zoomY);
+	newZoom(delta, pointerX, pointerY);
+	evt.preventDefault();
+}, { passive: false });
+
+// Safari still exposes trackpad pinch as GestureEvent.
+canvas.addEventListener('gesturestart', function (evt) {
+	safariGestureScale = evt.scale || 1;
+	evt.preventDefault();
+}, { passive: false });
+
+canvas.addEventListener('gesturechange', function (evt) {
+	var rect = canvas.getBoundingClientRect();
+	var pointerX = evt.clientX - rect.left;
+	var pointerY = evt.clientY - rect.top;
+	var nextScale = evt.scale || 1;
+	var scaleDelta = safariGestureScale ? nextScale / safariGestureScale : 1;
+
+	if (scaleDelta && scaleDelta !== 1) {
+		setZoomLevelAtPoint(zoomLevel * scaleDelta, pointerX, pointerY);
+		safariGestureScale = nextScale;
+	}
+
+	evt.preventDefault();
+}, { passive: false });
+
+canvas.addEventListener('gestureend', function (evt) {
+	safariGestureScale = 1;
 	evt.preventDefault();
 }, { passive: false });
 
@@ -183,7 +263,8 @@ window.addEventListener('resize', function () {
 var ZOOM_STEP_FACTOR = 1.05; // Multiplier per scroll tick
 var MIN_ZOOM_LEVEL = 0.15;
 var MAX_ZOOM_LEVEL = 20;
-var MAX_ZOOM_OUT_MARGIN_FACTOR = 1.25;
+var MAX_ZOOM_OUT_MARGIN_FACTOR = 1.6;
+var PAN_BOUNDARY_MARGIN_FACTOR = 0.2;
 
 function getViewportSize() {
 	var canvasParent = $('#canvas').parent()[0];
@@ -224,6 +305,8 @@ function clampPanToWorkpiece(nextPanX, nextPanY, effectiveZoomLevel) {
 	var workpieceWidth = getOption("workpieceWidth") * viewScale;
 	var workpieceLength = getOption("workpieceLength") * viewScale;
 	var viewport = getViewportSize();
+	var horizontalMargin = workpieceWidth * PAN_BOUNDARY_MARGIN_FACTOR;
+	var verticalMargin = workpieceLength * PAN_BOUNDARY_MARGIN_FACTOR;
 
 	if (!zoom || !workpieceWidth || !workpieceLength || !viewport.width || !viewport.height) {
 		return { panX: nextPanX, panY: nextPanY };
@@ -233,10 +316,12 @@ function clampPanToWorkpiece(nextPanX, nextPanY, effectiveZoomLevel) {
 	var visibleHeight = viewport.height / zoom;
 	var centerX = (viewport.width / 2 - nextPanX) / zoom;
 	var centerY = (viewport.height / 2 - nextPanY) / zoom;
-	var minCenterX = visibleWidth >= workpieceWidth ? workpieceWidth / 2 : visibleWidth / 2;
-	var maxCenterX = visibleWidth >= workpieceWidth ? workpieceWidth / 2 : workpieceWidth - visibleWidth / 2;
-	var minCenterY = visibleHeight >= workpieceLength ? workpieceLength / 2 : visibleHeight / 2;
-	var maxCenterY = visibleHeight >= workpieceLength ? workpieceLength / 2 : workpieceLength - visibleHeight / 2;
+	var maxVisibleWidth = workpieceWidth + horizontalMargin * 2;
+	var maxVisibleHeight = workpieceLength + verticalMargin * 2;
+	var minCenterX = visibleWidth >= maxVisibleWidth ? workpieceWidth / 2 : visibleWidth / 2 - horizontalMargin;
+	var maxCenterX = visibleWidth >= maxVisibleWidth ? workpieceWidth / 2 : workpieceWidth - visibleWidth / 2 + horizontalMargin;
+	var minCenterY = visibleHeight >= maxVisibleHeight ? workpieceLength / 2 : visibleHeight / 2 - verticalMargin;
+	var maxCenterY = visibleHeight >= maxVisibleHeight ? workpieceLength / 2 : workpieceLength - visibleHeight / 2 + verticalMargin;
 
 	centerX = Math.max(minCenterX, Math.min(maxCenterX, centerX));
 	centerY = Math.max(minCenterY, Math.min(maxCenterY, centerY));
@@ -248,19 +333,15 @@ function clampPanToWorkpiece(nextPanX, nextPanY, effectiveZoomLevel) {
 }
 
 // Function to handle zooming in and out, centered on given screen coordinates
-function newZoom(delta, centerX, centerY) {
-	// centerX, centerY are screen coordinates where zoom is centered
-	// Compute world coordinate under mouse before zoom
+function setZoomLevelAtPoint(nextZoomLevel, centerX, centerY) {
 	var world = screenToWorld(centerX, centerY);
-	// Update zoom level multiplicatively
-	var zoomFactor = (delta > 0) ? ZOOM_STEP_FACTOR : 1 / ZOOM_STEP_FACTOR;
 	var minZoomLevel = getMinZoomLevel();
-	var newZoom = Math.max(minZoomLevel, Math.min(MAX_ZOOM_LEVEL, zoomLevel * zoomFactor));
-	var clampedPan = clampPanToWorkpiece(centerX - world.x * newZoom, centerY - world.y * newZoom, newZoom);
-	// Adjust pan so the world coordinate stays under the mouse
+	var clampedZoomLevel = Math.max(minZoomLevel, Math.min(MAX_ZOOM_LEVEL, nextZoomLevel));
+	var clampedPan = clampPanToWorkpiece(centerX - world.x * clampedZoomLevel, centerY - world.y * clampedZoomLevel, clampedZoomLevel);
+
 	panX = clampedPan.panX;
 	panY = clampedPan.panY;
-	zoomLevel = newZoom;
+	zoomLevel = clampedZoomLevel;
 	markGeometryCacheDirty();
 
 	// Update properties panel if Pan tool is currently active
@@ -273,6 +354,11 @@ function newZoom(delta, centerX, centerY) {
 	}
 
 	redraw();
+}
+
+function newZoom(delta, centerX, centerY) {
+	var zoomFactor = (delta > 0) ? ZOOM_STEP_FACTOR : 1 / ZOOM_STEP_FACTOR;
+	setZoomLevelAtPoint(zoomLevel * zoomFactor, centerX, centerY);
 }
 
 // Function to automatically center the workpiece in the canvas viewport
@@ -297,6 +383,8 @@ function centerWorkpiece() {
 function fitWorkpieceInView() {
 	zoomLevel = getMinZoomLevel();
 	centerWorkpiece();
+	markGeometryCacheDirty();
+	redraw();
 }
 
 function initializeCanvasOverlayControls() {
@@ -307,6 +395,29 @@ function initializeCanvasOverlayControls() {
 			window.setDisplayUnits(button.dataset.unit === 'in');
 		});
 		unitToggleElement.dataset.initialized = 'true';
+	}
+
+	if (zoomInButtonElement && zoomInButtonElement.dataset.initialized !== 'true') {
+		zoomInButtonElement.addEventListener('click', function() {
+			var viewport = getViewportSize();
+			newZoom(1, viewport.width / 2, viewport.height / 2);
+		});
+		zoomInButtonElement.dataset.initialized = 'true';
+	}
+
+	if (zoomOutButtonElement && zoomOutButtonElement.dataset.initialized !== 'true') {
+		zoomOutButtonElement.addEventListener('click', function() {
+			var viewport = getViewportSize();
+			newZoom(-1, viewport.width / 2, viewport.height / 2);
+		});
+		zoomOutButtonElement.dataset.initialized = 'true';
+	}
+
+	if (homeButtonElement && homeButtonElement.dataset.initialized !== 'true') {
+		homeButtonElement.addEventListener('click', function() {
+			fitWorkpieceInView();
+		});
+		homeButtonElement.dataset.initialized = 'true';
 	}
 
 	if (typeof updateCanvasUnitToggleUI === 'function') {
