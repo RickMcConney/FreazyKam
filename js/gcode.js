@@ -29,6 +29,57 @@ function getChipLoad(material, toolDiameter, toolType) {
 
 const DEFAULT_FEED_MM_MIN = 600; // Fallback feed rate when no tool or auto-feed is disabled
 
+function getResolvedGcodeCutSettings() {
+	if (typeof window === 'undefined') return null;
+	const rawSettings = typeof window.getCompleteCutSettings === 'function'
+		? window.getCompleteCutSettings()
+		: (window.gcodeCutSettings || null);
+	if (!rawSettings) return null;
+
+	const tool = (window.tools || []).find(candidate => Number(candidate.recid) === Number(rawSettings.tool));
+	if (!tool) return null;
+
+	const step = Number(rawSettings.step);
+	if (!Number.isFinite(step) || step <= 0) return null;
+
+	return {
+		toolId: Number(tool.recid),
+		tool: tool,
+		direction: rawSettings.direction === 'conventional' ? 'conventional' : 'climb',
+		step: step,
+		plunge: rawSettings.plunge || 'vertical',
+		strategy: rawSettings.strategy || 'adaptive'
+	};
+}
+
+function buildToolpathWithCutSettings(toolpath, cutSettings) {
+	if (!toolpath || !cutSettings || !cutSettings.tool) return toolpath;
+
+	const nextTool = {
+		...toolpath.tool,
+		...cutSettings.tool,
+		depth: toolpath.tool?.depth,
+		step: cutSettings.step,
+		direction: cutSettings.direction,
+		plunge: cutSettings.plunge,
+		strategy: cutSettings.strategy
+	};
+
+	return {
+		...toolpath,
+		tool: nextTool,
+		toolpathProperties: {
+			...(toolpath.toolpathProperties || {}),
+			tool: cutSettings.toolId,
+			toolId: cutSettings.toolId,
+			direction: cutSettings.direction,
+			plunge: cutSettings.plunge,
+			strategy: cutSettings.strategy,
+			step: cutSettings.step
+		}
+	};
+}
+
 function calculateFeedRate(tool, material, operation) {
 	// Manual mode - return user-specified feed rate
 	if (!getOption("autoFeedRate") || !tool) {
@@ -1577,12 +1628,16 @@ function checkTableLimits(tpaths) {
 }
 
 // MAIN FUNCTION: Generate G-code output for all toolpaths
-function toGcode() {
+function toGcode(cutSettingsOverride) {
 	var timeStart = performance.now();
 	// 1. SETUP AND VALIDATION
 	var profile = _setupGcodeProfile();
 	var useInches = profile.gcodeUnits === 'inches';
-	var sortedToolpaths = _prepareAndSortToolpaths(toolpaths);
+	var resolvedCutSettings = cutSettingsOverride || getResolvedGcodeCutSettings();
+	var sourceToolpaths = resolvedCutSettings
+		? toolpaths.map(function(toolpath) { return buildToolpathWithCutSettings(toolpath, resolvedCutSettings); })
+		: toolpaths;
+	var sortedToolpaths = _prepareAndSortToolpaths(sourceToolpaths);
 	var spindleSpeed = _getInitialSpindleSpeed(sortedToolpaths);
 
 	var output = "";

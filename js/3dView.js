@@ -24,8 +24,6 @@ let initialized = false;
 let workpieceManager, toolpathAnimation, toolpathVisualizer;
 let orbitControls;
 let toolGroup;  // Visual representation of the cutting tool (Group: children[0]=tip, children[1]=shank)
-let gridHelper3D;  // Grid helper reference for updates
-let currentGridStep3D = null;  // Active grid step in mm for progressive zoom behavior
 let axisLines = { x: null, y: null, z: null };  // Store axis line references
 let resizeListenerAttached = false;  // Track if resize listener has been added
 let isResizing = false;  // Track if window is currently being resized
@@ -90,40 +88,7 @@ function getCurrentSimulation3DGcode() {
     return window._cachedGcode;
   }
 
-  if (!window.toolpaths || window.toolpaths.length === 0 || typeof toGcode !== 'function') {
-    return null;
-  }
-
-  const hasReadyVisibleToolpath = window.toolpaths.some((toolpath) => {
-    return toolpath && toolpath.visible !== false && toolpath.pending !== true && Array.isArray(toolpath.paths) && toolpath.paths.length > 0;
-  });
-
-  if (!hasReadyVisibleToolpath) {
-    return null;
-  }
-
-  try {
-    const gcode = toGcode();
-    if (typeof console !== 'undefined' && typeof console.debug === 'function') {
-      console.debug('[3DView] generated G-code for refresh', {
-        visibleToolpaths: window.toolpaths
-          .filter((toolpath) => toolpath && toolpath.visible !== false)
-          .map((toolpath) => ({
-            id: toolpath.id,
-            operation: toolpath.operation,
-            pending: toolpath.pending === true,
-            pathCount: Array.isArray(toolpath.paths) ? toolpath.paths.length : 0,
-            depth: toolpath?.toolpathProperties?.depth ?? toolpath?.tool?.depth ?? null,
-            svgIds: Array.isArray(toolpath.svgIds) ? toolpath.svgIds.slice() : (toolpath.svgId ? [toolpath.svgId] : [])
-          })),
-        gcodeLength: gcode.length
-      });
-    }
-    return gcode;
-  } catch (error) {
-    console.error('Failed to generate G-code for 3D view refresh:', error);
-    return null;
-  }
+  return null;
 }
 
 function seek3DViewToCompletedState() {
@@ -304,6 +269,88 @@ async function reload3DViewFromCurrentState(options = {}) {
 }
 
 window.reload3DViewFromCurrentState = reload3DViewFromCurrentState;
+
+async function generateAndLoad3DGcode(options = {}) {
+  const {
+    cutSettings = null,
+    showLoading = true,
+    seekToLatestState = true,
+    preserveProgress = false
+  } = options;
+
+  if (window._importedGcode) {
+    if (!scene || !toolpathAnimation || !workpieceManager) {
+      if (typeof window.show3DPane === 'function') {
+        window.show3DPane();
+      }
+      return true;
+    }
+
+    return reload3DViewFromCurrentState({
+      preserveProgress,
+      resetIfMissing: true,
+      showLoading,
+      force: true,
+      seekToLatestState
+    });
+  }
+
+  if (!window.toolpaths || window.toolpaths.length === 0 || typeof toGcode !== 'function') {
+    return false;
+  }
+
+  const hasReadyVisibleToolpath = window.toolpaths.some((toolpath) => {
+    return toolpath && toolpath.visible !== false && toolpath.pending !== true && Array.isArray(toolpath.paths) && toolpath.paths.length > 0;
+  });
+
+  if (!hasReadyVisibleToolpath) {
+    return false;
+  }
+
+  if (showLoading) {
+    setThreeLoadingState(true, 'Generation du G-code...');
+    await waitForNextFrame();
+  }
+
+  try {
+    const gcode = toGcode(cutSettings || undefined);
+    window._cachedGcode = gcode;
+
+    if (typeof gcodeView !== 'undefined' && gcodeView) {
+      gcodeView.populate(gcode);
+      if (typeof showGcodeViewerPanel === 'function') {
+        showGcodeViewerPanel();
+      }
+    }
+
+    if (!scene || !toolpathAnimation || !workpieceManager) {
+      if (typeof window.show3DPane === 'function') {
+        window.show3DPane();
+      }
+      return true;
+    }
+
+    return await reload3DViewFromCurrentState({
+      preserveProgress,
+      resetIfMissing: true,
+      showLoading: false,
+      force: true,
+      seekToLatestState
+    });
+  } catch (error) {
+    console.error('Failed to generate G-code for 3D view:', error);
+    if (typeof window.notify === 'function') {
+      window.notify((error && error.message) || 'Unable to generate G-code', 'error');
+    }
+    return false;
+  } finally {
+    if (showLoading) {
+      setThreeLoadingState(false);
+    }
+  }
+}
+
+window.generateAndLoad3DGcode = generateAndLoad3DGcode;
 
 function schedule3DViewRefresh(options = {}) {
   const mergedOptions = storePending3DRefreshOptions(options);
@@ -501,16 +548,6 @@ const CONFIG = {
   AXIS_GREEN: 0x00ff00,
   AXIS_BLUE: 0x0000ff,
 
-  // Grid
-  GRID_DISPLAY_SIZE_MULTIPLIER: 1.5,
-  GRID_MAX_SIZE_MULTIPLIER: 12,
-  GRID_MIN_DIVISIONS: 8,
-  GRID_MAX_DIVISIONS: 120,
-  GRID_PROGRESSIVE_DISTANCE_DIVISOR: 2.5,
-  GRID_PROGRESSIVE_SCALE_FACTOR: 2,
-  GRID_COLOR: 0x666666,
-  GRID_ROTATION_X: Math.PI / 2,
-
   // Workpiece
   WORKPIECE_MATERIAL_SHININESS: 30,
   WORKPIECE_OPACITY: 0.6,
@@ -536,9 +573,6 @@ const CONFIG = {
   DEFAULT_FEED_RATE: 1000,
   RAPID_FEED_RATE: 6000,
   SAFE_Z_HEIGHT: 5,
-
-  // Grid size default
-  DEFAULT_GRID_SIZE: 10,
 
   // PHASE 3.5: Magic number constants
   // Animation
@@ -745,7 +779,7 @@ function refreshToolpath() {
   toolpathAnimation.clearToolpath();
 
   // Regenerate from current G-code or use imported G-code
-  const gcode = window._importedGcode || (typeof toGcode === 'function' ? toGcode() : null);
+  const gcode = getCurrentSimulation3DGcode();
   if (gcode) {
     toolpathAnimation.loadFromGcode(gcode);
   }
@@ -884,11 +918,6 @@ async function initThree(loadToken = threeViewLoadToken) {
 
   requestThreeRender();
 
-  if (!window._cachedGcode && !window._importedGcode && window.toolpaths && window.toolpaths.length > 0 && typeof toGcode === 'function') {
-    setThreeLoadingState(true, 'Generation du G-code...');
-    await waitForNextFrame();
-  }
-
   // Load toolpaths from generated G-code or imported G-code file
   const gcode = getCurrentSimulation3DGcode();
   window._cachedGcode = null;
@@ -918,7 +947,16 @@ async function initThree(loadToken = threeViewLoadToken) {
       seek3DViewToCompletedState();
     }
   } else {
-    console.warn('No toolpaths found - create some in the 2D view first');
+    const hasReadyVisibleToolpath = Array.isArray(window.toolpaths) && window.toolpaths.some((toolpath) => {
+      return toolpath && toolpath.visible !== false && toolpath.pending !== true && Array.isArray(toolpath.paths) && toolpath.paths.length > 0;
+    });
+
+    if (hasReadyVisibleToolpath) {
+      console.info('No G-code loaded - generate it from the 3D view controls to run the simulation.');
+    } else {
+      console.warn('No toolpaths found - create some in the 2D view first');
+    }
+
     // Still create voxel grid so workpiece appearance is consistent (solid voxels vs bare mesh)
     if (toolpathAnimation.enableVoxelRemoval && workpieceManager) {
       toolpathAnimation.initializeVoxelGrid();
@@ -1217,70 +1255,14 @@ function setupLighting() {
   const ambientLight = new THREE.AmbientLight(CONFIG.AMBIENT_LIGHT_COLOR, CONFIG.AMBIENT_LIGHT_INTENSITY);
   scene.add(ambientLight);
 
-  // Create grid with user's gridSize setting
-  updateGridSize3D();
 }
 
 function updateGridSize3D(gridSizeMM) {
-  // Update 3D grid to match the user's gridSize setting
-  if (!scene) return;  // Scene not initialized yet
-
-  // Use provided gridSize or fall back to getOption
-  if (gridSizeMM === undefined) {
-    gridSizeMM = (typeof getOption === 'function') ? getOption("gridSize") : 10;
-  }
-
-  gridSizeMM = Math.max(gridSizeMM || CONFIG.DEFAULT_GRID_SIZE, 0.1);
-
-  // Get workpiece dimensions
-  const { width: workpieceWidth, length: workpieceLength, thickness: workpieceThickness } = getWorkpieceDimensions();
-  const maxDim = Math.max(workpieceWidth, workpieceLength);
-
-  // Remove old grid if it exists
-  if (gridHelper3D && scene) {
-    scene.remove(gridHelper3D);
-  }
-
-  const displaySize = Math.max(
-    maxDim * CONFIG.GRID_DISPLAY_SIZE_MULTIPLIER,
-    maxDim * CONFIG.GRID_MAX_SIZE_MULTIPLIER,
-    gridSizeMM * CONFIG.GRID_MIN_DIVISIONS
-  );
-  const stepForDisplay = currentGridStep3D || gridSizeMM;
-  const gridDivisions = Math.max(
-    CONFIG.GRID_MIN_DIVISIONS,
-    Math.min(CONFIG.GRID_MAX_DIVISIONS, Math.round(displaySize / stepForDisplay))
-  );
-
-  gridHelper3D = new THREE.GridHelper(displaySize, gridDivisions, CONFIG.GRID_COLOR, CONFIG.GRID_COLOR);
-  gridHelper3D.userData.baseGridSizeMM = gridSizeMM;
-  gridHelper3D.userData.activeGridStepMM = stepForDisplay;
-
-  // Position grid on X-Y plane at bottom of workpiece
-  gridHelper3D.rotation.x = CONFIG.GRID_ROTATION_X;
-  gridHelper3D.position.z = -workpieceThickness;
-
-  scene.add(gridHelper3D);
+  return;
 }
 
 function updateProgressiveGrid3D(force = false) {
-  if (!scene || !orbitControls) return;
-
-  const baseGridSizeMM = (typeof getOption === 'function') ? getOption("gridSize") : CONFIG.DEFAULT_GRID_SIZE;
-  const safeBaseGridSizeMM = Math.max(baseGridSizeMM || CONFIG.DEFAULT_GRID_SIZE, 0.1);
-  const scaleFactor = CONFIG.GRID_PROGRESSIVE_SCALE_FACTOR;
-  const distanceDivisor = CONFIG.GRID_PROGRESSIVE_DISTANCE_DIVISOR;
-  const desiredStep = Math.max(safeBaseGridSizeMM, orbitControls.distance / distanceDivisor);
-
-  let progressiveStep = safeBaseGridSizeMM;
-  while (progressiveStep < desiredStep) {
-    progressiveStep *= scaleFactor;
-  }
-
-  if (!force && currentGridStep3D === progressiveStep && gridHelper3D) return;
-
-  currentGridStep3D = progressiveStep;
-  updateGridSize3D(safeBaseGridSizeMM);
+  if (!scene || !orbitControls || !force) return;
   requestThreeRender();
 }
 
@@ -1687,14 +1669,6 @@ function cleanup3DView() {
     workpieceManager = null;
   }
 
-  // Dispose grid helper
-  if (gridHelper3D) {
-    if (gridHelper3D.geometry) gridHelper3D.geometry.dispose();
-    if (gridHelper3D.material) gridHelper3D.material.dispose();
-    if (scene) scene.remove(gridHelper3D);
-    gridHelper3D = null;
-  }
-
   // Dispose axis line helpers
   ['x', 'y', 'z'].forEach(axis => {
     if (axisLines[axis]) {
@@ -1767,27 +1741,7 @@ window.cleanup3DView = cleanup3DView;
  * @param {boolean} visible - Whether grid should be visible
  */
 function toggleGridHelper3D(visible) {
-  if (!scene) return;
-
-  if (visible && !gridHelper3D) {
-    // Create grid if it doesn't exist
-    const { width: workpieceWidth, length: workpieceLength } = getWorkpieceDimensions();
-    const maxDim = Math.max(workpieceWidth, workpieceLength);
-    const gridSizeMM = (typeof getOption === 'function') ? getOption("gridSize") : 10;
-    const displaySize = maxDim * CONFIG.GRID_DISPLAY_SIZE_MULTIPLIER;
-    const gridDivisions = Math.ceil(displaySize / gridSizeMM);
-
-    gridHelper3D = new THREE.GridHelper(displaySize, gridDivisions, CONFIG.GRID_COLOR, CONFIG.GRID_COLOR);
-    gridHelper3D.rotation.x = CONFIG.GRID_ROTATION_X;
-    gridHelper3D.position.z = -getWorkpieceDimensions().thickness;
-    scene.add(gridHelper3D);
-  } else if (!visible && gridHelper3D) {
-    // Remove grid
-    scene.remove(gridHelper3D);
-    gridHelper3D.geometry.dispose();
-    gridHelper3D.material.dispose();
-    gridHelper3D = null;
-  }
+  return;
 }
 
 /**

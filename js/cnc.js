@@ -706,7 +706,9 @@ function buildProfilePendingKey(config, svgpath) {
 	].join('|');
 }
 
-function doProfile() {
+function doProfile(options = {}) {
+	const silent = options.silent === true;
+
 	if (selectMgr.noSelection()) {
 		notify(currentTool.inside == "center" ? 'Select a path to center cut' : 'Select a path to Profile');
 		return;
@@ -808,7 +810,9 @@ function doProfile() {
 
 	const worker = new Worker('js/workers/ProfileWorker.js');
 	registerGenerationWorker('profile', worker);
-	notify('Generating profile paths…', 'info');
+	if (!silent) {
+		notify('Generating profile paths…', 'info');
+	}
 
 	worker.onmessage = function(event) {
 		if (!isGenerationWorkerActive('profile', worker)) {
@@ -2444,7 +2448,9 @@ function doInlay() {
 	});
 }
 
-function doPocket() {
+function doPocket(options = {}) {
+	const silent = options.silent === true;
+
 	setMode("Pocket");
 	if (selectMgr.noSelection()) {
 		notify('Select a path to pocket');
@@ -2539,7 +2545,9 @@ function doPocket() {
 
 	const worker = new Worker('js/workers/pocketWorker.js');
 	registerGenerationWorker('pocket', worker);
-	notify('Generating pocket paths…', 'info');
+	if (!silent) {
+		notify('Generating pocket paths…', 'info');
+	}
 
 	function clearPendingToolpaths() {
 		for (let i = toolpaths.length - 1; i >= 0; i--) {
@@ -2803,10 +2811,20 @@ function _gcodeNameComment(name) {
 	return commentChar + name + closingChar + '\n';
 }
 
-async function doGcode() {
+async function doGcode(cutSettingsOverride) {
 	if (toolpaths.length == 0) {
 		notify('No toolpaths to export');
 		return;
+	}
+
+	var cutSettings = cutSettingsOverride || (typeof window.getCompleteCutSettings === 'function' ? window.getCompleteCutSettings() : null);
+	if (!cutSettings) {
+		if (typeof window.showCutSettingsModal === 'function') {
+			cutSettings = await window.showCutSettingsModal({ confirmText: 'Generate G-code' });
+		}
+		if (!cutSettings) {
+			return;
+		}
 	}
 
 	// Check table limits before saving - show Bootstrap confirm dialog if exceeded
@@ -2829,8 +2847,9 @@ async function doGcode() {
 	}
 
 	window._skipTableLimitWarning = true;
-	var text = toGcode();
+	var text = toGcode(cutSettings);
 	window._skipTableLimitWarning = false;
+	window._cachedGcode = text;
 
 	// Use the File System Access API if available (modern browsers)
 	if ('showSaveFilePicker' in window) {

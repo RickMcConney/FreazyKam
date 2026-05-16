@@ -2295,9 +2295,9 @@ function syncShapeMachiningToolpath(path, options = {}) {
 
     try {
         if (executionOperation === 'Pocket') {
-            doPocket();
+            doPocket({ silent: true });
         } else {
-            doProfile();
+            doProfile({ silent: true });
         }
     } finally {
         window.currentTool = originalTool;
@@ -2383,6 +2383,22 @@ function refresh3DPreviewForShape(path) {
         seekToLatestState: true
     });
 }
+
+function show3DPane() {
+    const tab3D = document.getElementById('3d-tab');
+    if (tab3D && typeof bootstrap !== 'undefined' && bootstrap?.Tab) {
+        bootstrap.Tab.getOrCreateInstance(tab3D).show();
+        return;
+    }
+
+    const overlay3D = document.getElementById('simulation-overlay-3d');
+    if (overlay3D) overlay3D.classList.remove('d-none');
+    if (typeof update3DSimulationOverlayLayout === 'function') update3DSimulationOverlayLayout();
+    if (typeof updateSimulation3DUI === 'function') updateSimulation3DUI();
+    if (typeof updateSimulation3DDisplays === 'function') updateSimulation3DDisplays();
+}
+
+window.show3DPane = show3DPane;
 
 function generateToolpathForSelection() {
     // Collect form data

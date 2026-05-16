@@ -293,7 +293,7 @@ function createModals() {
             <div class="modal-dialog modal-dialog-scrollable">
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h5 class="modal-title" id="cut-settings-modal-title">Cut settings</h5>
+                        <h5 class="modal-title" id="cut-settings-modal-title">Cut Settings</h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                     <div class="modal-body" id="cut-settings-modal-body"></div>
@@ -593,6 +593,211 @@ function showHelpModal() {
     // Initialize Lucide icons in the modal
     lucide.createIcons();
 }
+
+function getCutSettingsStorageKey() {
+    return 'Gcode.cutSettings';
+}
+
+function getCutSettingsFields() {
+    const toolOptions = (window.tools || []).map(tool => ({
+        value: tool.recid,
+        label: `${tool.name} (${tool.diameter}mm ${tool.bit})`
+    }));
+
+    const defaultToolId = toolOptions[0]?.value ?? '';
+
+    return [
+        {
+            key: 'tool',
+            label: 'Tool',
+            type: 'choice',
+            default: defaultToolId,
+            options: toolOptions,
+            help: toolOptions.length === 0 ? 'Add at least one tool in the tool library before generating G-code.' : ''
+        },
+        {
+            key: 'direction',
+            label: 'Milling direction',
+            type: 'choice',
+            default: 'climb',
+            options: [
+                { value: 'climb', label: 'Climb' },
+                { value: 'conventional', label: 'Conventional' }
+            ]
+        },
+        {
+            key: 'step',
+            label: 'Depth per pass',
+            type: 'dimension',
+            default: toolOptions.length > 0
+                ? ((window.tools || []).find(tool => tool.recid === defaultToolId)?.step || 1)
+                : 1,
+            min: 0.01
+        },
+        {
+            key: 'plunge',
+            label: 'Plunge',
+            type: 'choice',
+            default: 'vertical',
+            options: [
+                { value: 'vertical', label: 'Vertical' },
+                { value: 'ramp-5', label: 'Ramp 5°' },
+                { value: 'ramp-20', label: 'Ramp 20°' }
+            ]
+        },
+        {
+            key: 'strategy',
+            label: 'Fill method',
+            type: 'choice',
+            default: 'adaptive',
+            options: [
+                { value: 'adaptive', label: 'Adaptive' },
+                { value: 'raster', label: 'Raster' },
+                { value: 'contour', label: 'Contour' }
+            ]
+        }
+    ];
+}
+
+function getSavedCutSettings() {
+    const fields = getCutSettingsFields();
+    const saved = PropertiesManager.loadSaved(getCutSettingsStorageKey());
+    const defaultToolField = fields.find(field => field.key === 'tool');
+    const defaultToolId = defaultToolField?.default ?? '';
+    const toolOptions = Array.isArray(defaultToolField?.options) ? defaultToolField.options : [];
+    const savedToolId = Number(saved.tool);
+    const hasSavedTool = toolOptions.some(option => Number(option.value) === savedToolId);
+    const defaultStep = defaultToolId
+        ? (window.tools || []).find(tool => Number(tool.recid) === Number(defaultToolId))?.step || 1
+        : 1;
+
+    return {
+        tool: hasSavedTool ? savedToolId : defaultToolId,
+        direction: saved.direction || 'climb',
+        step: Number(saved.step) > 0 ? Number(saved.step) : defaultStep,
+        plunge: saved.plunge || 'vertical',
+        strategy: saved.strategy || 'adaptive'
+    };
+}
+
+function validateCutSettings(values) {
+    const errors = [];
+
+    if (!Number(values.tool)) {
+        errors.push('Please select a tool');
+    }
+
+    if (!Number.isFinite(values.step) || values.step <= 0) {
+        errors.push('Depth per pass must be greater than 0');
+    }
+
+    return errors;
+}
+
+function saveCutSettings(values) {
+    const fields = getCutSettingsFields();
+    PropertiesManager.save(getCutSettingsStorageKey(), values, fields);
+    window.gcodeCutSettings = { ...values };
+    return window.gcodeCutSettings;
+}
+
+function loadCutSettingsIntoForm(values) {
+    const fields = getCutSettingsFields();
+    for (let i = 0; i < fields.length; i++) {
+        const field = fields[i];
+        const nextValue = values[field.key] !== undefined ? values[field.key] : field.default;
+        PropertiesManager.setValue(field.key, nextValue);
+    }
+}
+
+function showCutSettingsModal(options = {}) {
+    return new Promise(function(resolve) {
+        const modalElement = document.getElementById('cutSettingsModal');
+        const body = document.getElementById('cut-settings-modal-body');
+        const confirmBtn = document.getElementById('save-cut-settings-button');
+        const title = document.getElementById('cut-settings-modal-title');
+        if (!modalElement || !body || !confirmBtn || !title) {
+            resolve(null);
+            return;
+        }
+
+        const fields = getCutSettingsFields();
+        const currentValues = {
+            ...getSavedCutSettings(),
+            ...(options.values || {})
+        };
+
+        title.textContent = 'Cut Settings';
+
+        if ((window.tools || []).length === 0) {
+            body.innerHTML = '<div class="alert alert-warning mb-0">Add at least one tool in the tool library before generating G-code.</div>';
+        } else {
+            body.innerHTML = `
+                <div class="alert alert-info mb-3">
+                    These settings are applied when generating G-code from the 3D view.
+                </div>
+                ${PropertiesManager.formHTML(fields, currentValues, null)}
+            `;
+            loadCutSettingsIntoForm(currentValues);
+        }
+
+        const confirmLabel = options.confirmText || 'Save';
+        confirmBtn.textContent = confirmLabel;
+        confirmBtn.disabled = (window.tools || []).length === 0;
+
+        const newConfirmBtn = confirmBtn.cloneNode(true);
+        confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+
+        let resolved = false;
+        const modal = new bootstrap.Modal(modalElement);
+
+        function cleanup() {
+            modalElement.removeEventListener('hidden.bs.modal', onHidden);
+        }
+
+        function finish(value) {
+            if (resolved) return;
+            resolved = true;
+            cleanup();
+            modal.hide();
+            resolve(value);
+        }
+
+        function onHidden() {
+            if (resolved) return;
+            resolved = true;
+            cleanup();
+            resolve(null);
+        }
+
+        newConfirmBtn.addEventListener('click', function() {
+            const values = PropertiesManager.collectValues(fields);
+            values.tool = Number(values.tool) || null;
+            values.step = Number(values.step) || 0;
+
+            const errors = validateCutSettings(values);
+            if (errors.length > 0) {
+                notify(errors.join(', '), 'error');
+                return;
+            }
+
+            finish(saveCutSettings(values));
+        });
+
+        modalElement.addEventListener('hidden.bs.modal', onHidden);
+        modal.show();
+    });
+}
+
+function getCompleteCutSettings() {
+    const values = window.gcodeCutSettings || getSavedCutSettings();
+    const errors = validateCutSettings(values);
+    return errors.length === 0 ? values : null;
+}
+
+window.getSavedCutSettings = getSavedCutSettings;
+window.getCompleteCutSettings = getCompleteCutSettings;
+window.showCutSettingsModal = showCutSettingsModal;
 
 /**
  * Show a reusable confirmation dialog

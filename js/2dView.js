@@ -1052,7 +1052,6 @@ function redrawCore() {
 			drawGrid();
 		if (getOption("showOrigin"))
 			drawOrigin();
-		drawToolPaths();
 		drawSvgPaths();
 		if (typeof window.drawSTLHeightMap === 'function') window.drawSTLHeightMap(ctx);
 
@@ -1233,63 +1232,4 @@ function depthToBlue(depth) {
 	var g = Math.round(200 - 160 * t);
 	var b = Math.round(255 - 95 * t);
 	return 'rgb(' + r + ',' + g + ',' + b + ')';
-}
-
-function drawToolPaths() {
-	for (var i = 0; i < toolpaths.length; i++) {
-		if (toolpaths[i].visible) {
-			if (toolpaths[i].active) {
-				continue;
-			}
-
-			var paths = toolpaths[i].paths;
-			// Determine color: active > selected > depth-based blue
-			var isActive = toolpaths[i].active;
-			var depth = toolpaths[i].tool.depth || 0;
-			var color = isActive ? activeToolpathColor : depthToBlue(depth);
-			var lineWidth = isActive ? 4 : (toolpaths[i].selected ? 3 : 2);
-
-			for (var p = 0; p < paths.length; p++) {
-				var path = paths[p].tpath;
-				var tpath = paths[p].tpath;
-				var operation = toolpaths[i].operation;
-
-				if (operation == "Drill")
-					fillCircles(path, color);
-
-				// Check if this is a plunge point
-				if (paths[p].isPlunge && paths[p].plungePoint) {
-					// Draw plunge point as a filled circle with cross
-					var plungePoint = paths[p].plungePoint;
-					var screenPoint = worldToScreen(plungePoint.x, plungePoint.y);
-					var size = 8 * zoomLevel; // Size of the plunge marker, scaled with zoom
-
-					ctx.save();
-					// Draw filled circle
-					ctx.beginPath();
-					ctx.arc(screenPoint.x, screenPoint.y, size, 0, 2 * Math.PI);
-					ctx.fillStyle = color;
-					ctx.globalAlpha = 0.5;
-					ctx.fill();
-
-					// Draw cross
-					ctx.globalAlpha = 1.0;
-					ctx.strokeStyle = color;
-					ctx.lineWidth = 2;
-					ctx.beginPath();
-					ctx.moveTo(screenPoint.x - size, screenPoint.y);
-					ctx.lineTo(screenPoint.x + size, screenPoint.y);
-					ctx.moveTo(screenPoint.x, screenPoint.y - size);
-					ctx.lineTo(screenPoint.x, screenPoint.y + size);
-					ctx.stroke();
-					ctx.restore();
-				}
-				else if (tpath) {
-					updateToolpathScreenCache(paths[p]);
-					drawScreenPolyline(paths[p]._screenCache, color, lineWidth);
-				}
-			}
-		}
-	}
-
 }

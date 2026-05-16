@@ -329,6 +329,19 @@ function ensure3DSimulationControls() {
     speedCol.appendChild(speedDisplay);
     controlsRow.appendChild(speedCol);
 
+    const generateGcodeCol = document.createElement('div');
+    generateGcodeCol.className = 'col-auto';
+
+    const generateGcodeBtn = document.createElement('button');
+    generateGcodeBtn.type = 'button';
+    generateGcodeBtn.className = 'btn btn-primary btn-sm';
+    generateGcodeBtn.id = '3d-generate-gcode';
+    generateGcodeBtn.appendChild(createIconNode('file-code'));
+    generateGcodeBtn.appendChild(document.createTextNode(' Generate G-code'));
+
+    generateGcodeCol.appendChild(generateGcodeBtn);
+    controlsRow.appendChild(generateGcodeCol);
+
     const axesControl = create3DVisibilityControl('3d-show-axes', 'Axes', true);
     const toolpathControl = create3DVisibilityControl('3d-show-toolpath', 'Toolpath', true);
     const workpieceControl = create3DVisibilityControl('3d-show-workpiece', 'Workpiece', true);
@@ -428,6 +441,28 @@ function ensure3DSimulationControls() {
         }
     });
 
+    generateGcodeBtn.addEventListener('click', async function () {
+        if (typeof showCutSettingsModal !== 'function') {
+            return;
+        }
+
+        const savedSettings = typeof getSavedCutSettings === 'function'
+            ? getSavedCutSettings()
+            : null;
+        const cutSettings = await showCutSettingsModal({
+            confirmText: 'Generate G-code',
+            values: savedSettings || undefined
+        });
+
+        if (!cutSettings) {
+            return;
+        }
+
+        if (typeof generateAndLoad3DGcode === 'function') {
+            generateAndLoad3DGcode({ cutSettings: cutSettings, showLoading: true, seekToLatestState: true });
+        }
+    });
+
     progressInput.addEventListener('input', function (e) {
         const lineNumber = parseInt(e.target.value, 10);
         if (typeof setSimulation3DProgress === 'function') {
@@ -466,6 +501,7 @@ function ensure3DSimulationControls() {
         stopBtn: stopBtn,
         speedInput: speedInput,
         speedDisplay: speedDisplay,
+        generateGcodeBtn: generateGcodeBtn,
         progressInput: progressInput,
         progressDisplay: progressDisplay,
         stepDisplay: stepDisplay,
