@@ -103,6 +103,361 @@ function hasReadyVisibleToolpathsForSimulation() {
   });
 }
 
+function getPreviewSourceToolpaths(cutSettings = null) {
+  if (!Array.isArray(window.toolpaths)) {
+    return [];
+  }
+
+  const resolvedCutSettings = cutSettings || (typeof getResolvedGcodeCutSettings === 'function'
+    ? getResolvedGcodeCutSettings()
+    : null);
+
+  const sourceToolpaths = resolvedCutSettings && typeof buildToolpathWithCutSettings === 'function'
+    ? window.toolpaths.map((toolpath) => buildToolpathWithCutSettings(toolpath, resolvedCutSettings))
+    : window.toolpaths.slice();
+
+  const orderedToolpaths = typeof _prepareAndSortToolpaths === 'function'
+    ? _prepareAndSortToolpaths(sourceToolpaths)
+    : sourceToolpaths;
+
+  const previewToolpaths = orderedToolpaths.filter((toolpath) => {
+    return toolpath && toolpath.visible !== false && toolpath.pending !== true && Array.isArray(toolpath.paths) && toolpath.paths.length > 0;
+  });
+
+  if (typeof console !== 'undefined' && typeof console.debug === 'function') {
+    console.debug('[3DPreview] source toolpaths resolved', {
+      requestedCutSettings: !!cutSettings,
+      totalToolpaths: Array.isArray(window.toolpaths) ? window.toolpaths.length : 0,
+      previewToolpaths: previewToolpaths.length,
+      toolpaths: previewToolpaths.map((toolpath) => ({
+        id: toolpath.id,
+        name: toolpath.name,
+        operation: toolpath.operation,
+        displayOperation: toolpath.displayOperation,
+        pathGroups: Array.isArray(toolpath.paths) ? toolpath.paths.length : 0,
+        tool: toolpath.tool ? {
+          name: toolpath.tool.name,
+          bit: toolpath.tool.bit,
+          diameter: toolpath.tool.diameter,
+          depth: toolpath.tool.depth,
+          step: toolpath.tool.step
+        } : null
+      }))
+    });
+  }
+
+  return previewToolpaths;
+}
+
+function normalizePreviewToolInfo(toolpath) {
+    const tool = toolpath && toolpath.tool ? toolpath.tool : null;
+  if (!tool || !Number.isFinite(Number(tool.diameter)) || Number(tool.diameter) <= 0) {
+    return null;
+  }
+
+  return {
+    diameter: Number(tool.diameter),
+    type: tool.bit === 'BallNose' ? 'Ball Nose' : (tool.bit || 'End Mill'),
+    angle: Number(tool.angle) || 0,
+    recid: tool.recid ?? null,
+    name: tool.name || ''
+  };
+}
+
+function pushPreviewMovement(movements, point, isG1, toolInfo) {
+  if (!point || !Number.isFinite(Number(point.x)) || !Number.isFinite(Number(point.y))) {
+    return;
+  }
+
+  const mmPoint = typeof toMM === 'function'
+    ? toMM(Number(point.x), Number(point.y))
+    : { x: Number(point.x), y: Number(point.y) };
+
+  movements.push({
+    x: Number(mmPoint.x),
+    y: Number(mmPoint.y),
+    z: Number.isFinite(Number(point.z)) ? Number(point.z) : 0,
+    isG1: !!isG1,
+    toolRadius: toolInfo ? Number(toolInfo.diameter) / 2 : 0,
+    gcodeLineNumber: movements.length,
+    feedRate: 0
+  });
+}
+
+function appendPreviewPolyline(movements, points, toolInfo, options = {}) {
+  if (!Array.isArray(points) || points.length === 0 || !toolInfo) {
+    return;
+  }
+
+  const continuous = options.continuous === true;
+  const safeZ = Number.isFinite(Number(options.safeZ)) ? Number(options.safeZ) : 5;
+  const firstPoint = points[0];
+
+  if (!continuous) {
+    pushPreviewMovement(movements, { x: firstPoint.x, y: firstPoint.y, z: safeZ }, false, toolInfo);
+  }
+
+  for (const point of points) {
+    pushPreviewMovement(movements, point, true, toolInfo);
+  }
+}
+
+function buildProfilePreviewPoints(pathPoints, passZ, tabData) {
+  if (!Array.isArray(pathPoints) || pathPoints.length === 0) {
+    return [];
+  }
+
+  const tabs = Array.isArray(tabData?.tabs) ? tabData.tabs : [];
+  const tabHeightMM = Number(tabData?.tabHeightMM) || 0;
+  const workpieceThickness = Number(tabData?.workpieceThickness) || 0;
+  const toolRadiusWorld = Number(tabData?.toolRadiusWorld) || 0;
+  const tabLengthMM = Number(tabData?.tabLengthMM) || 0;
+
+  if (
+    tabs.length === 0 ||
+    tabHeightMM <= 0 ||
+    typeof calculateTabMarkers !== 'function' ||
+    typeof augmentToolpathWithMarkers !== 'function' ||
+    typeof getTabLiftAmount !== 'function'
+  ) {
+    return pathPoints.map((point) => ({ x: point.x, y: point.y, z: passZ }));
+  }
+
+  const markers = calculateTabMarkers(pathPoints, tabs, tabLengthMM, toolRadiusWorld, viewScale);
+  const augmentedPath = markers.length > 0 ? augmentToolpathWithMarkers(pathPoints, markers) : pathPoints;
+  const tabLift = getTabLiftAmount(passZ, tabs, workpieceThickness, tabHeightMM);
+
+  let firstMarkerPos = null;
+  for (let index = 1; index < augmentedPath.length; index++) {
+    if (augmentedPath[index].marker) {
+      firstMarkerPos = augmentedPath[index];
+      break;
+    }
+  }
+
+  const distToFirstMarker = firstMarkerPos
+    ? Math.hypot(firstMarkerPos.x - augmentedPath[0].x, firstMarkerPos.y - augmentedPath[0].y)
+    : Infinity;
+  const startedLifted = tabLift > 0 && distToFirstMarker <= 2 * toolRadiusWorld;
+
+  const previewPoints = [{
+    x: augmentedPath[0].x,
+    y: augmentedPath[0].y,
+    z: startedLifted ? passZ + tabLift : passZ
+  }];
+
+  let currentlyLifted = startedLifted;
+  for (let index = 1; index < augmentedPath.length; index++) {
+    const point = augmentedPath[index];
+    if (point.marker === 'lift') {
+      previewPoints.push({ x: point.x, y: point.y, z: passZ });
+      previewPoints.push({ x: point.x, y: point.y, z: passZ + tabLift });
+      currentlyLifted = true;
+      continue;
+    }
+
+    if (point.marker === 'lower') {
+      previewPoints.push({ x: point.x, y: point.y, z: passZ + tabLift });
+      previewPoints.push({ x: point.x, y: point.y, z: passZ });
+      currentlyLifted = false;
+      continue;
+    }
+
+    previewPoints.push({
+      x: point.x,
+      y: point.y,
+      z: currentlyLifted ? passZ + tabLift : passZ
+    });
+  }
+
+  if (startedLifted && firstMarkerPos) {
+    previewPoints.push({ x: firstMarkerPos.x, y: firstMarkerPos.y, z: passZ });
+  }
+
+  return previewPoints;
+}
+
+function buildPreviewMovementsFromToolpaths(sourceToolpaths) {
+  const movements = [];
+  const toolChangePoints = [];
+  const safeZ = Math.max(5, Number(getOption('safeHeight')) || 5);
+  const workpieceThickness = Number(getOption('workpieceThickness')) || 0;
+  let previousToolKey = null;
+  const toolpathSummaries = [];
+
+  const registerTool = (toolInfo) => {
+    const toolKey = `${toolInfo.recid ?? 'tool'}|${toolInfo.diameter}|${toolInfo.type}|${toolInfo.angle}`;
+    if (toolKey === previousToolKey) {
+      return;
+    }
+    previousToolKey = toolKey;
+    toolChangePoints.push({
+      lineNumber: movements.length,
+      toolInfo: { ...toolInfo }
+    });
+  };
+
+  const appendConstantDepthPath = (toolInfo, pathPoints, passZ, options = {}) => {
+    if (!Array.isArray(pathPoints) || pathPoints.length === 0) {
+      return;
+    }
+    const points = pathPoints.map((point) => ({ x: point.x, y: point.y, z: passZ }));
+    appendPreviewPolyline(movements, points, toolInfo, options);
+  };
+
+  for (const toolpath of sourceToolpaths) {
+    const toolInfo = normalizePreviewToolInfo(toolpath);
+    if (!toolInfo) {
+      continue;
+    }
+
+    registerTool(toolInfo);
+
+    const tool = toolpath.tool || {};
+    const depth = Math.max(0, Number(tool.depth) || 0);
+    const step = Math.max(0, Number(tool.step) || 0);
+    const passes = depth > 0 ? Math.max(1, Math.ceil(depth / Math.max(step, depth || 1))) : 1;
+    const sourceSvgPath = toolpath.svgId ? svgpaths.find((path) => path.id === toolpath.svgId) : null;
+    const tabData = {
+      tabs: sourceSvgPath?.creationProperties?.tabs || [],
+      tabLengthMM: sourceSvgPath?.creationProperties?.tabLength || 0,
+      tabHeightMM: sourceSvgPath?.creationProperties?.tabHeight || 0,
+      workpieceThickness,
+      toolRadiusWorld: (toolInfo.diameter / 2) * viewScale
+    };
+      const previewKind = toolpath.name && toolpath.name.includes('VCarve')
+        ? 'vcarve'
+      : toolpath.name && (toolpath.name.includes('Profile') || toolpath.name.includes('Cutout'))
+        ? 'profile'
+        : toolpath.operation === 'Drill'
+          ? 'drill'
+          : toolpath.operation === 'HelicalDrill'
+            ? 'helical'
+            : toolpath.operation === 'VCarve'
+              ? 'vcarve'
+              : toolpath.operation === '3dProfile'
+                ? '3dprofile'
+                : toolpath.operation === 'Surfacing'
+                  ? 'surfacing'
+                  : toolpath.operation === 'Profile'
+                    ? 'profile'
+                    : 'pocket';
+
+    const movementStartIndex = movements.length;
+
+    if (previewKind === 'drill') {
+      for (const pathGroup of toolpath.paths) {
+        const drillPoints = Array.isArray(pathGroup?.path) ? pathGroup.path : Array.isArray(pathGroup?.tpath) ? pathGroup.tpath : [];
+        for (const point of drillPoints) {
+          appendPreviewPolyline(movements, [{ x: point.x, y: point.y, z: -depth }], toolInfo, { continuous: false, safeZ });
+        }
+      }
+      toolpathSummaries.push({ id: toolpath.id, name: toolpath.name, operation: toolpath.operation, previewKind, pathGroups: toolpath.paths.length, passes, movementCount: movements.length - movementStartIndex, depth, step });
+      continue;
+    }
+
+    if (previewKind === 'helical') {
+      for (const pathGroup of toolpath.paths) {
+        const helixPath = Array.isArray(pathGroup?.tpath) ? pathGroup.tpath : [];
+        const points = helixPath.map((point) => ({ x: point.x, y: point.y, z: Number(point.z) || 0 }));
+        appendPreviewPolyline(movements, points, toolInfo, { continuous: false, safeZ });
+      }
+      toolpathSummaries.push({ id: toolpath.id, name: toolpath.name, operation: toolpath.operation, previewKind, pathGroups: toolpath.paths.length, passes, movementCount: movements.length - movementStartIndex, depth, step });
+      continue;
+    }
+
+    if (previewKind === 'vcarve') {
+      for (const pathGroup of toolpath.paths) {
+        const vcarvePath = Array.isArray(pathGroup?.tpath) ? pathGroup.tpath : [];
+        const points = vcarvePath.map((point) => ({
+          x: point.x,
+          y: point.y,
+          z: -toolDepth(toolInfo.angle || 90, point.r)
+        }));
+        appendPreviewPolyline(movements, points, toolInfo, { continuous: false, safeZ });
+      }
+      toolpathSummaries.push({ id: toolpath.id, name: toolpath.name, operation: toolpath.operation, previewKind, pathGroups: toolpath.paths.length, passes, movementCount: movements.length - movementStartIndex, depth, step });
+      continue;
+    }
+
+    if (previewKind === '3dprofile') {
+      for (const pathGroup of toolpath.paths) {
+        const rasterPath = Array.isArray(pathGroup?.tpath) ? pathGroup.tpath : [];
+        const points = rasterPath.map((point) => ({ x: point.x, y: point.y, z: Number(point.z) || 0 }));
+        appendPreviewPolyline(movements, points, toolInfo, {
+          continuous: pathGroup?.passStart === false,
+          safeZ
+        });
+      }
+      toolpathSummaries.push({ id: toolpath.id, name: toolpath.name, operation: toolpath.operation, previewKind, pathGroups: toolpath.paths.length, passes, movementCount: movements.length - movementStartIndex, depth, step });
+      continue;
+    }
+
+    if (previewKind === 'surfacing') {
+      for (let index = 0; index < toolpath.paths.length; index++) {
+        const pathGroup = toolpath.paths[index];
+        const surfacePath = Array.isArray(pathGroup?.tpath) ? pathGroup.tpath : [];
+        appendConstantDepthPath(toolInfo, surfacePath, -depth, {
+          continuous: index > 0,
+          safeZ
+        });
+      }
+      toolpathSummaries.push({ id: toolpath.id, name: toolpath.name, operation: toolpath.operation, previewKind, pathGroups: toolpath.paths.length, passes, movementCount: movements.length - movementStartIndex, depth, step });
+      continue;
+    }
+
+    if (previewKind === 'profile') {
+      for (const pathGroup of toolpath.paths) {
+        const profilePath = Array.isArray(pathGroup?.tpath) ? pathGroup.tpath : [];
+        for (let pass = 1; pass <= passes; pass++) {
+          const passDepth = Math.min(depth, pass * Math.max(step, depth || 1));
+          const passZ = -passDepth;
+          const previewPoints = buildProfilePreviewPoints(profilePath, passZ, tabData);
+          appendPreviewPolyline(movements, previewPoints, toolInfo, { continuous: false, safeZ });
+        }
+      }
+      toolpathSummaries.push({ id: toolpath.id, name: toolpath.name, operation: toolpath.operation, previewKind, pathGroups: toolpath.paths.length, passes, movementCount: movements.length - movementStartIndex, depth, step, tabCount: tabData.tabs.length, tabHeightMM: tabData.tabHeightMM });
+      continue;
+    }
+
+    for (let pass = 1; pass <= passes; pass++) {
+      const passDepth = Math.min(depth, pass * Math.max(step, depth || 1));
+      const passZ = -passDepth;
+      let previousWasContinuous = false;
+
+      for (const pathGroup of toolpath.paths) {
+        const pocketPath = Array.isArray(pathGroup?.tpath) ? pathGroup.tpath : [];
+        appendConstantDepthPath(toolInfo, pocketPath, passZ, {
+          continuous: previousWasContinuous && pathGroup?.passStart === false,
+          safeZ
+        });
+        previousWasContinuous = Array.isArray(pocketPath) && pocketPath.length > 0;
+      }
+    }
+
+    toolpathSummaries.push({ id: toolpath.id, name: toolpath.name, operation: toolpath.operation, previewKind, pathGroups: toolpath.paths.length, passes, movementCount: movements.length - movementStartIndex, depth, step });
+  }
+
+  if (typeof console !== 'undefined' && typeof console.debug === 'function') {
+    console.debug('[3DPreview] built preview movements', {
+      toolpathCount: sourceToolpaths.length,
+      movementCount: movements.length,
+      cuttingMoveCount: movements.filter((move) => move && move.isG1 === true).length,
+      rapidMoveCount: movements.filter((move) => move && move.isG1 !== true).length,
+      toolChangePoints: toolChangePoints.length,
+      safeZ,
+      workpieceThickness,
+      toolpathSummaries
+    });
+  }
+
+  return {
+    movements,
+    toolChangePoints,
+    toolInfo: toolChangePoints.length > 0 ? { ...toolChangePoints[0].toolInfo } : null
+  };
+}
+
 function getPreparedSimulation3DGcode() {
   if (window._importedGcode) {
     return window._importedGcode;
@@ -255,9 +610,6 @@ async function refreshPrepared3DGcodeNow(options = {}) {
 
     if (hasLoadedSimulation) {
       window._cachedGcode = gcode;
-      if (typeof gcodeView !== 'undefined' && gcodeView) {
-        gcodeView.populate(gcode);
-      }
       if (scene && toolpathAnimation && workpieceManager) {
         schedule3DViewRefresh({
           preserveProgress: false,
@@ -398,6 +750,25 @@ async function reload3DViewFromCurrentState(options = {}) {
 
   const gcode = getCurrentSimulation3DGcode();
   if (!gcode) {
+    const previewToolpaths = getPreviewSourceToolpaths(options.cutSettings || null);
+    if (previewToolpaths.length > 0) {
+      if (typeof console !== 'undefined' && typeof console.debug === 'function') {
+        console.debug('[3DPreview] reload using finished preview instead of G-code', {
+          preserveProgress,
+          resetIfMissing,
+          showLoading,
+          force,
+          seekToLatestState,
+          previewToolpaths: previewToolpaths.length
+        });
+      }
+      toolpathAnimation.loadFinishedPreviewFromToolpaths(previewToolpaths);
+      updateSimulation3DUI();
+      updateSimulation3DDisplays();
+      requestThreeRender();
+      return true;
+    }
+
     if (resetIfMissing) {
       toolpathAnimation.clearToolpath();
       if (toolpathAnimation.voxelGrid) {
@@ -534,13 +905,6 @@ async function generateAndLoad3DGcode(options = {}) {
     }
     window._cachedGcode = gcode;
 
-    if (typeof gcodeView !== 'undefined' && gcodeView) {
-      gcodeView.populate(gcode);
-      if (typeof showGcodeViewerPanel === 'function') {
-        showGcodeViewerPanel();
-      }
-    }
-
     if (!scene || !toolpathAnimation || !workpieceManager) {
       if (typeof window.show3DPane === 'function') {
         window.show3DPane();
@@ -620,9 +984,6 @@ function startThreeViewLoad() {
           return;
         }
         console.error('3D view initialization failed:', error);
-        if (typeof gcodeView !== 'undefined' && gcodeView && typeof showGcodeViewerPanel === 'function') {
-          showGcodeViewerPanel();
-        }
         setThreeLoadingState(false);
       });
     });
@@ -884,7 +1245,11 @@ function sync3DVisibilityControls(options = {}) {
     ? window.get3DSimulationControlState('showTool', true)
     : true;
   if (typeof window.setToolVisibility3D === 'function') {
-    window.setToolVisibility3D(showTool);
+    const hasLoadedSimulation = !!(toolpathAnimation
+      && Array.isArray(toolpathAnimation.movementTiming)
+      && toolpathAnimation.movementTiming.length > 0
+      && toolpathAnimation.totalGcodeLines > 0);
+    window.setToolVisibility3D(hasLoadedSimulation && showTool);
   }
 
   const stlCheckbox = document.getElementById('3d-show-stl');
@@ -1148,13 +1513,6 @@ async function initThree(loadToken = threeViewLoadToken) {
   }
 
   if (gcode) {
-    if (typeof gcodeView !== 'undefined' && gcodeView) {
-      gcodeView.populate(gcode);
-      if (typeof showGcodeViewerPanel === 'function') {
-        showGcodeViewerPanel();
-      }
-    }
-
     setThreeLoadingState(true, 'Preparation de la simulation 3D...');
     await toolpathAnimation.loadFromGcodeAsync(gcode);
     if (!isThreeViewLoadCurrent(loadToken)) {
@@ -1169,18 +1527,18 @@ async function initThree(loadToken = threeViewLoadToken) {
       seek3DViewToCompletedState();
     }
   } else {
-    const hasReadyVisibleToolpath = Array.isArray(window.toolpaths) && window.toolpaths.some((toolpath) => {
-      return toolpath && toolpath.visible !== false && toolpath.pending !== true && Array.isArray(toolpath.paths) && toolpath.paths.length > 0;
-    });
+    const previewToolpaths = getPreviewSourceToolpaths();
+    const hasReadyVisibleToolpath = previewToolpaths.length > 0;
 
     if (hasReadyVisibleToolpath) {
       console.info('No G-code loaded - generate it from the 3D view controls to run the simulation.');
+      toolpathAnimation.loadFinishedPreviewFromToolpaths(previewToolpaths);
     } else {
       console.warn('No toolpaths found - create some in the 2D view first');
     }
 
     // Still create voxel grid so workpiece appearance is consistent (solid voxels vs bare mesh)
-    if (toolpathAnimation.enableVoxelRemoval && workpieceManager) {
+    if (!hasReadyVisibleToolpath && toolpathAnimation.enableVoxelRemoval && workpieceManager) {
       toolpathAnimation.initializeVoxelGrid();
     }
   }
@@ -1715,11 +2073,13 @@ function updateSimulation3DUI() {
   startBtn.disabled = !hasLoadedSimulation;
 
   if (isPlaying) {
-    startBtn.innerHTML = '<i data-lucide="pause"></i> Pause';
+    startBtn.innerHTML = '<i data-lucide="pause"></i>';
+    startBtn.setAttribute('aria-label', 'Pause simulation');
     startBtn.classList.remove('btn-outline-primary');
     startBtn.classList.add('btn-outline-secondary');
   } else {
-    startBtn.innerHTML = '<i data-lucide="play"></i> Play';
+    startBtn.innerHTML = '<i data-lucide="play"></i>';
+    startBtn.setAttribute('aria-label', 'Play simulation');
     startBtn.classList.remove('btn-outline-secondary');
     startBtn.classList.add('btn-outline-primary');
   }
@@ -1757,8 +2117,10 @@ function animate() {
   if (isPlaying) {
     toolpathAnimation.update();
 
-    const followToolCheckbox = document.getElementById('3d-follow-tool');
-    if (followToolCheckbox && followToolCheckbox.checked && toolGroup && orbitControls) {
+    const followToolEnabled = typeof window.get3DSimulationControlState === 'function'
+      ? window.get3DSimulationControlState('followTool', false)
+      : false;
+    if (followToolEnabled && toolGroup && orbitControls) {
       orbitControls.target.copy(toolGroup.position);
       orbitControls.updateCamera();
     }
@@ -2289,6 +2651,184 @@ class ToolpathAnimation {
     this.toolpathLines = [];
   }
 
+  getMovementSignature() {
+    const movementTiming = Array.isArray(this.movementTiming) ? this.movementTiming : [];
+    let cuttingMoveCount = 0;
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
+    let minZ = Infinity;
+    let maxZ = -Infinity;
+    let firstCut = null;
+    let lastCut = null;
+
+    for (const move of movementTiming) {
+      if (!move || move.isG1 !== true) continue;
+      cuttingMoveCount++;
+      if (!firstCut) firstCut = move;
+      lastCut = move;
+      minX = Math.min(minX, move.x);
+      maxX = Math.max(maxX, move.x);
+      minY = Math.min(minY, move.y);
+      maxY = Math.max(maxY, move.y);
+      minZ = Math.min(minZ, move.z);
+      maxZ = Math.max(maxZ, move.z);
+    }
+
+    if (cuttingMoveCount === 0) {
+      return 'no-cutting-moves';
+    }
+
+    return [
+      cuttingMoveCount,
+      minX.toFixed(3),
+      maxX.toFixed(3),
+      minY.toFixed(3),
+      maxY.toFixed(3),
+      minZ.toFixed(3),
+      maxZ.toFixed(3),
+      firstCut ? `${firstCut.x.toFixed(3)},${firstCut.y.toFixed(3)},${firstCut.z.toFixed(3)}` : 'none',
+      lastCut ? `${lastCut.x.toFixed(3)},${lastCut.y.toFixed(3)},${lastCut.z.toFixed(3)}` : 'none'
+    ].join('|');
+  }
+
+  visualizePreviewMovements(movements) {
+    if (!Array.isArray(movements) || movements.length === 0) {
+      return;
+    }
+
+    let segment = [];
+    for (const move of movements) {
+      if (!move || move.isG1 !== true) {
+        if (segment.length > 1) {
+          this.drawToolpathSegment(segment, true);
+        }
+        segment = [];
+        continue;
+      }
+
+      segment.push(new THREE.Vector3(move.x, move.y, move.z));
+    }
+
+    if (segment.length > 1) {
+      this.drawToolpathSegment(segment, true);
+    }
+  }
+
+  loadFinishedPreviewFromToolpaths(sourceToolpaths) {
+    this.clearToolpath();
+    this.pause();
+    this.wasStopped = true;
+
+    const previewData = buildPreviewMovementsFromToolpaths(sourceToolpaths);
+    this.toolpaths = Array.isArray(sourceToolpaths) ? sourceToolpaths.slice() : [];
+    this.flattenedPath = [];
+    this.gcodeLines = [];
+    this.movementTiming = previewData.movements || [];
+    this.lastSubtractionSegmentIndex = -1;
+    this.toolChangePoints = previewData.toolChangePoints || [];
+    this.toolCommentsInOrder = [];
+    this.toolCommentsByLineIndex = {};
+    this.lineNumberToTimeMap = new Map();
+    this.totalGcodeLines = 0;
+    this.totalAnimationTime = 0;
+    this.totalJobTime = 0;
+    this.currentMovementIndex = 0;
+    this.currentGcodeLineNumber = 0;
+    this.elapsedTime = 0;
+    this.previousElapsedTime = 0;
+    this.currentFeedRate = 0;
+    this.frameCount = 0;
+    this.currentToolInfo = previewData.toolInfo || null;
+    this.toolInfo = previewData.toolInfo || null;
+
+    if (previewData.toolInfo?.diameter) {
+      this.toolRadius = previewData.toolInfo.diameter / 2;
+    }
+
+    if (toolGroup) {
+      toolGroup.visible = false;
+    }
+
+    if (typeof console !== 'undefined' && typeof console.debug === 'function') {
+      console.debug('[3DPreview] load finished preview:start', {
+        sourceToolpaths: Array.isArray(sourceToolpaths) ? sourceToolpaths.length : 0,
+        movementCount: this.movementTiming.length,
+        cuttingMoveCount: this.movementTiming.filter((move) => move && move.isG1 === true).length,
+        toolChangePoints: this.toolChangePoints.length,
+        toolInfo: this.toolInfo
+      });
+    }
+
+    const boundsOffset = getWorkpieceBoundsOffset();
+    for (const line of this.toolpathLines) {
+      line.position.x = -boundsOffset.x;
+      line.position.y = boundsOffset.y;
+      line.position.z = 0;
+    }
+
+    if (this.enableVoxelRemoval && this.workpieceManager) {
+      this.initializeVoxelGrid();
+      if (this.voxelGrid && this.movementTiming.length > 0) {
+        this.voxelGrid.reset();
+        this.voxelMaterialRemover.reset();
+        this._replayFromMovementIndexToIndex(0, this.movementTiming.length - 1);
+        this.voxelGrid.flushVisualUpdates();
+
+        if (typeof console !== 'undefined' && typeof console.debug === 'function') {
+          let carvedVoxelCount = 0;
+          let minTopZ = 0;
+          const voxelTopZ = this.voxelGrid.voxelTopZ;
+          if (voxelTopZ && typeof voxelTopZ.length === 'number') {
+            for (let i = 0; i < voxelTopZ.length; i++) {
+              const topZ = voxelTopZ[i];
+              if (topZ < 0) {
+                carvedVoxelCount++;
+                if (topZ < minTopZ) minTopZ = topZ;
+              }
+            }
+          }
+
+          console.debug('[3DPreview] load finished preview:voxel replay result', {
+            carvedVoxelCount,
+            totalVoxels: this.voxelGrid?.voxelTopZ?.length || 0,
+            minTopZ,
+            materialBottomZ: this.voxelGrid?.materialBottomZ,
+            voxelSize: this.voxelGrid?.voxelSize,
+            workpieceVisible: this.workpieceManager?.mesh?.visible,
+            outlineBoxVisible: this.workpieceOutlineBox?.visible,
+            totalRemovedSamples: this.voxelMaterialRemover?.totalVoxelsRemoved
+          });
+        }
+      }
+    }
+
+    const lastMove = this.movementTiming.length > 0 ? this.movementTiming[this.movementTiming.length - 1] : null;
+    if (lastMove) {
+      this.currentMovementIndex = this.movementTiming.length - 1;
+      this.currentGcodeLineNumber = 0;
+      this.updateToolPositionAtCoordinates(lastMove.x, lastMove.y, lastMove.z, false, lastMove.gcodeLineNumber || 0);
+    } else {
+      updateToolMesh(this.toolRadius * 2, 0, 0, 0, this.toolInfo?.type || 'End Mill', this.toolInfo?.angle || 0);
+    }
+
+    if (typeof window.set3DSimulationControlsReady === 'function') {
+      window.set3DSimulationControlsReady(false);
+    }
+
+    if (typeof console !== 'undefined' && typeof console.debug === 'function') {
+      console.debug('[3DPreview] load finished preview:done', {
+        toolpathLineCount: this.toolpathLines.length,
+        currentMovementIndex: this.currentMovementIndex,
+        totalGcodeLines: this.totalGcodeLines,
+        simulationReady: false
+      });
+    }
+
+    this.updateStatus();
+  }
+
   /**
    * Calculate bounding box of all toolpaths with padding
    * @returns {Object} {minX, maxX, minY, maxY, minZ, maxZ} with padding applied
@@ -2360,17 +2900,37 @@ class ToolpathAnimation {
         length,
         thickness,
         voxelSize: this.voxelSize,
-        boundsOffset: getWorkpieceBoundsOffset()
+        boundsOffset: getWorkpieceBoundsOffset(),
+        movementSignature: this.getMovementSignature()
       };
+
+      if (typeof console !== 'undefined' && typeof console.debug === 'function') {
+        console.debug('[3DPreview] initialize voxel grid:start', {
+          width,
+          length,
+          thickness,
+          voxelSize: this.voxelSize,
+          movementCount: Array.isArray(this.movementTiming) ? this.movementTiming.length : 0,
+          toolpathCount: Array.isArray(this.toolpaths) ? this.toolpaths.length : 0,
+          boundsOffset: currentConfig.boundsOffset
+        });
+      }
 
       // Quick check if voxel grid exists and has same dimensions
       const configChanged = !this.lastVoxelConfig ||
         this.lastVoxelConfig.width !== currentConfig.width ||
         this.lastVoxelConfig.length !== currentConfig.length ||
         this.lastVoxelConfig.thickness !== currentConfig.thickness ||
-        this.lastVoxelConfig.voxelSize !== currentConfig.voxelSize;
+        this.lastVoxelConfig.voxelSize !== currentConfig.voxelSize ||
+        this.lastVoxelConfig.movementSignature !== currentConfig.movementSignature;
 
       if (!configChanged && this.voxelGrid) {
+        if (typeof console !== 'undefined' && typeof console.debug === 'function') {
+          console.debug('[3DPreview] initialize voxel grid:reuse existing grid', {
+            movementSignature: currentConfig.movementSignature,
+            leafCount: this.voxelGrid?.leaves?.length || 0
+          });
+        }
         return;  // Dimensions haven't changed, keep using existing voxel grid
       }
 
@@ -2452,6 +3012,25 @@ class ToolpathAnimation {
           (clippedMinY + clippedMaxY) / 2,
           0  // Keep Z at surface
         );
+
+        if (typeof console !== 'undefined' && typeof console.debug === 'function') {
+          console.debug('[3DPreview] initialize voxel grid:bounds', {
+            bounds,
+            clippedBounds: {
+              minX: clippedMinX,
+              maxX: clippedMaxX,
+              minY: clippedMinY,
+              maxY: clippedMaxY,
+              minZ: clippedMinZ,
+              maxZ: clippedMaxZ
+            },
+            gridWidth,
+            gridLength,
+            gridThickness,
+            gridOrigin: { x: gridOrigin.x, y: gridOrigin.y, z: gridOrigin.z },
+            voxelSize: this.voxelSize
+          });
+        }
       }
 
 
@@ -2507,6 +3086,18 @@ class ToolpathAnimation {
 
       // PHASE 2.1: Save current config so we don't recreate unnecessarily
       this.lastVoxelConfig = currentConfig;
+
+      if (typeof console !== 'undefined' && typeof console.debug === 'function') {
+        console.debug('[3DPreview] initialize voxel grid:done', {
+          leafCount: this.voxelGrid?.leaves?.length || 0,
+          voxelSize: this.voxelGrid?.voxelSize,
+          workpieceVisible: this.workpieceManager?.mesh?.visible,
+          hasOutlineBox: !!this.workpieceOutlineBox,
+          gridWidth,
+          gridLength,
+          gridThickness
+        });
+      }
 
     } catch (error) {
       console.error('Error initializing voxel grid:', error);

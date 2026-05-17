@@ -1562,6 +1562,23 @@ html, body {
     min-width: 180px;
 }
 
+#3d-start-simulation {
+    min-width: 32px;
+    padding-left: 0.45rem;
+    padding-right: 0.45rem;
+}
+
+#3d-start-simulation .lucide,
+#3d-start-simulation svg {
+    width: 16px;
+    height: 16px;
+}
+
+.simulation-time-group {
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
 .three-dots-vertical {
     display: inline-block;
     width: 4px;

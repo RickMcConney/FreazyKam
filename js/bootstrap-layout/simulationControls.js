@@ -21,6 +21,23 @@ function set3DSimulationControlsReady(isReady) {
         refs.controlsRow.classList.toggle('d-none', !refs.isSimulationReady);
     }
 
+    ['summaryMenu', 'controlsMenu'].forEach(function(menuKey) {
+        const menuRefs = refs[menuKey];
+        const showToolWrapper = menuRefs && menuRefs.showTool ? menuRefs.showTool.closest('.dropdown-item') : null;
+        const followToolWrapper = menuRefs && menuRefs.followTool ? menuRefs.followTool.closest('.dropdown-item') : null;
+        if (showToolWrapper) {
+            showToolWrapper.classList.toggle('d-none', !refs.isSimulationReady);
+        }
+        if (followToolWrapper) {
+            followToolWrapper.classList.toggle('d-none', !refs.isSimulationReady);
+        }
+    });
+
+    if (typeof setToolVisibility3D === 'function') {
+        const showTool = refs.isSimulationReady && get3DSimulationControlState('showTool', true);
+        setToolVisibility3D(showTool);
+    }
+
     update3DSimulationOverlayLayout();
 
     if (typeof requestThreeRender === 'function') {
@@ -423,8 +440,8 @@ function ensure3DSimulationControls() {
     startBtn.type = 'button';
     startBtn.className = 'btn btn-outline-primary btn-sm';
     startBtn.id = '3d-start-simulation';
+    startBtn.setAttribute('aria-label', 'Play simulation');
     startBtn.appendChild(createIconNode('play'));
-    startBtn.appendChild(document.createTextNode(' Play'));
     startBtn.disabled = true;
 
     controlsRow.appendChild(startBtn);
@@ -478,7 +495,7 @@ function ensure3DSimulationControls() {
     totalTime.id = '3d-total-time';
     totalTime.textContent = '0:00';
     const timeWrap = document.createElement('div');
-    timeWrap.className = 'col-auto d-flex align-items-center gap-1';
+    timeWrap.className = 'col-auto d-flex align-items-center gap-1 text-nowrap simulation-time-group';
     timeWrap.appendChild(simulationTime);
     timeWrap.appendChild(document.createTextNode(' / '));
     timeWrap.appendChild(totalTime);
