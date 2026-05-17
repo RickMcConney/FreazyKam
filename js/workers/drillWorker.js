@@ -94,8 +94,8 @@ self.onmessage = function(event) {
 					name: 'Drill',
 					operation: 'Drill',
 					displayOperation: 'Center',
-					svgId: null,
-					svgIds: [],
+					svgId: request.svgId || null,
+					svgIds: Array.isArray(request.svgIds) ? request.svgIds : [],
 					paths: [{
 						tpath: [{ x: request.point.x, y: request.point.y, r: toolRadius }],
 						path: [{ x: request.point.x, y: request.point.y, r: toolRadius }]

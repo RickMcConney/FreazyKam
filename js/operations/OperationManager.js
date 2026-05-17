@@ -29,7 +29,7 @@ class OperationManager {
     const CURSOR_MAP = {
       Pan: 'grab', Origin: 'grab',
       Move: 'move',
-      Pen: 'crosshair', Drill: 'crosshair',
+      Pen: 'crosshair',
       Text: 'text'
     };
     this.canvas.style.cursor = CURSOR_MAP[name] || 'default';

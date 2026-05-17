@@ -4,7 +4,8 @@ var AVAILABLE_SHAPES = [
     { value: 'Triangle', label: 'Triangle', icon: 'triangle', tooltip: 'Create isosceles triangles from a center point' },
     { value: 'Star', label: 'Star', icon: 'star', tooltip: 'Create star shapes from a center point' },
     { value: 'HalfCircle', label: 'Half circle', icon: 'circle', tooltip: 'Create half circles from a center point' },
-    { value: 'RightTriangle', label: 'Right triangle', icon: 'triangle', tooltip: 'Create right triangles from a center point' }
+    { value: 'RightTriangle', label: 'Right triangle', icon: 'triangle', tooltip: 'Create right triangles from a center point' },
+    { value: 'DrillShape', label: 'Drill', icon: 'circle-plus', tooltip: 'Create a drill point from a center point' }
 ];
 
 const SHAPE_TOOL_NAMES = AVAILABLE_SHAPES.map(shape => shape.value);
@@ -14,6 +15,7 @@ const DEFAULT_SHAPE_ANGLE = 0;
 const DEFAULT_SHAPE_LOCK_RATIO = false;
 const DEFAULT_SHAPE_NAME = '';
 const DEFAULT_SHAPE_LOCK_OBJECT = false;
+const DEFAULT_DRILL_SHAPE_DIAMETER = 6;
 const MIN_SHAPE_SIZE = 1;
 const SHAPE_EDIT_HANDLE_SIZE = 8;
 const SHAPE_EDIT_HANDLE_HIT_RADIUS = 28;
@@ -98,6 +100,10 @@ function rotatePath(points, centerX, centerY, angleDeg) {
     if (!angleDeg) return points;
     const angleRad = angleDeg * Math.PI / 180;
     return points.map(point => rotatePointAround(point, centerX, centerY, angleRad));
+}
+
+function isDrillShape(shape) {
+    return shape === 'DrillShape';
 }
 
 function closePath(points) {
@@ -438,6 +444,15 @@ class Shape extends Operation {
     }
 
     get fields() {
+        if (isDrillShape(this.fixedShape)) {
+            return {
+                x: this.geometryFields.find(field => field.key === 'x'),
+                y: this.geometryFields.find(field => field.key === 'y'),
+                lockObject: this.lockObjectField,
+                name: this.nameField
+            };
+        }
+
         if (this.fixedShape) {
             return {
                 ...Object.fromEntries(this.geometryFields.map(field => [field.key, field])),
@@ -455,10 +470,16 @@ class Shape extends Operation {
     }
 
     getShapeFields(shape) {
+        if (isDrillShape(shape)) {
+            return this.geometryFields.filter(field => field.key === 'x' || field.key === 'y');
+        }
         return this.geometryFields;
     }
 
     getDefaultPathName(shape, svgPathId) {
+        if (isDrillShape(shape)) {
+            return 'Drill ' + svgPathId;
+        }
         const shapeLabel = AVAILABLE_SHAPES.find(item => item.value === shape)?.label || shape;
         return shapeLabel + ' ' + svgPathId;
     }
@@ -542,15 +563,21 @@ class Shape extends Operation {
         const fallbackX = fallbackCenter ? this.toExternal(fallbackCenter.x) : 0;
         const fallbackY = fallbackCenter ? this.toExternal(fallbackCenter.y) : 0;
 
+        const isDrill = isDrillShape(shape);
+        const width = isDrill ? DEFAULT_DRILL_SHAPE_DIAMETER : clampShapeSize(values.width, DEFAULT_SHAPE_WIDTH);
+        const height = isDrill ? DEFAULT_DRILL_SHAPE_DIAMETER : clampShapeSize(values.height, DEFAULT_SHAPE_HEIGHT);
+        const angle = isDrill ? 0 : normalizeAngle(values.angle);
+        const lockRatio = isDrill ? true : normalizeLockRatio(values.lockRatio);
+
         return {
             shape,
             name: typeof values.name === 'string' ? values.name.trim() : DEFAULT_SHAPE_NAME,
             x: Number.isFinite(Number(values.x)) ? Number(values.x) : fallbackX,
             y: Number.isFinite(Number(values.y)) ? Number(values.y) : fallbackY,
-            width: clampShapeSize(values.width, DEFAULT_SHAPE_WIDTH),
-            height: clampShapeSize(values.height, DEFAULT_SHAPE_HEIGHT),
-            angle: normalizeAngle(values.angle),
-            lockRatio: normalizeLockRatio(values.lockRatio),
+            width,
+            height,
+            angle,
+            lockRatio,
             lockObject: normalizeLockObject(values.lockObject)
         };
     }
@@ -700,6 +727,9 @@ class Shape extends Operation {
         let points = [];
 
         switch (shape) {
+            case 'DrillShape':
+                points = createEllipsePoints(centerX, centerY, width / 2, height / 2);
+                break;
             case 'Square':
                 points = [
                     { x: centerX - width / 2, y: centerY - height / 2 },
@@ -797,7 +827,8 @@ class Shape extends Operation {
         };
         const path = this.buildShapePoints(shape, values);
         if (!path.length) return;
-        const defaultToolpathProperties = window.toolPathProperties?.getDefaultShapeCutProperties('Profile') || null;
+        const defaultCutOperationName = isDrillShape(shape) ? 'Drill' : 'Profile';
+        const defaultToolpathProperties = window.toolPathProperties?.getDefaultShapeCutProperties(defaultCutOperationName) || null;
 
         let oldId = null;
         let oldsvgpathId = null;
@@ -1086,6 +1117,10 @@ class Shape extends Operation {
         const geometry = this.getEditGeometry();
         if (!geometry) return [];
 
+        if (isDrillShape(geometry.shape)) {
+            return [];
+        }
+
         const outline = this.getEditOutlinePoints();
         const topMid = rotatePointAround(
             { x: geometry.centerX, y: geometry.centerY - geometry.halfHeight },
@@ -1127,7 +1162,7 @@ class Shape extends Operation {
     drawEditOverlay(ctx) {
         const outline = this.getEditOutlinePoints();
         const handles = this.getEditHandles();
-        if (outline.length !== 4 || handles.length === 0) return;
+        if (outline.length !== 4) return;
 
         const screenPoints = outline.map(point => worldToScreen(point.x, point.y));
         const rotateHandle = handles.find(handle => handle.type === 'rotate');
@@ -1307,6 +1342,7 @@ class Shape extends Operation {
     }
 
     renderGeometryFields(pathProperties) {
+        const currentShape = pathProperties?.shape || this.getCurrentShape();
         const nameField = this.nameField;
         const lockObjectField = this.lockObjectField;
         const xField = this.geometryFields.find(field => field.key === 'x');
@@ -1324,6 +1360,16 @@ class Shape extends Operation {
             ? normalizeLockRatio(pathProperties.lockRatio)
             : normalizeLockRatio(this.properties.lockRatio);
         const displayPosition = this.toDisplayPosition(resolvedX, resolvedY);
+
+        if (isDrillShape(currentShape)) {
+            return `
+                <h5 class="mt-3 mb-2">Position</h5>
+                ${PropertiesManager.fieldHTML(xField, displayPosition.x)}
+                ${PropertiesManager.fieldHTML(yField, displayPosition.y)}
+                ${PropertiesManager.fieldHTML(lockObjectField, resolvedLockObject)}
+                ${PropertiesManager.fieldHTML(nameField, resolvedName)}
+            `;
+        }
 
         return `
             <h5 class="mt-3 mb-2">Position</h5>

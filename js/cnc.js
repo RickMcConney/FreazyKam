@@ -74,7 +74,7 @@ function makePendingToolpath(svgIds, name, operation, pendingKey, overrides) {
 		setToolpathLabel(pendingToolpath, getToolpathPropertyName(window.currentToolpathProperties));
 	}
 	if (window.currentToolpathDescriptor?.displayOperation) {
-		pendingToolpath.operation = window.currentToolpathDescriptor.displayOperation;
+		pendingToolpath.displayOperation = window.currentToolpathDescriptor.displayOperation;
 	}
 	if (overrides && typeof overrides === 'object') {
 		Object.assign(pendingToolpath, overrides);
@@ -801,7 +801,8 @@ function doProfile(options = {}) {
 		if (updateTarget) {
 			updateTarget.paths = [];
 			updateTarget.visible = true;
-			updateTarget.operation = window.currentToolpathDescriptor?.displayOperation || 'Profile';
+			updateTarget.operation = 'Profile';
+			updateTarget.displayOperation = window.currentToolpathDescriptor?.displayOperation || 'Profile';
 			updateTarget.name = config.name;
 			updateTarget.tool = { ...currentTool };
 			updateTarget.svgId = entry.svgpath.id;
@@ -852,7 +853,8 @@ function doProfile(options = {}) {
 			const generated = result.toolpaths[i];
 			const pendingToolpath = pendingToolpaths[i];
 			pendingToolpath.paths = generated.paths;
-			pendingToolpath.operation = generated.displayOperation || generated.operation;
+			pendingToolpath.operation = generated.operation;
+			pendingToolpath.displayOperation = generated.displayOperation || generated.operation;
 			pendingToolpath.name = generated.name;
 			pendingToolpath.svgId = generated.svgId;
 			pendingToolpath.svgIds = generated.svgIds;
@@ -937,24 +939,6 @@ function doOffset() {
 
 function doPattern() {
 	cncController.setMode("Pattern");
-}
-
-function doDrill() {
-	var selected = selectMgr.selectedPaths();
-	if (selected.length > 0) {
-		var drillOp = cncController.operationManager.getOperation('Drill');
-		if (drillOp) {
-			startDrillGeneration(collectDrillGenerationRequests({
-				selected: selected,
-				drillOp: drillOp
-			}));
-		}
-		selectMgr.unselectAll();
-	}
-
-	// Enter drill mode — handles both path highlighting/helical drill
-	// and empty-space peck drilling
-	cncController.setMode("Drill");
 }
 
 function doTabEditor() {
@@ -1085,7 +1069,8 @@ function doSurfacing() {
 		const generated = result.toolpaths[i];
 		const pendingToolpath = pendingToolpaths[i];
 		pendingToolpath.paths = generated.paths;
-		pendingToolpath.operation = generated.displayOperation || generated.operation;
+		pendingToolpath.operation = generated.operation;
+		pendingToolpath.displayOperation = generated.displayOperation || generated.operation;
 		pendingToolpath.name = generated.name;
 			pendingToolpath.svgId = generated.svgId;
 			pendingToolpath.svgIds = generated.svgIds;
@@ -2605,7 +2590,8 @@ function doPocket(options = {}) {
 		const generated = result.toolpaths[i];
 		const pendingToolpath = pendingToolpaths[i];
 		pendingToolpath.paths = generated.paths;
-		pendingToolpath.operation = generated.displayOperation || generated.operation;
+		pendingToolpath.operation = generated.operation;
+		pendingToolpath.displayOperation = generated.displayOperation || generated.operation;
 		pendingToolpath.svgId = generated.svgId;
 		pendingToolpath.svgIds = generated.svgIds;
 			pendingToolpath.pending = false;
@@ -2723,7 +2709,8 @@ function startVcarveGeneration(config) {
 			const generated = result.toolpaths[i];
 			const pendingToolpath = pendingToolpaths[i];
 			pendingToolpath.paths = generated.paths;
-			pendingToolpath.operation = generated.displayOperation || generated.operation;
+			pendingToolpath.operation = generated.operation;
+			pendingToolpath.displayOperation = generated.displayOperation || generated.operation;
 			pendingToolpath.name = generated.name;
 			pendingToolpath.svgId = generated.svgId;
 			pendingToolpath.svgIds = generated.svgIds;

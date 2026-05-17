@@ -270,6 +270,11 @@ class ToolPathProperties {
     }
 
     getDefaultShapeCutProperties(operationName = 'Profile') {
+        if (operationName === 'Drill') {
+            return sanitizeToolpathProperties(this.collectDefaultFormData(operationName, {
+                operationType: 'drill'
+            }));
+        }
         return sanitizeToolpathProperties(this.collectDefaultFormData(operationName, {
             operationType: 'none'
         }));
@@ -315,6 +320,10 @@ class ToolPathProperties {
 
         if (operationName === 'Profile' && data.operationType === 'none') {
             errors.push('Please select a cut path');
+        }
+
+        if (operationName === 'Drill' && data.operationType !== 'drill') {
+            errors.push('Drill shapes only support drilling');
         }
 
         if (!data.tool) {
@@ -394,6 +403,7 @@ class ToolPathProperties {
     }
 
     _resolveOperationName(operationName, operationType) {
+        if (operationType === 'drill') return 'Drill';
         if (operationType === 'pocket') return 'Pocket';
         return operationName;
     }

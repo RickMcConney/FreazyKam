@@ -1251,13 +1251,14 @@ window.do3dProfile = function() {
         }
 
         const result = event.data.result || { toolpaths: [], createdCount: 0 };
-        for (let i = 0; i < result.toolpaths.length && i < pendingToolpaths.length; i++) {
-            const generated = result.toolpaths[i];
-            const pendingToolpath = pendingToolpaths[i];
-            pendingToolpath.paths = generated.paths;
-            pendingToolpath.operation = generated.displayOperation || generated.operation;
-            pendingToolpath.name = generated.name;
-            pendingToolpath.svgId = generated.svgId;
+		for (let i = 0; i < result.toolpaths.length && i < pendingToolpaths.length; i++) {
+			const generated = result.toolpaths[i];
+			const pendingToolpath = pendingToolpaths[i];
+			pendingToolpath.paths = generated.paths;
+			pendingToolpath.operation = generated.operation;
+			pendingToolpath.displayOperation = generated.displayOperation || generated.operation;
+			pendingToolpath.name = generated.name;
+			pendingToolpath.svgId = generated.svgId;
             pendingToolpath.svgIds = generated.svgIds;
             pendingToolpath.pending = false;
             delete pendingToolpath.pendingKey;

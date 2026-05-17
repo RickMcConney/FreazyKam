@@ -355,7 +355,8 @@ function pushToolPath(paths, name, operation, svgId = null, svgIds = null, label
 	if (window.toolpathUpdateTargets && window.toolpathUpdateTargets.length > 0) {
 		const existing = window.toolpathUpdateTargets.shift();
 		existing.paths = paths;
-		existing.operation = window.currentToolpathDescriptor?.displayOperation || operation;
+		existing.operation = operation;
+		existing.displayOperation = window.currentToolpathDescriptor?.displayOperation || operation;
 		existing.tool = { ...currentTool };
 		existing.svgId = svgId || (svgIds && svgIds.length > 0 ? svgIds[0] : null);
 		existing.svgIds = svgIds;
@@ -374,7 +375,8 @@ function pushToolPath(paths, name, operation, svgId = null, svgIds = null, label
 		id: "T" + toolpathId,
 		paths: paths,
 		visible: true,
-		operation: window.currentToolpathDescriptor?.displayOperation || operation,
+		operation: operation,
+		displayOperation: window.currentToolpathDescriptor?.displayOperation || operation,
 		name: name,
 		tool: { ...currentTool },
 		svgId: svgId || (svgIds && svgIds.length > 0 ? svgIds[0] : null),  // Backward compatibility
@@ -441,6 +443,8 @@ function collectDrillGenerationRequests(options) {
 	const selected = options && Array.isArray(options.selected) ? options.selected : [];
 	const drillOp = options && options.drillOp ? options.drillOp : null;
 	const point = options && options.point ? options.point : null;
+	const svgId = options && options.svgId ? options.svgId : null;
+	const svgIds = options && Array.isArray(options.svgIds) ? options.svgIds : (svgId ? [svgId] : []);
 
 	if (selected.length > 0 && drillOp) {
 		for (var i = 0; i < selected.length; i++) {
@@ -463,8 +467,8 @@ function collectDrillGenerationRequests(options) {
 			kind: 'point',
 			name: 'Drill',
 			operation: 'Drill',
-			svgId: null,
-			svgIds: [],
+			svgId: svgId,
+			svgIds: svgIds,
 			point: { x: point.x, y: point.y }
 		});
 	}
@@ -509,7 +513,29 @@ function startDrillGeneration(requests) {
 		return false;
 	}
 
-	const pendingToolpaths = pendingRequests.map(function(entry) {
+	const updateTargets = Array.isArray(window.toolpathUpdateTargets)
+		? window.toolpathUpdateTargets.slice()
+		: [];
+	const pendingToolpaths = pendingRequests.map(function(entry, index) {
+		const updateTarget = updateTargets[index] || null;
+		if (updateTarget) {
+			updateTarget.paths = [];
+			updateTarget.visible = true;
+			updateTarget.operation = entry.request.operation;
+			updateTarget.displayOperation = window.currentToolpathDescriptor?.displayOperation || entry.request.operation;
+			updateTarget.name = entry.request.name;
+			updateTarget.tool = { ...currentTool };
+			updateTarget.svgId = entry.request.svgId || null;
+			updateTarget.svgIds = Array.isArray(entry.request.svgIds) ? entry.request.svgIds.slice() : [];
+			updateTarget.pending = true;
+			updateTarget.pendingKey = entry.pendingKey;
+			if (window.currentToolpathProperties) {
+				updateTarget.toolpathProperties = sanitizeToolpathProperties(window.currentToolpathProperties) || {};
+				setToolpathLabel(updateTarget, getToolpathPropertyName(window.currentToolpathProperties));
+			}
+			return updateTarget;
+		}
+
 		return makePendingToolpath(entry.request.svgIds || [], entry.request.name, entry.request.operation, entry.pendingKey, {
 			svgId: entry.request.svgId || null,
 			svgIds: Array.isArray(entry.request.svgIds) ? entry.request.svgIds.slice() : []
@@ -552,7 +578,8 @@ function startDrillGeneration(requests) {
 		const generated = result.toolpaths[i];
 		const pendingToolpath = pendingToolpaths[i];
 		pendingToolpath.paths = generated.paths;
-		pendingToolpath.operation = generated.displayOperation || generated.operation;
+		pendingToolpath.operation = generated.operation;
+		pendingToolpath.displayOperation = generated.displayOperation || generated.operation;
 		pendingToolpath.name = generated.name;
 			pendingToolpath.svgId = generated.svgId;
 			pendingToolpath.svgIds = generated.svgIds;
@@ -565,6 +592,9 @@ function startDrillGeneration(requests) {
 		}
 		if (typeof refreshToolPathsDisplay === 'function') refreshToolPathsDisplay();
 		redraw();
+		if (typeof window.schedulePrepared3DGcodeRefresh === 'function') {
+			window.schedulePrepared3DGcodeRefresh({ delay: 0 });
+		}
 		if (typeof setActiveToolpaths === 'function' && result.toolpaths.length > 0) {
 			setActiveToolpaths(pendingToolpaths.slice(0, result.toolpaths.length));
 		}
@@ -589,9 +619,13 @@ function startDrillGeneration(requests) {
 	return true;
 }
 
-function makeHole(pt) {
+function makeHole(pt, options = {}) {
 	function core() {
-		return startDrillGeneration(collectDrillGenerationRequests({ point: pt }));
+		return startDrillGeneration(collectDrillGenerationRequests({
+			point: pt,
+			svgId: options.svgId || null,
+			svgIds: Array.isArray(options.svgIds) ? options.svgIds : (options.svgId ? [options.svgId] : [])
+		}));
 	}
 	if (!withDrillProperties(core)) core();
 }

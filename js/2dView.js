@@ -725,12 +725,100 @@ function drawToolpathShapePreview(svgpath, toolpath) {
 	ctx.restore();
 }
 
+function drawDrillToolpathPreview(toolpath) {
+	if (!toolpath || !Array.isArray(toolpath.paths) || toolpath.paths.length === 0) return;
+
+	var depth = Number(toolpath?.toolpathProperties?.depth ?? toolpath?.tool?.depth) || 0;
+	var color = getToolpathShadeColor(depth);
+
+	ctx.save();
+	for (var i = 0; i < toolpath.paths.length; i++) {
+		var pathGroup = toolpath.paths[i];
+		var drillPoints = Array.isArray(pathGroup?.path) && pathGroup.path.length > 0
+			? pathGroup.path
+			: (Array.isArray(pathGroup?.tpath) ? pathGroup.tpath : []);
+
+		for (var j = 0; j < drillPoints.length; j++) {
+			var point = drillPoints[j];
+			if (!point) continue;
+
+			var pt = worldToScreen(point.x, point.y);
+			var radiusWorld = Number(point.r) || ((Number(toolpath?.tool?.diameter) || 0) / 2) * viewScale;
+			var radiusScreen = Math.max(3, radiusWorld * zoomLevel);
+
+			ctx.beginPath();
+			ctx.arc(pt.x, pt.y, radiusScreen, 0, 2 * Math.PI);
+			ctx.fillStyle = color;
+			ctx.fill();
+
+			ctx.beginPath();
+			ctx.arc(pt.x, pt.y, Math.max(1.25, radiusScreen * 0.38), 0, 2 * Math.PI);
+			ctx.fillStyle = canvasBackgroundColor;
+			ctx.fill();
+
+			ctx.beginPath();
+			ctx.arc(pt.x, pt.y, radiusScreen, 0, 2 * Math.PI);
+			ctx.strokeStyle = color;
+			ctx.lineWidth = 1;
+			ctx.stroke();
+		}
+	}
+	ctx.restore();
+}
+
+function drawHelicalToolpathPreview(toolpath) {
+	if (!toolpath || !Array.isArray(toolpath.paths) || toolpath.paths.length === 0) return;
+
+	var depth = Number(toolpath?.toolpathProperties?.depth ?? toolpath?.tool?.depth) || 0;
+	var color = getToolpathShadeColor(depth);
+
+	ctx.save();
+	for (var i = 0; i < toolpath.paths.length; i++) {
+		var pathGroup = toolpath.paths[i];
+		var helixPath = Array.isArray(pathGroup?.tpath) ? pathGroup.tpath : [];
+		if (!helixPath.length) continue;
+
+		var screenPath = buildScreenPolyline(helixPath, false);
+		drawScreenPolyline(screenPath, color, 2);
+
+		var centerPoint = helixPath[0];
+		var outerRadiusWorld = 0;
+		for (var j = 0; j < helixPath.length; j++) {
+			var point = helixPath[j];
+			var dx = Number(point.x) - Number(centerPoint.x);
+			var dy = Number(point.y) - Number(centerPoint.y);
+			var distance = Math.sqrt(dx * dx + dy * dy);
+			if (distance > outerRadiusWorld) outerRadiusWorld = distance;
+		}
+
+		if (outerRadiusWorld > 0) {
+			var centerScreen = worldToScreen(centerPoint.x, centerPoint.y);
+			ctx.beginPath();
+			ctx.arc(centerScreen.x, centerScreen.y, Math.max(3, outerRadiusWorld * zoomLevel), 0, 2 * Math.PI);
+			ctx.strokeStyle = color;
+			ctx.lineWidth = 1;
+			ctx.stroke();
+		}
+	}
+	ctx.restore();
+}
+
 function drawActiveToolpathShapePreviews() {
 	if (!Array.isArray(toolpaths) || toolpaths.length === 0) return;
 
 	for (var i = 0; i < toolpaths.length; i++) {
 		var toolpath = toolpaths[i];
 		if (!toolpath || !toolpath.active) continue;
+
+		if (toolpath.operation === 'Drill') {
+			drawDrillToolpathPreview(toolpath);
+			continue;
+		}
+
+		if (toolpath.operation === 'HelicalDrill') {
+			drawHelicalToolpathPreview(toolpath);
+			continue;
+		}
 
 		var sourceIds = Array.isArray(toolpath.svgIds) && toolpath.svgIds.length > 0
 			? toolpath.svgIds
@@ -757,6 +845,22 @@ function drawStoredShapeCutPreviews() {
 		var tool = null;
 		if (window.toolPathProperties && typeof window.toolPathProperties.getToolById === 'function') {
 			tool = window.toolPathProperties.getToolById(path.toolpathProperties.tool);
+		}
+
+		if (path.creationProperties?.shape === 'DrillShape' && path.toolpathProperties.operationType === 'drill') {
+			drawDrillToolpathPreview({
+				operation: 'Drill',
+				toolpathProperties: path.toolpathProperties,
+				tool: tool || { diameter: 0 },
+				paths: [{
+					path: [{
+						x: path.creationProperties.center?.x ?? ((path.bbox.minx + path.bbox.maxx) / 2),
+						y: path.creationProperties.center?.y ?? ((path.bbox.miny + path.bbox.maxy) / 2),
+						r: ((Number(tool?.diameter) || 0) / 2) * viewScale
+					}]
+				}]
+			});
+			continue;
 		}
 
 		drawToolpathShapePreview(path, {

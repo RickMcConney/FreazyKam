@@ -686,7 +686,6 @@ function initializeLayout() {
     createToolbar();
     createSidebar();
     cncController.operationManager.addOperations();
-    ensureMachiningOperationsInSidebar();
     createCanvasSidePanels();
     createModals();
     initializeGcodeView();
@@ -1494,10 +1493,6 @@ function setupSidebarEventHandlers(sidebar) {
             if (isDrawTool) {
                 showToolPropertiesEditor(operation);
                 handleOperationClick(operation);
-            } else if (operation === 'Drill') {
-                // Drill lives in the Operations panel but also activates an interactive canvas mode
-                showOperationPropertiesEditor(operation);
-                handleOperationClick(operation);
             } else {
                 // Machining operations like Profile/Pocket use the properties panel and
                 // canvas selection, so leave any interactive tool mode such as Drill first.
@@ -1870,6 +1865,11 @@ function buildShapeCutPopupHTML(shapeOperation, path, operationName) {
     };
 }
 
+function getShapeCutOperationName(path, shapeOperation) {
+    const shapeType = path?.creationProperties?.shape || shapeOperation?.fixedShape || null;
+    return shapeType === 'DrillShape' ? 'Drill' : 'Profile';
+}
+
 function bindShapeCutPopup(path, shapeOperation, operationName) {
     const form = document.getElementById('tool-properties-form');
     if (!form) return;
@@ -2121,7 +2121,7 @@ function isSameToolpathSource(toolpath, selectedSvgIds) {
 }
 
 function findExistingToolpathsForSelection(operationName, selectedSvgIds) {
-    const normalizedOperation = operationName === 'Drill' ? 'HelicalDrill' : operationName;
+    const normalizedOperation = operationName === 'Drill' ? 'Drill' : operationName;
 	if (isWholeWorkpieceOperation(operationName)) {
 		return toolpaths.filter(toolpath => {
 			if (toolpath.operation !== normalizedOperation) return false;
@@ -2239,14 +2239,15 @@ function syncShapeMachiningToolpath(path, options = {}) {
         });
     }
 
-    const descriptor = window.toolPathProperties.getOperationDescriptor('Profile', data.operationType);
+    const shapeCutOperationName = path?.creationProperties?.shape === 'DrillShape' ? 'Drill' : 'Profile';
+    const descriptor = window.toolPathProperties.getOperationDescriptor(shapeCutOperationName, data.operationType);
     const selectedTool = window.toolPathProperties.getToolById(data.tool);
     if (!descriptor || !selectedTool) {
         return false;
     }
 
     const executionOperation = descriptor.executionOperation || 'Profile';
-    if (executionOperation !== 'Profile' && executionOperation !== 'Pocket') {
+    if (executionOperation !== 'Profile' && executionOperation !== 'Pocket' && executionOperation !== 'Drill') {
         return false;
     }
 
@@ -2303,6 +2304,12 @@ function syncShapeMachiningToolpath(path, options = {}) {
     try {
         if (executionOperation === 'Pocket') {
             doPocket({ silent: true });
+        } else if (executionOperation === 'Drill') {
+            const shapeCenter = path?.creationProperties?.center;
+            if (!shapeCenter) {
+                return false;
+            }
+            makeHole({ x: shapeCenter.x, y: shapeCenter.y }, { svgId: path.id, svgIds: [path.id] });
         } else {
             doProfile({ silent: true });
         }
@@ -2931,8 +2938,6 @@ function setupToolpathUpdateButton(operationName) {
 
         if (operationName === 'Surfacing' || operationName === '3dProfile') {
             updateSurfacingToolpath(operationName, activeToolpaths, selectedTool, data);
-        } else if (operationName === 'Drill' && activeToolpaths.some(tp => tp.operation === 'HelicalDrill')) {
-            updateHelicalDrillToolpath(activeToolpaths, selectedTool, data);
         } else if (operationName === 'Drill') {
             updateDrillToolpath(activeToolpaths, selectedTool, data);
             window.currentToolpathDescriptor = null;
@@ -2994,15 +2999,17 @@ function regenerateToolpathsForPaths(changedPathIds) {
     // together in a single call with all their update targets.
     const regenGroups = new Map();
     for (const toolpath of affectedToolpaths) {
-        if (toolpath.operation === 'Drill') continue;
-
         if (toolpath.operation === 'HelicalDrill') {
             let sourceIds = toolpath.svgIds || (toolpath.svgId ? [toolpath.svgId] : []);
             let sourcePath = sourceIds.map(id => svgpaths.find(p => p.id === id)).filter(Boolean)[0];
-            if (sourcePath && typeof Drill !== 'undefined') {
-                const drillOp = new Drill();
-                const circleInfo = drillOp.detectCircle(sourcePath);
-                if (circleInfo) {
+            if (sourcePath && sourcePath.creationProperties?.shape === 'DrillShape') {
+                const bbox = sourcePath.bbox || (sourcePath.path ? boundingBox(sourcePath.path) : null);
+                if (bbox) {
+                    const circleInfo = {
+                        cx: (bbox.minx + bbox.maxx) / 2,
+                        cy: (bbox.miny + bbox.maxy) / 2,
+                        radius: Math.max(0, (bbox.maxx - bbox.minx) / 2)
+                    };
                     const originalTool = window.currentTool;
                     window.currentTool = { ...toolpath.tool };
                     window.currentToolpathProperties = toolpath.toolpathProperties ? { ...toolpath.toolpathProperties } : null;
@@ -3246,7 +3253,7 @@ function showPathPropertiesEditor(path) {
     currentOperationName = path.creationTool;
 
     const isShapePath = path.creationTool === 'Shape' || (window.SHAPE_TOOL_NAMES || []).includes(path.creationTool);
-    const shapeCutOperationName = 'Profile';
+    const shapeCutOperationName = getShapeCutOperationName(path, operation);
 
     // Get properties HTML from the operation
     let propertiesHTML = '';
@@ -3983,12 +3990,6 @@ function handleOperationClick(operation) {
             doPattern();
             break;
         // Machining Operations — batch all generated toolpaths into a single undo step
-        case 'Drill':
-            beginUndoBatch();
-            doDrill();
-            endUndoBatch();
-            break;
-
         case 'Profile':
             beginUndoBatch();
             doProfile();
@@ -4644,26 +4645,11 @@ function syncGroupedToolSelection() {
     });
 }
 
-function ensureMachiningOperationsInSidebar() {
-    const machiningOperations = [
-        { name: 'Drill', icon: 'circle-plus', tooltip: 'Drill holes at selected points', displayName: 'Drill' },
-        { name: 'Profile', icon: 'circle', tooltip: 'Cut inside or outside the selected path', displayName: 'Profile' },
-        { name: 'Pocket', icon: 'target', tooltip: 'Remove material inside the path', displayName: 'Pocket' },
-        { name: 'VCarve', icon: 'star', tooltip: 'V-carve inside or outside the path', displayName: 'V-Carve' }
-    ];
-
-    machiningOperations.forEach(operation => {
-        if (!document.querySelector(`#draw-tools-list [data-operation="${operation.name}"]`)) {
-            addOperation(operation.name, operation.icon, operation.tooltip, operation.displayName);
-        }
-    });
-}
-
 // Compatibility function for operation manager
 function addOperation(name, icon, tooltip, displayName = name) {
 
-    const hiddenOperations = ['Move', 'Edit', 'Boolean', 'Pattern', 'Offset', 'Text', 'Shape'];
-    const machiningOperations = ['Drill', 'Profile', 'Pocket', 'VCarve'];
+    const hiddenOperations = ['Move', 'Edit', 'Boolean', 'Pattern', 'Offset', 'Text', 'Shape', 'Profile', 'Pocket', 'VCarve', 'Drill'];
+    const machiningOperations = [];
 
     if (hiddenOperations.includes(name)) {
         return;

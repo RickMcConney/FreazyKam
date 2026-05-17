@@ -202,6 +202,19 @@ function appendPreviewPolyline(movements, points, toolInfo, options = {}) {
   }
 }
 
+function appendPreviewDrill(movements, point, depth, toolInfo, options = {}) {
+  if (!point || !toolInfo) {
+    return;
+  }
+
+  const safeZ = Number.isFinite(Number(options.safeZ)) ? Number(options.safeZ) : 5;
+  const targetDepth = -Math.max(0, Number(depth) || 0);
+
+  pushPreviewMovement(movements, { x: point.x, y: point.y, z: safeZ }, false, toolInfo);
+  pushPreviewMovement(movements, { x: point.x, y: point.y, z: targetDepth }, true, toolInfo);
+  pushPreviewMovement(movements, { x: point.x, y: point.y, z: safeZ }, false, toolInfo);
+}
+
 function buildProfilePreviewPoints(pathPoints, passZ, tabData) {
   if (!Array.isArray(pathPoints) || pathPoints.length === 0) {
     return [];
@@ -349,7 +362,7 @@ function buildPreviewMovementsFromToolpaths(sourceToolpaths) {
       for (const pathGroup of toolpath.paths) {
         const drillPoints = Array.isArray(pathGroup?.path) ? pathGroup.path : Array.isArray(pathGroup?.tpath) ? pathGroup.tpath : [];
         for (const point of drillPoints) {
-          appendPreviewPolyline(movements, [{ x: point.x, y: point.y, z: -depth }], toolInfo, { continuous: false, safeZ });
+          appendPreviewDrill(movements, point, depth, toolInfo, { safeZ });
         }
       }
       toolpathSummaries.push({ id: toolpath.id, name: toolpath.name, operation: toolpath.operation, previewKind, pathGroups: toolpath.paths.length, passes, movementCount: movements.length - movementStartIndex, depth, step });
@@ -2699,20 +2712,27 @@ class ToolpathAnimation {
     }
 
     let segment = [];
+    let cuttingPointToolRadius = 0;
     for (const move of movements) {
       if (!move || move.isG1 !== true) {
         if (segment.length > 1) {
           this.drawToolpathSegment(segment, true);
+        } else if (segment.length === 1) {
+          this.drawToolpathPoint(segment[0], cuttingPointToolRadius);
         }
         segment = [];
+        cuttingPointToolRadius = 0;
         continue;
       }
 
       segment.push(new THREE.Vector3(move.x, move.y, move.z));
+      cuttingPointToolRadius = Number(move.toolRadius) || cuttingPointToolRadius;
     }
 
     if (segment.length > 1) {
       this.drawToolpathSegment(segment, true);
+    } else if (segment.length === 1) {
+      this.drawToolpathPoint(segment[0], cuttingPointToolRadius);
     }
   }
 
@@ -3520,6 +3540,22 @@ class ToolpathAnimation {
     const line = new THREE.Line(geometry, material);
     this.scene.add(line);
     this.toolpathLines.push(line);  // Store for cleanup
+  }
+
+  drawToolpathPoint(point, radius) {
+    if (!point) return;
+
+    const sphereRadius = Math.max(0.25, Number(radius) || 0.5);
+    const geometry = new THREE.SphereGeometry(sphereRadius, 18, 12);
+    const material = new THREE.MeshBasicMaterial({
+      color: 0x00ffff,
+      depthTest: true
+    });
+
+    const marker = new THREE.Mesh(geometry, material);
+    marker.position.copy(point);
+    this.scene.add(marker);
+    this.toolpathLines.push(marker);
   }
 
   play() {
