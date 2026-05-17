@@ -218,8 +218,8 @@ class Workpiece extends Operation {
             window.updateWorkpiece3D(newWidth, newLength, newThickness, newOriginPosition, newMaterial);
         }
 
-        if (typeof window.schedule3DViewRefresh === 'function') {
-            window.schedule3DViewRefresh({ preserveProgress: true, resetIfMissing: true });
+        if (typeof window.schedulePrepared3DGcodeRefresh === 'function') {
+            window.schedulePrepared3DGcodeRefresh({ preserveProgress: true, resetIfMissing: true });
         }
 
         // Force a second redraw on next frame to ensure all updates are visible

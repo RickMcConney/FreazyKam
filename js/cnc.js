@@ -315,8 +315,8 @@ function setVisibility(id, visible, options) {
 	if (!options.suppressRedraw) {
 		redraw();
 	}
-	if (typeof window.schedule3DViewRefresh === 'function') {
-		window.schedule3DViewRefresh({ preserveProgress: true, resetIfMissing: true });
+	if (typeof window.schedulePrepared3DGcodeRefresh === 'function') {
+		window.schedulePrepared3DGcodeRefresh({ preserveProgress: true, resetIfMissing: true });
 	}
 }
 
@@ -361,8 +361,8 @@ function doRemoveToolPath(id) {
 	}
 
 	redraw();
-	if (typeof window.schedule3DViewRefresh === 'function') {
-		window.schedule3DViewRefresh({ preserveProgress: true, resetIfMissing: true });
+	if (typeof window.schedulePrepared3DGcodeRefresh === 'function') {
+		window.schedulePrepared3DGcodeRefresh({ preserveProgress: true, resetIfMissing: true });
 	}
 }
 

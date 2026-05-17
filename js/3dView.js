@@ -282,6 +282,11 @@ function schedulePrepared3DGcodeRefresh(options = {}) {
     clearTimeout(prepared3DGcodeRefreshTimeoutId);
   }
 
+  // Any geometry/settings change invalidates the currently loaded simulation.
+  // Switch back to the estimate/simulate UI immediately and force the next
+  // simulation load to use freshly regenerated G-code.
+  clearPreparedSimulation3DState();
+
   const delay = Number.isFinite(options.delay) ? options.delay : 180;
   prepared3DGcodeRefreshPromise = new Promise((resolve) => {
     prepared3DGcodeRefreshResolvers.push(resolve);
@@ -2672,6 +2677,10 @@ class ToolpathAnimation {
       console.warn('loadFromGcode: Empty G-code string provided');
       return;
     }
+
+    // Reloading the 3D view after move/resize regenerates the simulation G-code.
+    // Clear the previous line meshes first so stale toolpaths don't accumulate visually.
+    this.clearToolpath();
 
     // Store toolpaths for tool info access
     this.toolpaths = window.toolpaths || [];

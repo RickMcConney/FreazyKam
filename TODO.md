@@ -7,5 +7,4 @@ TODO
 - Add TEXT tool
 - Add PEN tool
 - Add Aligment panel.
-- Fix duplication issue on 3D view when moving or resizing a shape.
 - Fix: Cut on path is twice as large as cut outside path

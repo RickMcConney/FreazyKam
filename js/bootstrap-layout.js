@@ -2368,7 +2368,7 @@ function scheduleShapeMachiningToolpathSync(path, options = {}) {
 }
 
 function refresh3DPreviewForShape(path) {
-    if (!path || path.visible === false || typeof window.schedule3DViewRefresh !== 'function') {
+    if (!path || path.visible === false) {
         return;
     }
 
@@ -2388,11 +2388,13 @@ function refresh3DPreviewForShape(path) {
         });
     }
 
-    window.schedule3DViewRefresh({
-        preserveProgress: false,
-        resetIfMissing: true,
-        seekToLatestState: true
-    });
+    if (typeof window.schedule3DViewRefresh === 'function') {
+        window.schedule3DViewRefresh({
+            preserveProgress: false,
+            resetIfMissing: true,
+            seekToLatestState: false
+        });
+    }
 }
 
 function show3DPane() {
@@ -4499,9 +4501,6 @@ function refreshToolPathsDisplay() {
         if (typeof lucide !== 'undefined' && typeof lucide.createIcons === 'function') {
             lucide.createIcons();
         }
-        if (typeof window.schedule3DViewRefresh === 'function') {
-            window.schedule3DViewRefresh({ preserveProgress: true, resetIfMissing: true });
-        }
         return;
     }
 
@@ -4560,9 +4559,6 @@ function refreshToolPathsDisplay() {
         lucide.createIcons();
     }
 
-    if (typeof window.schedule3DViewRefresh === 'function') {
-        window.schedule3DViewRefresh({ preserveProgress: true, resetIfMissing: true });
-    }
 }
 
 function removeSvgPath(id) {
