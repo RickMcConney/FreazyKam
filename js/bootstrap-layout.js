@@ -761,6 +761,10 @@ function createToolbar() {
                         <i data-lucide="cpu"></i>
                         <span>GRBL</span>
                     </button>
+                    <button type="button" class="dropdown-item app-menu-item" data-action="project-cut-settings" title="Open Cut Settings">
+                        <i data-lucide="scissors"></i>
+                        <span>Cut Settings</span>
+                    </button>
                 </div>
             </div>
             <div class="dropdown app-menu-group">
@@ -848,6 +852,9 @@ function createToolbar() {
                 break;
             case 'project-grbl':
                 showGrblModal();
+                break;
+            case 'project-cut-settings':
+                showCutSettingsModal();
                 break;
             case 'options':
                 showOptionsModal();
@@ -2363,6 +2370,10 @@ function scheduleShapeMachiningToolpathSync(path, options = {}) {
 function refresh3DPreviewForShape(path) {
     if (!path || path.visible === false || typeof window.schedule3DViewRefresh !== 'function') {
         return;
+    }
+
+    if (typeof window.schedulePrepared3DGcodeRefresh === 'function') {
+        window.schedulePrepared3DGcodeRefresh();
     }
 
     if (typeof console !== 'undefined' && typeof console.debug === 'function') {

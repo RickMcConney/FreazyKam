@@ -5,6 +5,31 @@
 var simulationControls2DRefs = null;
 var simulationControls3DRefs = null;
 
+function set3DSimulationControlsReady(isReady) {
+    const refs = ensure3DSimulationControls();
+    if (!refs) {
+        return;
+    }
+
+    refs.isSimulationReady = !!isReady;
+
+    if (refs.summaryRow) {
+        refs.summaryRow.classList.toggle('d-none', refs.isSimulationReady);
+    }
+
+    if (refs.controlsRow) {
+        refs.controlsRow.classList.toggle('d-none', !refs.isSimulationReady);
+    }
+
+    update3DSimulationOverlayLayout();
+
+    if (typeof requestThreeRender === 'function') {
+        requestThreeRender();
+    }
+}
+
+window.set3DSimulationControlsReady = set3DSimulationControlsReady;
+
 function createIconNode(iconName) {
     const icon = document.createElement('i');
     icon.setAttribute('data-lucide', iconName);
@@ -256,6 +281,97 @@ function create3DVisibilityControl(id, labelText, checked) {
     return { wrapper: wrapper, input: input };
 }
 
+function create3DSimulationMenuItem(id, labelText, checked) {
+    const wrapper = document.createElement('label');
+    wrapper.className = 'dropdown-item d-flex align-items-center gap-2 mb-0';
+    wrapper.style.cursor = 'pointer';
+
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.className = 'form-check-input mt-0';
+    input.id = id;
+    input.checked = checked;
+
+    const text = document.createElement('span');
+    text.className = 'small';
+    text.textContent = labelText;
+
+    wrapper.appendChild(input);
+    wrapper.appendChild(text);
+
+    return { wrapper: wrapper, input: input };
+}
+
+function create3DSimulationMenu(prefix) {
+    const container = document.createElement('div');
+    container.className = 'col-auto dropdown';
+
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'btn btn-outline-secondary btn-sm 3d-simulation-menu-button';
+    button.setAttribute('data-bs-toggle', 'dropdown');
+    button.setAttribute('aria-expanded', 'false');
+    button.setAttribute('aria-label', '3D display options');
+    button.innerHTML = '<span class="three-dots-vertical" aria-hidden="true"></span>';
+
+    const menu = document.createElement('div');
+    menu.className = 'dropdown-menu dropdown-menu-end simulation-overlay-menu';
+
+    const showWorkpiece = create3DSimulationMenuItem(prefix + '-show-workpiece', 'Workpiece', true);
+    const showAxes = create3DSimulationMenuItem(prefix + '-show-axes', 'Axis', true);
+    const showTool = create3DSimulationMenuItem(prefix + '-show-tool', 'Tool', true);
+    const followTool = create3DSimulationMenuItem(prefix + '-follow-tool', 'Follow Tool', false);
+
+    menu.appendChild(showWorkpiece.wrapper);
+    menu.appendChild(showAxes.wrapper);
+    menu.appendChild(showTool.wrapper);
+    menu.appendChild(followTool.wrapper);
+
+    container.appendChild(button);
+    container.appendChild(menu);
+
+    return {
+        container: container,
+        showWorkpiece: showWorkpiece.input,
+        showAxes: showAxes.input,
+        showTool: showTool.input,
+        followTool: followTool.input
+    };
+}
+
+function sync3DSimulationMenuState(controlName, checked) {
+    if (!simulationControls3DRefs) {
+        return;
+    }
+
+    ['summaryMenu', 'controlsMenu'].forEach(function(menuKey) {
+        const input = simulationControls3DRefs[menuKey] && simulationControls3DRefs[menuKey][controlName];
+        if (input) {
+            input.checked = checked;
+        }
+    });
+}
+
+function get3DSimulationControlState(controlName, fallback) {
+    if (!simulationControls3DRefs) {
+        return fallback;
+    }
+
+    const summaryInput = simulationControls3DRefs.summaryMenu && simulationControls3DRefs.summaryMenu[controlName];
+    if (summaryInput) {
+        return summaryInput.checked;
+    }
+
+    const controlsInput = simulationControls3DRefs.controlsMenu && simulationControls3DRefs.controlsMenu[controlName];
+    if (controlsInput) {
+        return controlsInput.checked;
+    }
+
+    return fallback;
+}
+
+window.get3DSimulationControlState = get3DSimulationControlState;
+
 function ensure3DSimulationControls() {
     const overlayControls = document.getElementById('3d-simulation-controls');
     if (!overlayControls) {
@@ -268,39 +384,50 @@ function ensure3DSimulationControls() {
     }
 
     const fragment = document.createDocumentFragment();
+    const summaryRow = document.createElement('div');
+    summaryRow.className = 'd-flex w-100 align-items-center justify-content-between gap-3 flex-wrap';
+
+    const estimateWrap = document.createElement('div');
+    estimateWrap.className = 'd-flex align-items-center gap-2';
+
+    const estimateLabel = document.createElement('span');
+    estimateLabel.className = 'small';
+    estimateLabel.textContent = 'Estimated Carve Time:';
+
+    const estimateValue = document.createElement('span');
+    estimateValue.id = '3d-estimated-carve-time';
+    estimateValue.className = 'small fw-semibold';
+    estimateValue.textContent = '0:00';
+
+    estimateWrap.appendChild(estimateLabel);
+    estimateWrap.appendChild(estimateValue);
+    summaryRow.appendChild(estimateWrap);
+
+    const simulateBtn = document.createElement('button');
+    simulateBtn.type = 'button';
+    simulateBtn.className = 'btn btn-primary btn-sm';
+    simulateBtn.id = '3d-generate-gcode';
+    simulateBtn.appendChild(document.createTextNode('Simulate'));
+
+    const summaryActions = document.createElement('div');
+    summaryActions.className = 'd-flex align-items-center gap-2';
+    const summaryMenu = create3DSimulationMenu('3d-summary');
+    summaryActions.appendChild(simulateBtn);
+    summaryActions.appendChild(summaryMenu.container);
+    summaryRow.appendChild(summaryActions);
+
     const controlsRow = document.createElement('div');
-    controlsRow.className = 'row g-2 w-100 align-items-center';
-
-    const metricsRow = document.createElement('div');
-    metricsRow.className = 'row gx-4 gy-2 w-100 align-items-center mt-1';
-
-    const buttonsCol = document.createElement('div');
-    buttonsCol.className = 'col-auto';
+    controlsRow.className = 'd-none d-flex w-100 align-items-center gap-3 flex-wrap';
 
     const startBtn = document.createElement('button');
     startBtn.type = 'button';
     startBtn.className = 'btn btn-outline-primary btn-sm';
     startBtn.id = '3d-start-simulation';
     startBtn.appendChild(createIconNode('play'));
+    startBtn.appendChild(document.createTextNode(' Play'));
+    startBtn.disabled = true;
 
-    const pauseBtn = document.createElement('button');
-    pauseBtn.type = 'button';
-    pauseBtn.className = 'btn btn-outline-secondary btn-sm';
-    pauseBtn.id = '3d-pause-simulation';
-    pauseBtn.disabled = true;
-    pauseBtn.appendChild(createIconNode('pause'));
-
-    const stopBtn = document.createElement('button');
-    stopBtn.type = 'button';
-    stopBtn.className = 'btn btn-outline-secondary btn-sm';
-    stopBtn.id = '3d-stop-simulation';
-    stopBtn.disabled = true;
-    stopBtn.appendChild(createIconNode('octagon-x'));
-
-    buttonsCol.appendChild(startBtn);
-    buttonsCol.appendChild(pauseBtn);
-    buttonsCol.appendChild(stopBtn);
-    controlsRow.appendChild(buttonsCol);
+    controlsRow.appendChild(startBtn);
 
     const speedCol = document.createElement('div');
     speedCol.className = 'col-auto d-flex align-items-center gap-2';
@@ -309,58 +436,27 @@ function ensure3DSimulationControls() {
     speedLabel.className = 'small';
     speedLabel.textContent = 'Speed:';
 
-    const speedInput = document.createElement('input');
-    speedInput.type = 'range';
-    speedInput.className = 'form-range form-range-sm';
+    const speedInput = document.createElement('select');
+    speedInput.className = 'form-select form-select-sm';
     speedInput.id = '3d-simulation-speed';
-    speedInput.min = '1';
-    speedInput.max = '50';
-    speedInput.step = '0.5';
-    speedInput.value = '4';
-    speedInput.style.width = '60px';
+    speedInput.style.width = '90px';
 
-    const speedDisplay = document.createElement('span');
-    speedDisplay.id = '3d-speed-display';
-    speedDisplay.className = 'small';
-    speedDisplay.textContent = '4x';
+    ['1', '2', '4', '8', '16', '32', '50'].forEach((speed) => {
+        const option = document.createElement('option');
+        option.value = speed;
+        option.textContent = speed + 'x';
+        if (speed === '4') {
+            option.selected = true;
+        }
+        speedInput.appendChild(option);
+    });
 
     speedCol.appendChild(speedLabel);
     speedCol.appendChild(speedInput);
-    speedCol.appendChild(speedDisplay);
     controlsRow.appendChild(speedCol);
 
-    const generateGcodeCol = document.createElement('div');
-    generateGcodeCol.className = 'col-auto';
-
-    const generateGcodeBtn = document.createElement('button');
-    generateGcodeBtn.type = 'button';
-    generateGcodeBtn.className = 'btn btn-primary btn-sm';
-    generateGcodeBtn.id = '3d-generate-gcode';
-    generateGcodeBtn.appendChild(createIconNode('file-code'));
-    generateGcodeBtn.appendChild(document.createTextNode(' Generate G-code'));
-
-    generateGcodeCol.appendChild(generateGcodeBtn);
-    controlsRow.appendChild(generateGcodeCol);
-
-    const axesControl = create3DVisibilityControl('3d-show-axes', 'Axes', true);
-    const toolpathControl = create3DVisibilityControl('3d-show-toolpath', 'Toolpath', true);
-    const workpieceControl = create3DVisibilityControl('3d-show-workpiece', 'Workpiece', true);
-    const stlControl = create3DVisibilityControl('3d-show-stl', 'STL Model', true);
-    const followToolControl = create3DVisibilityControl('3d-follow-tool', 'Follow Tool', false);
-
-    controlsRow.appendChild(axesControl.wrapper);
-    controlsRow.appendChild(toolpathControl.wrapper);
-    controlsRow.appendChild(workpieceControl.wrapper);
-    controlsRow.appendChild(stlControl.wrapper);
-    controlsRow.appendChild(followToolControl.wrapper);
-
     const progressCol = document.createElement('div');
-    progressCol.className = 'col-auto d-flex align-items-center gap-2';
-    progressCol.appendChild(createSimulationDivider());
-
-    const progressLabel = document.createElement('span');
-    progressLabel.className = 'small';
-    progressLabel.textContent = 'Progress:';
+    progressCol.className = 'd-flex align-items-center flex-grow-1';
 
     const progressInput = document.createElement('input');
     progressInput.type = 'range';
@@ -370,96 +466,56 @@ function ensure3DSimulationControls() {
     progressInput.max = '1';
     progressInput.step = '1';
     progressInput.value = '0';
-    progressInput.style.width = '150px';
+    progressInput.style.minWidth = '160px';
 
-    const progressDisplay = document.createElement('span');
-    progressDisplay.id = '3d-progress-display';
-    progressDisplay.className = 'small';
-    progressDisplay.textContent = '0/0 (0%)';
-
-    progressCol.appendChild(progressLabel);
     progressCol.appendChild(progressInput);
     controlsRow.appendChild(progressCol);
 
-    metricsRow.appendChild(createSimulationMetric('Line:', progressDisplay));
-
-    const stepDisplay = document.createElement('span');
-    stepDisplay.id = '3d-step-display';
-    stepDisplay.className = 'small';
-    stepDisplay.textContent = '0 / 0';
-    metricsRow.appendChild(createSimulationMetric('G-code:', stepDisplay));
-
-    const feedValue = document.createElement('span');
-    feedValue.id = '3d-feed-rate-display';
-    feedValue.textContent = '0';
-    metricsRow.appendChild(createSimulationMetric('Feed:', feedValue, ' mm/min'));
-
-    const timeValue = document.createElement('span');
     const simulationTime = document.createElement('span');
     simulationTime.id = '3d-simulation-time';
     simulationTime.textContent = '0:00';
     const totalTime = document.createElement('span');
     totalTime.id = '3d-total-time';
     totalTime.textContent = '0:00';
-    timeValue.appendChild(simulationTime);
-    timeValue.appendChild(document.createTextNode(' / '));
-    timeValue.appendChild(totalTime);
-    metricsRow.appendChild(createSimulationMetric('Time:', timeValue));
+    const timeWrap = document.createElement('div');
+    timeWrap.className = 'col-auto d-flex align-items-center gap-1';
+    timeWrap.appendChild(simulationTime);
+    timeWrap.appendChild(document.createTextNode(' / '));
+    timeWrap.appendChild(totalTime);
+    controlsRow.appendChild(timeWrap);
 
+    const controlsMenu = create3DSimulationMenu('3d-controls');
+    controlsRow.appendChild(controlsMenu.container);
+
+    fragment.appendChild(summaryRow);
     fragment.appendChild(controlsRow);
-    fragment.appendChild(metricsRow);
     overlayControls.replaceChildren(fragment);
 
     startBtn.addEventListener('click', () => {
-        if (typeof startSimulation3D === 'function') {
-            startSimulation3D();
+        if (typeof toggleSimulation3DPlayback === 'function') {
+            toggleSimulation3DPlayback();
         }
     });
 
-    pauseBtn.addEventListener('click', () => {
-        if (typeof pauseSimulation3D === 'function') {
-            pauseSimulation3D();
-        }
-    });
-
-    stopBtn.addEventListener('click', () => {
-        if (typeof stopSimulation3D === 'function') {
-            stopSimulation3D();
-        }
-        const tab2D = document.getElementById('2d-tab');
-        if (tab2D) {
-            const bsTab = bootstrap.Tab.getOrCreateInstance(tab2D);
-            bsTab.show();
-        }
-    });
-
-    speedInput.addEventListener('input', function (e) {
+    speedInput.addEventListener('change', function (e) {
         const speed = parseFloat(e.target.value);
-        speedDisplay.textContent = speed.toFixed(1) + 'x';
         if (typeof updateSimulation3DSpeed === 'function') {
             updateSimulation3DSpeed(speed);
         }
     });
 
-    generateGcodeBtn.addEventListener('click', async function () {
-        if (typeof showCutSettingsModal !== 'function') {
-            return;
-        }
-
-        const savedSettings = typeof getSavedCutSettings === 'function'
-            ? getSavedCutSettings()
-            : null;
-        const cutSettings = await showCutSettingsModal({
-            confirmText: 'Generate G-code',
-            values: savedSettings || undefined
-        });
-
-        if (!cutSettings) {
-            return;
+    simulateBtn.addEventListener('click', async function () {
+        if (typeof waitForPrepared3DGcodeRefresh === 'function') {
+            await waitForPrepared3DGcodeRefresh();
         }
 
         if (typeof generateAndLoad3DGcode === 'function') {
-            generateAndLoad3DGcode({ cutSettings: cutSettings, showLoading: true, seekToLatestState: true });
+            const loaded = await generateAndLoad3DGcode({ showLoading: true, seekToLatestState: true });
+            if (loaded) {
+                set3DSimulationControlsReady(true);
+            } else if (typeof notify === 'function') {
+                notify('No prepared G-code available for simulation', 'info');
+            }
         }
     });
 
@@ -470,49 +526,50 @@ function ensure3DSimulationControls() {
         }
     });
 
-    axesControl.input.addEventListener('change', function (e) {
-        if (typeof setAxesVisibility3D === 'function') {
-            setAxesVisibility3D(e.target.checked);
-        }
-    });
+    function bindMenuControls(menuRefs) {
+        menuRefs.showWorkpiece.addEventListener('change', function (e) {
+            sync3DSimulationMenuState('showWorkpiece', e.target.checked);
+            if (typeof setWorkpieceVisibility3D === 'function') {
+                setWorkpieceVisibility3D(e.target.checked);
+            }
+        });
 
-    toolpathControl.input.addEventListener('change', function (e) {
-        if (typeof setToolpathVisibility3D === 'function') {
-            setToolpathVisibility3D(e.target.checked);
-        }
-    });
+        menuRefs.showAxes.addEventListener('change', function (e) {
+            sync3DSimulationMenuState('showAxes', e.target.checked);
+            if (typeof setAxesVisibility3D === 'function') {
+                setAxesVisibility3D(e.target.checked);
+            }
+        });
 
-    workpieceControl.input.addEventListener('change', function (e) {
-        if (typeof setWorkpieceVisibility3D === 'function') {
-            setWorkpieceVisibility3D(e.target.checked);
-        }
-    });
+        menuRefs.showTool.addEventListener('change', function (e) {
+            sync3DSimulationMenuState('showTool', e.target.checked);
+            if (typeof setToolVisibility3D === 'function') {
+                setToolVisibility3D(e.target.checked);
+            }
+        });
 
-    stlControl.input.addEventListener('change', function (e) {
-        if (typeof setSTLVisibility3D === 'function') {
-            setSTLVisibility3D(e.target.checked);
-        }
-    });
+        menuRefs.followTool.addEventListener('change', function (e) {
+            sync3DSimulationMenuState('followTool', e.target.checked);
+        });
+    }
+
+    bindMenuControls(summaryMenu);
+    bindMenuControls(controlsMenu);
 
     simulationControls3DRefs = {
         container: overlayControls,
+        summaryRow: summaryRow,
+        controlsRow: controlsRow,
+        summaryMenu: summaryMenu,
+        controlsMenu: controlsMenu,
         startBtn: startBtn,
-        pauseBtn: pauseBtn,
-        stopBtn: stopBtn,
         speedInput: speedInput,
-        speedDisplay: speedDisplay,
-        generateGcodeBtn: generateGcodeBtn,
+        generateGcodeBtn: simulateBtn,
         progressInput: progressInput,
-        progressDisplay: progressDisplay,
-        stepDisplay: stepDisplay,
-        feedValue: feedValue,
         simulationTime: simulationTime,
         totalTime: totalTime,
-        showAxes: axesControl.input,
-        showToolpath: toolpathControl.input,
-        showWorkpiece: workpieceControl.input,
-        showStl: stlControl.input,
-        followTool: followToolControl.input
+        estimateValue: estimateValue,
+        isSimulationReady: false
     };
 
     update3DSimulationOverlayLayout();

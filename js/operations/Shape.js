@@ -432,6 +432,7 @@ class Shape extends Operation {
         this.initialHandleProperties = null;
         this.dragStartMouse = null;
         this.isDraggingShape = false;
+        this.shapeChangedDuringDrag = false;
         this.mouseDown = false;
         this.pendingDimensionKey = null;
     }
@@ -744,7 +745,35 @@ class Shape extends Operation {
         return closePath(rotated);
     }
 
-    makeShape(shape, x, y, svgPath, data) {
+    syncMachiningAfterShapeEdit(svgPath, oldId) {
+        if (!svgPath) return;
+
+        if (oldId !== null && oldId !== undefined && oldId !== svgPath.id) {
+            toolpaths.forEach(tp => {
+                if (tp.svgId === oldId) tp.svgId = svgPath.id;
+                if (tp.svgIds && Array.isArray(tp.svgIds)) {
+                    tp.svgIds = tp.svgIds.map(id => id === oldId ? svgPath.id : id);
+                }
+            });
+        }
+
+        const linkedToolpaths = toolpaths.filter(tp => {
+            const sourceIds = tp.svgIds || (tp.svgId ? [tp.svgId] : []);
+            return sourceIds.includes(svgPath.id);
+        });
+        const hasNonPreviewToolpaths = linkedToolpaths.some(tp => tp.isShapePreviewToolpath !== true);
+        const hasPreviewToolpaths = linkedToolpaths.some(tp => tp.isShapePreviewToolpath === true);
+
+        if (hasNonPreviewToolpaths && typeof regenerateToolpathsForPaths === 'function') {
+            regenerateToolpathsForPaths([svgPath.id]);
+        }
+
+        if (hasPreviewToolpaths && typeof scheduleShapeMachiningToolpathSync === 'function') {
+            scheduleShapeMachiningToolpathSync(svgPath, { createIfMissing: true });
+        }
+    }
+
+    makeShape(shape, x, y, svgPath, data, options = {}) {
         const existingTabLayout = svgPath ? captureShapeTabLayout(svgPath) : null;
         const fields = this.getShapeFields(shape);
         const fallbackCenter = { x, y };
@@ -859,28 +888,8 @@ class Shape extends Operation {
         this.updateRatioLockButton(values.lockRatio);
  
         if (oldId !== null) {
-            if (oldId !== svgPath.id) {
-                toolpaths.forEach(tp => {
-                    if (tp.svgId === oldId) tp.svgId = svgPath.id;
-                    if (tp.svgIds && Array.isArray(tp.svgIds)) {
-                        tp.svgIds = tp.svgIds.map(id => id === oldId ? svgPath.id : id);
-                    }
-                });
-            }
-
-            const linkedToolpaths = toolpaths.filter(tp => {
-                const sourceIds = tp.svgIds || (tp.svgId ? [tp.svgId] : []);
-                return sourceIds.includes(svgPath.id);
-            });
-            const hasNonPreviewToolpaths = linkedToolpaths.some(tp => tp.isShapePreviewToolpath !== true);
-            const hasPreviewToolpaths = linkedToolpaths.some(tp => tp.isShapePreviewToolpath === true);
-
-            if (hasNonPreviewToolpaths && typeof regenerateToolpathsForPaths === 'function') {
-                regenerateToolpathsForPaths([svgPath.id]);
-            }
-
-            if (hasPreviewToolpaths && typeof scheduleShapeMachiningToolpathSync === 'function') {
-                scheduleShapeMachiningToolpathSync(svgPath, { createIfMissing: true });
+            if (!options.deferMachiningSync) {
+                this.syncMachiningAfterShapeEdit(svgPath, oldId);
             }
         }
 
@@ -934,6 +943,7 @@ class Shape extends Operation {
                 this.initialHandleProperties = this.getPathShapeProperties(this.currentPath);
                 this.dragStartMouse = null;
                 this.isDraggingShape = false;
+                this.shapeChangedDuringDrag = false;
                 redraw();
                 return;
             }
@@ -948,6 +958,7 @@ class Shape extends Operation {
                 this.initialHandleProperties = this.getPathShapeProperties(this.currentPath);
                 this.dragStartMouse = { x: mouse.x, y: mouse.y };
                 this.isDraggingShape = true;
+                this.shapeChangedDuringDrag = false;
                 redraw();
                 return;
             }
@@ -994,11 +1005,19 @@ class Shape extends Operation {
     onMouseUp() {
         if (!this.currentPath) return;
 
+        const editedPath = this.currentPath;
+        const shouldSyncMachining = this.shapeChangedDuringDrag;
+
         this.mouseDown = false;
         this.activeHandle = null;
         this.initialHandleProperties = null;
         this.dragStartMouse = null;
         this.isDraggingShape = false;
+        this.shapeChangedDuringDrag = false;
+
+        if (shouldSyncMachining) {
+            this.syncMachiningAfterShapeEdit(editedPath, editedPath.id);
+        }
     }
 
     setEditPath(path) {
@@ -1008,6 +1027,7 @@ class Shape extends Operation {
         this.initialHandleProperties = null;
         this.dragStartMouse = null;
         this.isDraggingShape = false;
+        this.shapeChangedDuringDrag = false;
         this.mouseDown = false;
 
         if (path) {
@@ -1201,7 +1221,8 @@ class Shape extends Operation {
 
             const rawAngle = Math.atan2(dx, -dy) * 180 / Math.PI;
             const snappedAngle = Math.round(rawAngle / SHAPE_EDIT_ROTATION_SNAP_DEG) * SHAPE_EDIT_ROTATION_SNAP_DEG;
-            this.updateInPlace(this.currentPath, { ...properties, angle: snappedAngle });
+            this.updateInPlace(this.currentPath, { ...properties, angle: snappedAngle }, { deferMachiningSync: true });
+            this.shapeChangedDuringDrag = true;
             return;
         }
 
@@ -1220,11 +1241,13 @@ class Shape extends Operation {
                 height,
                 this.getReferenceAspectRatio(this.initialHandleProperties, properties)
             );
-            this.updateInPlace(this.currentPath, { ...properties, ...lockedDimensions });
+            this.updateInPlace(this.currentPath, { ...properties, ...lockedDimensions }, { deferMachiningSync: true });
+            this.shapeChangedDuringDrag = true;
             return;
         }
 
-        this.updateInPlace(this.currentPath, { ...properties, width, height });
+        this.updateInPlace(this.currentPath, { ...properties, width, height }, { deferMachiningSync: true });
+        this.shapeChangedDuringDrag = true;
     }
 
     applyShapeDrag(mouse) {
@@ -1238,7 +1261,8 @@ class Shape extends Operation {
             ...properties,
             x: properties.x + this.toExternal(dx),
             y: properties.y + this.toExternal(dy)
-        });
+        }, { deferMachiningSync: true });
+        this.shapeChangedDuringDrag = true;
     }
 
     update(path) {
@@ -1248,10 +1272,10 @@ class Shape extends Operation {
         this.properties = { ...this.properties, ...storedProperties };
     }
 
-    updateInPlace(svgPath, data) {
+    updateInPlace(svgPath, data, options = {}) {
         const currentProperties = this.getPathShapeProperties(svgPath);
         const nextValues = { ...currentProperties, ...(data || {}) };
-        this.makeShape(data.shape || this.getCurrentShape(), 0, 0, svgPath, nextValues);
+        this.makeShape(data.shape || this.getCurrentShape(), 0, 0, svgPath, nextValues, options);
     }
 
     // ── Properties panel ──────────────────────────────────────────────────

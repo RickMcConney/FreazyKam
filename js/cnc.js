@@ -92,6 +92,9 @@ function removePendingToolpaths(pendingToolpaths) {
 	}
 	if (typeof refreshToolPathsDisplay === 'function') refreshToolPathsDisplay();
 	redraw();
+	if (typeof window.schedulePrepared3DGcodeRefresh === 'function') {
+		window.schedulePrepared3DGcodeRefresh({ delay: 0 });
+	}
 }
 
 
@@ -214,6 +217,9 @@ function toolChanged(tool) {
 	}
 	refreshToolPathsDisplay();
 	redraw();
+	if (typeof window.schedulePrepared3DGcodeRefresh === 'function') {
+		window.schedulePrepared3DGcodeRefresh();
+	}
 }
 
 function getToolpathSourceIdsForVisibility(toolpath) {
@@ -508,6 +514,9 @@ function onPathsChanged(changedPathIds) {
 		}
 	}
 	redraw();
+	if (typeof window.schedulePrepared3DGcodeRefresh === 'function') {
+		window.schedulePrepared3DGcodeRefresh();
+	}
 }
 
 
@@ -655,6 +664,10 @@ function newProject() {
 	clearToolPaths();
 	clearSvgPaths();
 	if (typeof window.clearSTLModels === 'function') window.clearSTLModels();
+	window._importedGcode = null;
+	window._cachedGcode = null;
+	window._preparedSimulation3DGcode = null;
+	window._preparedSimulation3DMeta = null;
 	selectMgr.unselectAll();
 
 	loadOptions();
@@ -852,6 +865,9 @@ function doProfile(options = {}) {
 		}
 		if (typeof refreshToolPathsDisplay === 'function') refreshToolPathsDisplay();
 		redraw();
+		if (typeof window.schedulePrepared3DGcodeRefresh === 'function') {
+			window.schedulePrepared3DGcodeRefresh({ delay: 0 });
+		}
 
 		if (result.createdCount === 0) {
 			notify('Unable to generate profile paths');
@@ -1082,6 +1098,9 @@ function doSurfacing() {
 		}
 		if (typeof refreshToolPathsDisplay === 'function') refreshToolPathsDisplay();
 		redraw();
+		if (typeof window.schedulePrepared3DGcodeRefresh === 'function') {
+			window.schedulePrepared3DGcodeRefresh({ delay: 0 });
+		}
 
 		if (result.createdCount === 0) {
 			notify('Unable to generate surfacing paths');
@@ -2420,6 +2439,9 @@ function doInlay() {
 		}
 		if (typeof refreshToolPathsDisplay === 'function') refreshToolPathsDisplay();
 		redraw();
+		if (typeof window.schedulePrepared3DGcodeRefresh === 'function') {
+			window.schedulePrepared3DGcodeRefresh({ delay: 0 });
+		}
 		if (typeof setActiveToolpaths === 'function') {
 			const generatedTargets = groupStates.flatMap(function(state) {
 				return state.pendingTargets.filter(function(tp) { return tp.pending !== true; });
@@ -2595,6 +2617,9 @@ function doPocket(options = {}) {
 		}
 		if (typeof refreshToolPathsDisplay === 'function') refreshToolPathsDisplay();
 		redraw();
+		if (typeof window.schedulePrepared3DGcodeRefresh === 'function') {
+			window.schedulePrepared3DGcodeRefresh({ delay: 0 });
+		}
 
 		if (result.createdCount === 0) {
 			notify('Unable to generate pocket paths');
@@ -2711,6 +2736,9 @@ function startVcarveGeneration(config) {
 		}
 		if (typeof refreshToolPathsDisplay === 'function') refreshToolPathsDisplay();
 		redraw();
+		if (typeof window.schedulePrepared3DGcodeRefresh === 'function') {
+			window.schedulePrepared3DGcodeRefresh({ delay: 0 });
+		}
 
 		if (result.createdCount === 0) {
 			notify('Unable to generate VCarve paths');
@@ -2819,8 +2847,8 @@ async function doGcode(cutSettingsOverride) {
 
 	var cutSettings = cutSettingsOverride || (typeof window.getCompleteCutSettings === 'function' ? window.getCompleteCutSettings() : null);
 	if (!cutSettings) {
-		if (typeof window.showCutSettingsModal === 'function') {
-			cutSettings = await window.showCutSettingsModal({ confirmText: 'Generate G-code' });
+		if (typeof notify === 'function') {
+			notify('Configure Cut Settings from the Project menu before exporting G-code', 'info');
 		}
 		if (!cutSettings) {
 			return;

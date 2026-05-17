@@ -4,7 +4,6 @@ TODO
 - Add range input for cut depth
 - 3D view should display finished product
 - Select workpiece + tool bit + cut settings and press GENERATE
-- Generate G-Code and show tool path on 3D View with SIMULATE button
 - Add TEXT tool
 - Add PEN tool
 - Add Aligment panel.

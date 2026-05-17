@@ -287,26 +287,6 @@ function createModals() {
     `;
     body.appendChild(reorderOperationsModal);
 
-    const cutSettingsModal = document.createElement('div');
-    cutSettingsModal.innerHTML = `
-        <div class="modal fade" id="cutSettingsModal" tabindex="-1" aria-labelledby="cut-settings-modal-title" aria-hidden="true">
-            <div class="modal-dialog modal-dialog-scrollable">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title" id="cut-settings-modal-title">Cut Settings</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                    </div>
-                    <div class="modal-body" id="cut-settings-modal-body"></div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                        <button type="button" class="btn btn-primary" id="save-cut-settings-button">Save</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    `;
-    body.appendChild(cutSettingsModal);
-
     // Delete Profile Confirmation Modal
     const deleteConfirmModal = document.createElement('div');
     deleteConfirmModal.innerHTML = `
@@ -587,6 +567,67 @@ function showGrblModal() {
     showProjectPanelModal('GRBL', createGrblPanel);
 }
 
+function showCutSettingsModal() {
+    showProjectPanelModal('Cut Settings', function(containerId) {
+        const container = document.getElementById(containerId);
+        if (!container) return;
+
+        const fields = getCutSettingsFields();
+        const currentValues = {
+            ...getSavedCutSettings()
+        };
+
+        if ((window.tools || []).length === 0) {
+            container.innerHTML = '<div class="alert alert-warning mb-0">Add at least one tool in the tool library before generating G-code.</div>';
+            return;
+        }
+
+        container.innerHTML = `
+            <div class="alert alert-info mb-3">
+                These settings are applied when generating G-code from the 3D view.
+            </div>
+            ${PropertiesManager.formHTML(fields, currentValues, null)}
+            <div class="d-flex justify-content-end mt-3">
+                <button type="button" class="btn btn-primary" id="project-save-cut-settings-button">Save</button>
+            </div>
+        `;
+
+        loadCutSettingsIntoForm(currentValues);
+
+        const saveButton = document.getElementById('project-save-cut-settings-button');
+        if (!saveButton) {
+            return;
+        }
+
+        saveButton.addEventListener('click', function() {
+            const values = PropertiesManager.collectValues(fields);
+            values.tool = Number(values.tool) || null;
+            values.step = Number(values.step) || 0;
+
+            const errors = validateCutSettings(values);
+            if (errors.length > 0) {
+                notify(errors.join(', '), 'error');
+                return;
+            }
+
+            saveCutSettings(values);
+            notify('Cut settings saved', 'success');
+
+            if (typeof window.schedulePrepared3DGcodeRefresh === 'function') {
+                window.schedulePrepared3DGcodeRefresh({ delay: 0 });
+            }
+
+            const modalElement = document.getElementById('projectPanelModal');
+            const modalInstance = modalElement && typeof bootstrap !== 'undefined' && bootstrap?.Modal
+                ? bootstrap.Modal.getInstance(modalElement)
+                : null;
+            if (modalInstance) {
+                modalInstance.hide();
+            }
+        });
+    });
+}
+
 function showHelpModal() {
     const modal = new bootstrap.Modal(document.getElementById('helpModal'));
     modal.show();
@@ -708,85 +749,6 @@ function loadCutSettingsIntoForm(values) {
         const nextValue = values[field.key] !== undefined ? values[field.key] : field.default;
         PropertiesManager.setValue(field.key, nextValue);
     }
-}
-
-function showCutSettingsModal(options = {}) {
-    return new Promise(function(resolve) {
-        const modalElement = document.getElementById('cutSettingsModal');
-        const body = document.getElementById('cut-settings-modal-body');
-        const confirmBtn = document.getElementById('save-cut-settings-button');
-        const title = document.getElementById('cut-settings-modal-title');
-        if (!modalElement || !body || !confirmBtn || !title) {
-            resolve(null);
-            return;
-        }
-
-        const fields = getCutSettingsFields();
-        const currentValues = {
-            ...getSavedCutSettings(),
-            ...(options.values || {})
-        };
-
-        title.textContent = 'Cut Settings';
-
-        if ((window.tools || []).length === 0) {
-            body.innerHTML = '<div class="alert alert-warning mb-0">Add at least one tool in the tool library before generating G-code.</div>';
-        } else {
-            body.innerHTML = `
-                <div class="alert alert-info mb-3">
-                    These settings are applied when generating G-code from the 3D view.
-                </div>
-                ${PropertiesManager.formHTML(fields, currentValues, null)}
-            `;
-            loadCutSettingsIntoForm(currentValues);
-        }
-
-        const confirmLabel = options.confirmText || 'Save';
-        confirmBtn.textContent = confirmLabel;
-        confirmBtn.disabled = (window.tools || []).length === 0;
-
-        const newConfirmBtn = confirmBtn.cloneNode(true);
-        confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
-
-        let resolved = false;
-        const modal = new bootstrap.Modal(modalElement);
-
-        function cleanup() {
-            modalElement.removeEventListener('hidden.bs.modal', onHidden);
-        }
-
-        function finish(value) {
-            if (resolved) return;
-            resolved = true;
-            cleanup();
-            modal.hide();
-            resolve(value);
-        }
-
-        function onHidden() {
-            if (resolved) return;
-            resolved = true;
-            cleanup();
-            resolve(null);
-        }
-
-        newConfirmBtn.addEventListener('click', function() {
-            const values = PropertiesManager.collectValues(fields);
-            values.tool = Number(values.tool) || null;
-            values.step = Number(values.step) || 0;
-
-            const errors = validateCutSettings(values);
-            if (errors.length > 0) {
-                notify(errors.join(', '), 'error');
-                return;
-            }
-
-            finish(saveCutSettings(values));
-        });
-
-        modalElement.addEventListener('hidden.bs.modal', onHidden);
-        modal.show();
-    });
 }
 
 function getCompleteCutSettings() {

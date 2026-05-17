@@ -1558,6 +1558,26 @@ html, body {
     display: none !important;
 }
 
+.simulation-overlay-menu {
+    min-width: 180px;
+}
+
+.three-dots-vertical {
+    display: inline-block;
+    width: 4px;
+    height: 16px;
+    position: relative;
+    background: radial-gradient(circle, currentColor 1.5px, transparent 1.6px) center 2px / 4px 4px no-repeat,
+                radial-gradient(circle, currentColor 1.5px, transparent 1.6px) center 8px / 4px 4px no-repeat,
+                radial-gradient(circle, currentColor 1.5px, transparent 1.6px) center 14px / 4px 4px no-repeat;
+}
+
+.\33 d-simulation-menu-button {
+    min-width: 32px;
+    padding-left: 0.45rem;
+    padding-right: 0.45rem;
+}
+
 /* G-code Viewer Styles */
 #gcode-viewer {
     background-color: white;
