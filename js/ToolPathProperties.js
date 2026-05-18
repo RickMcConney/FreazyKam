@@ -140,13 +140,15 @@ class ToolPathProperties {
         PropertiesManager.save(`${operationName}.cutSettings`, values, this.getAdvancedFields(operationName));
     }
 
-    getFields(operationName) {
+    getFields(operationName, values = null) {
         const meta = this.getMeta(operationName);
         const defaults = this.getDefaults(operationName);
         const thickness = this._getWorkpieceThickness();
         const useInches = typeof getOption === 'function' ? !!getOption('Inches') : false;
         const mmPerUnit = useInches ? 25.4 : 1;
         const sliderMax = thickness / mmPerUnit;
+        const depthDisplayValue = Math.max(0, Number(values?.depth ?? defaults.depth) || 0)
+            + Math.max(0, Number(values?.extraDepth ?? defaults.extraDepth) || 0);
         const sliderStep = sliderMax > 0
             ? Math.max(Number((sliderMax / 100).toFixed(useInches ? 4 : 2)), useInches ? 0.001 : 0.1)
             : (useInches ? 0.001 : 0.1);
@@ -165,6 +167,8 @@ class ToolPathProperties {
                 type: 'range',
                 default: defaults.depth,
                 dimension: true,
+                displayValue: depthDisplayValue,
+                displayAddInputKey: 'extraDepth',
                 vertical: true,
                 min: 0,
                 max: sliderMax,
@@ -177,6 +181,7 @@ class ToolPathProperties {
                 label: 'Extra depth',
                 type: 'dimension',
                 default: defaults.extraDepth,
+                refreshRangeDisplayKey: 'extraDepth',
                 min: 0
             }
         ];
@@ -472,7 +477,7 @@ class ToolPathProperties {
             <div class="alert alert-info mb-3">
                 <strong>${meta.label}</strong><br>${meta.description}
             </div>
-            ${PropertiesManager.formHTML(this.getFields(operationName), values, defaults)}`;
+            ${PropertiesManager.formHTML(this.getFields(operationName, values), values, defaults)}`;
     }
 
     _postProcessorFields() {

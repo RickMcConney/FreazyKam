@@ -1,5 +1,4 @@
 import * as THREE from './lib/three.module.js';
-import { VoxelGrid } from './voxels/VoxelGrid.js';
 import { QuadtreeVoxelGrid } from './voxels/QuadtreeVoxelGrid.js';
 import { VoxelMaterialRemover } from './voxels/VoxelMaterialRemover.js';
 
@@ -30,7 +29,6 @@ let isResizing = false;  // Track if window is currently being resized
 let resizeTimeoutId = null;  // Timeout ID for detecting end of resize
 let animationFrameId = null;  // Track animation loop to prevent duplicates
 let animationLoopActive = false;  // Flag to control whether animation loop should run
-let deferredSTLVisibilitySyncId = null;  // Timeout for reapplying STL checkbox after meshes load
 let renderRequested = false;  // Track pending on-demand renders
 let resizeObserver3D = null;  // Track active ResizeObserver instance
 let threeLoadingUI = null;
@@ -139,7 +137,7 @@ function getPreviewSourceToolpaths(cutSettings = null) {
           name: toolpath.tool.name,
           bit: toolpath.tool.bit,
           diameter: toolpath.tool.diameter,
-          depth: toolpath.tool.depth,
+          depth: typeof resolveToolpathDepth === 'function' ? resolveToolpathDepth(toolpath) : toolpath.tool.depth,
           step: toolpath.tool.step
         } : null
       }))
@@ -338,7 +336,9 @@ function buildPreviewMovementsFromToolpaths(sourceToolpaths) {
     registerTool(toolInfo);
 
     const tool = toolpath.tool || {};
-    const depth = Math.max(0, Number(tool.depth) || 0);
+    const depth = Math.max(0, typeof resolveToolpathDepth === 'function'
+      ? resolveToolpathDepth(toolpath)
+      : (Number(tool.depth) || 0));
     const step = Math.max(0, Number(tool.step) || 0);
     const passes = depth > 0 ? Math.max(1, Math.ceil(depth / Math.max(step, depth || 1))) : 1;
     const sourceSvgPath = toolpath.svgId ? svgpaths.find((path) => path.id === toolpath.svgId) : null;
@@ -704,6 +704,7 @@ function seek3DViewToCompletedState() {
   toolpathAnimation.previousElapsedTime = 0;
 
   toolpathAnimation._replayFromMovementIndexToIndex(0, toolpathAnimation.movementTiming.length - 1);
+  toolpathAnimation._applyThroughCutRegionRemoval(toolpathAnimation.toolpaths, { deferVisualUpdate: true });
 
   const lastMovementIndex = toolpathAnimation.movementTiming.length - 1;
   const lastMovement = toolpathAnimation.movementTiming[lastMovementIndex];
@@ -805,7 +806,7 @@ async function reload3DViewFromCurrentState(options = {}) {
         toolpathAnimation.voxelGrid.flushVisualUpdates();
       }
       if (workpieceManager.mesh) {
-        workpieceManager.mesh.visible = true;
+        workpieceManager.mesh.visible = false;
       }
       if (toolpathAnimation.workpieceOutlineBox) {
         scene.remove(toolpathAnimation.workpieceOutlineBox);
@@ -1124,8 +1125,8 @@ function scheduleSimulation3DUI(force) {
 // ============ CONFIGURATION CONSTANTS ============
 const CONFIG = {
   // Scene and rendering
-  SCENE_BACKGROUND_COLOR: 0xadd8e6,
-  RENDERER_CLEAR_COLOR: 0xadd8e6,
+  SCENE_BACKGROUND_COLOR: 0xeeeeee,
+  RENDERER_CLEAR_COLOR: 0xeeeeee,
   ANTIALIAS: true,
   MAX_PIXEL_RATIO: 1.25,
   ENABLE_SHADOWS: false,
@@ -1248,9 +1249,169 @@ function getWorkpieceBoundsOffset(originPositionOverride, widthOverride, lengthO
   return { x: offsetX, y: offsetY };
 }
 
-function sync3DVisibilityControls(options = {}) {
-  const { deferSTL = false } = options;
+function getWorkpieceBottomZWithEpsilon() {
+  const thickness = Number((typeof getOption === 'function') ? getOption('workpieceThickness') : CONFIG.WORKPIECE_DEFAULT_THICKNESS) || 0;
+  return thickness > 0 ? (-thickness + 0.05) : -Infinity;
+}
 
+function isHiddenThroughCutPointZ(z) {
+  return Number.isFinite(Number(z)) && Number(z) <= getWorkpieceBottomZWithEpsilon();
+}
+
+function shouldHideThroughCutSegment(points) {
+  if (!Array.isArray(points) || points.length === 0) {
+    return false;
+  }
+
+  let hasBottomPoint = false;
+  for (const point of points) {
+    if (!point) {
+      return false;
+    }
+    if (isHiddenThroughCutPointZ(point.z)) {
+      hasBottomPoint = true;
+    }
+  }
+
+  return hasBottomPoint;
+}
+
+function getClosedToolpathSourcePath(toolpath) {
+  if (!toolpath || !Array.isArray(svgpaths)) {
+    return null;
+  }
+
+  const sourceIds = Array.isArray(toolpath.svgIds) && toolpath.svgIds.length > 0
+    ? toolpath.svgIds
+    : (toolpath.svgId ? [toolpath.svgId] : []);
+  const sourcePath = sourceIds.length > 0
+    ? svgpaths.find((path) => path && sourceIds.includes(path.id))
+    : null;
+
+  if (!sourcePath || !Array.isArray(sourcePath.path) || sourcePath.path.length < 3) {
+    return null;
+  }
+
+  const first = sourcePath.path[0];
+  const last = sourcePath.path[sourcePath.path.length - 1];
+  const isClosed = sourcePath.closed === true
+    || (first && last && first.x === last.x && first.y === last.y)
+    || sourcePath.creationTool === 'Shape'
+    || (Array.isArray(window.SHAPE_TOOL_NAMES) && window.SHAPE_TOOL_NAMES.includes(sourcePath.creationTool));
+
+  if (!isClosed) {
+    return null;
+  }
+
+  const closedWorldPath = (first && last && first.x === last.x && first.y === last.y)
+    ? sourcePath.path
+    : [...sourcePath.path, { x: first.x, y: first.y }];
+
+  return closedWorldPath.map((point) => {
+    const mmPoint = typeof toMM === 'function'
+      ? toMM(Number(point.x), Number(point.y))
+      : { x: Number(point.x), y: Number(point.y) };
+
+    return {
+      x: Number(mmPoint.x),
+      y: Number(mmPoint.y)
+    };
+  });
+}
+
+function isThroughCutProfileToolpath(toolpath) {
+  if (!toolpath) {
+    return false;
+  }
+
+  const operation = String(toolpath.displayOperation || toolpath.operation || '').trim();
+  const depth = typeof resolveToolpathDepth === 'function' ? resolveToolpathDepth(toolpath) : Number(toolpath?.tool?.depth) || 0;
+  const thickness = Number((typeof getOption === 'function') ? getOption('workpieceThickness') : CONFIG.WORKPIECE_DEFAULT_THICKNESS) || 0;
+
+  return (operation === 'Inside' || operation === 'Outside' || operation === 'Center' || toolpath.operation === 'Profile')
+    && thickness > 0
+    && depth >= thickness - 0.05;
+}
+
+function shouldRemoveInsideRegionForThroughCut(toolpath) {
+  if (!isThroughCutProfileToolpath(toolpath)) {
+    return false;
+  }
+
+  const operation = String(toolpath.displayOperation || toolpath.operation || '').trim();
+  return operation !== 'Outside';
+}
+
+function buildThroughCutSubdivisionMovements(toolpaths, workpieceThickness, sampleSpacing, fallbackRadius) {
+  if (!Array.isArray(toolpaths) || toolpaths.length === 0 || sampleSpacing <= 0) {
+    return [];
+  }
+
+  const movements = [];
+  const targetZ = -(Math.max(0, Number(workpieceThickness) || 0) + 1);
+  const toolRadius = Math.max(sampleSpacing * 0.75, Number(fallbackRadius) || 0.5);
+
+  for (const toolpath of toolpaths) {
+    if (!shouldRemoveInsideRegionForThroughCut(toolpath)) {
+      continue;
+    }
+
+    const closedPath = getClosedToolpathSourcePath(toolpath);
+    if (!closedPath || closedPath.length < 4 || typeof pointInPolygon !== 'function') {
+      continue;
+    }
+
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
+    for (const point of closedPath) {
+      if (!point) continue;
+      minX = Math.min(minX, point.x);
+      maxX = Math.max(maxX, point.x);
+      minY = Math.min(minY, point.y);
+      maxY = Math.max(maxY, point.y);
+    }
+
+    if (!Number.isFinite(minX) || !Number.isFinite(maxX) || !Number.isFinite(minY) || !Number.isFinite(maxY)) {
+      continue;
+    }
+
+    let rowIndex = 0;
+    for (let y = minY; y <= maxY + sampleSpacing * 0.5; y += sampleSpacing, rowIndex++) {
+      const rowPoints = [];
+      for (let x = minX; x <= maxX + sampleSpacing * 0.5; x += sampleSpacing) {
+        if (!pointInPolygon({ x, y }, closedPath)) {
+          continue;
+        }
+        rowPoints.push({
+          x,
+          y,
+          z: targetZ,
+          isG1: true,
+          toolRadius
+        });
+      }
+
+      if (rowPoints.length === 0) {
+        continue;
+      }
+
+      if (rowIndex % 2 === 1) {
+        rowPoints.reverse();
+      }
+
+      if (movements.length > 0) {
+        movements.push({ isG1: false, x: rowPoints[0].x, y: rowPoints[0].y, z: targetZ, toolRadius });
+      }
+      movements.push(...rowPoints);
+    }
+  }
+
+  return movements;
+}
+
+function sync3DVisibilityControls(options = {}) {
   const showAxes = typeof window.get3DSimulationControlState === 'function'
     ? window.get3DSimulationControlState('showAxes', true)
     : true;
@@ -1275,27 +1436,8 @@ function sync3DVisibilityControls(options = {}) {
   if (typeof window.setToolVisibility3D === 'function') {
     const hasLoadedSimulation = !!(toolpathAnimation
       && Array.isArray(toolpathAnimation.movementTiming)
-      && toolpathAnimation.movementTiming.length > 0
-      && toolpathAnimation.totalGcodeLines > 0);
+      && toolpathAnimation.movementTiming.length > 0);
     window.setToolVisibility3D(hasLoadedSimulation && showTool);
-  }
-
-  const stlCheckbox = document.getElementById('3d-show-stl');
-  if (deferredSTLVisibilitySyncId) {
-    clearTimeout(deferredSTLVisibilitySyncId);
-    deferredSTLVisibilitySyncId = null;
-  }
-  if (stlCheckbox && typeof window.setSTLVisibility3D === 'function') {
-    if (deferSTL) {
-      // STL meshes may be attached shortly after the 3D scene is rebuilt.
-      deferredSTLVisibilitySyncId = setTimeout(() => {
-        deferredSTLVisibilitySyncId = null;
-        const currentSTLCheckbox = document.getElementById('3d-show-stl');
-        window.setSTLVisibility3D(currentSTLCheckbox ? currentSTLCheckbox.checked : true);
-      }, 150);
-    } else {
-      window.setSTLVisibility3D(stlCheckbox.checked);
-    }
   }
 
   requestThreeRender();
@@ -1383,7 +1525,19 @@ function refreshToolpath() {
 
   // Create new workpiece with current dimensions and wood color
   workpieceManager = new WorkpieceManager(scene, workpieceWidth, workpieceLength, workpieceThickness, originPosition, materialColor);
-  workpieceManager.mesh.visible = true;  // Show workpiece
+  workpieceManager.mesh.visible = false;
+
+  if (toolGroup) {
+    toolGroup.children.forEach((child) => {
+      if (child.geometry) child.geometry.dispose();
+      if (child.material) child.material.dispose();
+    });
+    scene.remove(toolGroup);
+    toolGroup = null;
+  }
+  createToolVisualization(6);
+
+  toolpathVisualizer = new ToolpathVisualizer(scene);
 
   // Update the toolpath animation's reference
   toolpathAnimation.workpieceManager = workpieceManager;
@@ -1491,18 +1645,16 @@ async function initThree(loadToken = threeViewLoadToken) {
   // Create and add axis helper at origin
   addAxisHelper();
 
-  // Create and add tool visualization
-  createToolVisualization(6);  // 6mm diameter tool
-
   // Get material color for initial workpiece
   const material = (typeof getOption === 'function') ? getOption('material') : 'Softwood / MDF';
   const materialColor = getMaterialColor(material);
 
   // Initialize workpiece manager with workpiece positioned correctly and material color
   workpieceManager = new WorkpieceManager(scene, workpieceWidth, workpieceLength, workpieceThickness, originPosition, materialColor);
-  workpieceManager.mesh.visible = true;  // Show workpiece
+  workpieceManager.mesh.visible = false;
 
-  // Initialize visualizers
+  createToolVisualization(6);
+
   toolpathVisualizer = new ToolpathVisualizer(scene);
 
   // Save current speed before recreating ToolpathAnimation (preserves speed across tab switches)
@@ -1571,10 +1723,7 @@ async function initThree(loadToken = threeViewLoadToken) {
     }
   }
 
-  sync3DVisibilityControls({ deferSTL: true });
-  if (typeof window.addPendingSTLMeshes === 'function') {
-    window.addPendingSTLMeshes();
-  }
+  sync3DVisibilityControls();
   updateSimulation3DUI();
   updateSimulation3DDisplays();
   setThreeLoadingState(false);
@@ -1631,18 +1780,16 @@ function addAxisHelper() {
 }
 
 function createToolVisualization(toolDiameter) {
-  // Create tool as a Group with two children: tip (blue) and shank (gray)
-  // Matches the color scheme of the SVG tool icons on the Tools page
   toolGroup = new THREE.Group();
 
   const tipMaterial = new THREE.MeshPhongMaterial({
-    color: 0x4a9eda,  // Blue matching SVG tool icons
+    color: 0x4a9eda,
     transparent: true,
     opacity: 0.85,
   });
 
   const shankMaterial = new THREE.MeshPhongMaterial({
-    color: 0x888888,  // Gray matching SVG tool icons
+    color: 0x888888,
     transparent: true,
     opacity: 0.85,
   });
@@ -1668,24 +1815,18 @@ let _cachedToolKey = null;  // "diameter|type|angle"
 function updateToolMesh(toolDiameter, posX, posY, posZ, toolType = 'End Mill', toolAngle = 0) {
   if (!toolGroup) return;
 
-  // Apply origin offset so tool aligns with toolpath visualization
   const boundsOffset = getWorkpieceBoundsOffset();
   const offsetPosX = posX + boundsOffset.x;
   const offsetPosY = posY + boundsOffset.y;
 
-  // Only regenerate geometry when tool properties change (not every frame)
   const toolKey = toolDiameter + '|' + toolType + '|' + toolAngle;
   if (toolKey !== _cachedToolKey) {
     _cachedToolKey = toolKey;
 
-    // Generate separate tip and shank geometries
     const { tipGeometry, shankGeometry } = generateToolParts(toolDiameter, toolType, toolAngle);
-
-    // Swap Y↔Z on both geometries to align tool with Z axis (vertical)
     swapYZAxes(tipGeometry);
     swapYZAxes(shankGeometry);
 
-    // Dispose old geometries and assign new ones
     const tipMesh = toolGroup.children[0];
     const shankMesh = toolGroup.children[1];
     if (tipMesh.geometry) tipMesh.geometry.dispose();
@@ -1694,7 +1835,6 @@ function updateToolMesh(toolDiameter, posX, posY, posZ, toolType = 'End Mill', t
     shankMesh.geometry = shankGeometry;
   }
 
-  // Position the group at the tool's world location (cheap - just set position)
   toolGroup.position.set(offsetPosX, offsetPosY, posZ);
 }
 
@@ -1914,7 +2054,7 @@ function updateWorkpiece3D(width, length, thickness, originPosition, material) {
     if (workpieceManager.mesh.material) workpieceManager.mesh.material.dispose();
 
     workpieceManager = new WorkpieceManager(scene, width, length, thickness, originPosition, materialColor);
-    workpieceManager.mesh.visible = true;
+    workpieceManager.mesh.visible = false;
 
     if (toolpathAnimation) {
       toolpathAnimation.workpieceManager = workpieceManager;
@@ -1958,24 +2098,14 @@ window.setToolpathVisibility3D = function(visible) {
 };
 
 window.setWorkpieceVisibility3D = function(visible) {
-  // Instead of toggling visibility (which causes GPU corruption), move meshes off-screen
-  // This keeps them rendering but hidden from view, avoiding blotchy discoloration
   const offscreenPosition = new THREE.Vector3(10000, 10000, 10000);  // Far behind camera
-  const fixedWorkpiecePosition = new THREE.Vector3(0, 0, 0);
   const boundsOffset = getWorkpieceBoundsOffset();
   const offsetWorkpiecePosition = new THREE.Vector3(boundsOffset.x, boundsOffset.y, 0);
 
-  // Keep workpiece fixed in the 3D scene regardless of origin choice
-  if (workpieceManager && workpieceManager.mesh) {
-    workpieceManager.mesh.position.copy(visible ? fixedWorkpiecePosition : offscreenPosition);
-  }
-
-  // The voxel stock shell and filler blocks are offset to align with the selected origin.
   if (toolpathAnimation && toolpathAnimation.workpieceOutlineBox) {
     toolpathAnimation.workpieceOutlineBox.position.copy(visible ? offsetWorkpiecePosition : offscreenPosition);
   }
 
-  // The voxel grid uses the same offset as the outline shell.
   if (toolpathAnimation && toolpathAnimation.voxelGrid && toolpathAnimation.voxelGrid.mesh) {
     toolpathAnimation.voxelGrid.mesh.position.copy(visible ? offsetWorkpiecePosition : offscreenPosition);
   }
@@ -2283,7 +2413,6 @@ function cleanup3DView() {
     toolpathAnimation = null;
   }
 
-  // Dispose tool group (tip + shank meshes)
   if (toolGroup) {
     toolGroup.children.forEach(child => {
       if (child.geometry) child.geometry.dispose();
@@ -2292,16 +2421,21 @@ function cleanup3DView() {
     if (scene) scene.remove(toolGroup);
     toolGroup = null;
   }
-  _cachedToolKey = null;  // Reset so tool geometry is regenerated on reopen
+  _cachedToolKey = null;
 
-  // Dispose toolpath visualizer (stored in toolpathAnimation, but check if accessible)
-  if (toolpathVisualizer && toolpathVisualizer.mesh) {
-    const mesh = toolpathVisualizer.mesh;
-    if (mesh.geometry) mesh.geometry.dispose();
-    if (mesh.material) mesh.material.dispose();
-    if (scene) scene.remove(mesh);
+  if (toolpathVisualizer) {
+    if (toolpathVisualizer.pathLine) {
+      if (toolpathVisualizer.pathLine.geometry) toolpathVisualizer.pathLine.geometry.dispose();
+      if (toolpathVisualizer.pathLine.material) toolpathVisualizer.pathLine.material.dispose();
+      if (scene) scene.remove(toolpathVisualizer.pathLine);
+    }
+    if (toolpathVisualizer.cutProfileLine) {
+      if (toolpathVisualizer.cutProfileLine.geometry) toolpathVisualizer.cutProfileLine.geometry.dispose();
+      if (toolpathVisualizer.cutProfileLine.material) toolpathVisualizer.cutProfileLine.material.dispose();
+      if (scene) scene.remove(toolpathVisualizer.cutProfileLine);
+    }
+    toolpathVisualizer = null;
   }
-  toolpathVisualizer = null;
 
   // Dispose workpiece
   if (workpieceManager) {
@@ -2350,13 +2484,6 @@ function cleanup3DView() {
   }
   window.threeScene = null;
 
-  // Clear STL mesh references so they get re-added when 3D tab reopens
-  if (window.stlModels) {
-    for (const model of window.stlModels) {
-      model.mesh = null;
-    }
-  }
-
   // Dispose renderer
   if (renderer) {
     renderer.dispose();
@@ -2400,53 +2527,7 @@ function toggleGridHelper3D(visible) {
  * @param {boolean} visible - Whether axes should be visible
  */
 function toggleAxisHelper3D(visible) {
-  if (!scene) return;
-
-  const axisId = 'axisHelper3D';  // Use a special ID to find it
-
-  if (visible && !axisLines.x) {
-    // Create axis helper if it doesn't exist
-    // Create 3 lines for X, Y, Z axes
-    const axisLength = CONFIG.AXIS_LENGTH;
-
-    // X axis (red)
-    const xGeometry = new THREE.BufferGeometry().setFromPoints([
-      new THREE.Vector3(0, 0, 0),
-      new THREE.Vector3(axisLength, 0, 0)
-    ]);
-    const xMaterial = new THREE.LineBasicMaterial({ color: CONFIG.AXIS_RED, linewidth: CONFIG.AXIS_LINE_WIDTH });
-    axisLines.x = new THREE.Line(xGeometry, xMaterial);
-    scene.add(axisLines.x);
-
-    // Y axis (green)
-    const yGeometry = new THREE.BufferGeometry().setFromPoints([
-      new THREE.Vector3(0, 0, 0),
-      new THREE.Vector3(0, axisLength, 0)
-    ]);
-    const yMaterial = new THREE.LineBasicMaterial({ color: CONFIG.AXIS_GREEN, linewidth: CONFIG.AXIS_LINE_WIDTH });
-    axisLines.y = new THREE.Line(yGeometry, yMaterial);
-    scene.add(axisLines.y);
-
-    // Z axis (blue)
-    const zGeometry = new THREE.BufferGeometry().setFromPoints([
-      new THREE.Vector3(0, 0, 0),
-      new THREE.Vector3(0, 0, axisLength)
-    ]);
-    const zMaterial = new THREE.LineBasicMaterial({ color: CONFIG.AXIS_BLUE, linewidth: CONFIG.AXIS_LINE_WIDTH });
-    axisLines.z = new THREE.Line(zGeometry, zMaterial);
-    scene.add(axisLines.z);
-
-  } else if (!visible && axisLines.x) {
-    // Remove axes
-    ['x', 'y', 'z'].forEach(axis => {
-      if (axisLines[axis]) {
-        scene.remove(axisLines[axis]);
-        axisLines[axis].geometry.dispose();
-        axisLines[axis].material.dispose();
-        axisLines[axis] = null;
-      }
-    });
-  }
+  window.setAxesVisibility3D(visible);
 }
 
 // Export visibility toggles globally
@@ -2521,9 +2602,10 @@ class WorkpieceManager {
     });
 
     this.mesh = new THREE.Mesh(geometry, material);
-    this.mesh.castShadow = true;
-    this.mesh.receiveShadow = true;
+    this.mesh.castShadow = false;
+    this.mesh.receiveShadow = false;
     scene.add(this.mesh);
+    this.mesh.visible = false;
 
     // Store original vertices for deformation
     this.geometry = geometry;
@@ -2625,7 +2707,7 @@ class ToolpathAnimation {
     this.onStatusChange = null;
     this.toolVisual = null;
     this.toolRadius = 1;
-    this.toolpathLines = [];  // Store references to line meshes for cleanup
+    this.toolpathLines = [];
     this.movementTiming = [];  // Array of movement timings with G-code line numbers
     this.lastSubtractionSegmentIndex = -1;  // Track last segment where we performed subtraction
     this.toolCommentsInOrder = [];  // Array of tool comments in chronological order for tool switching
@@ -2672,7 +2754,6 @@ class ToolpathAnimation {
   }
 
   clearToolpath() {
-    // Remove all toolpath line meshes from the scene
     for (const line of this.toolpathLines) {
       this.scene.remove(line);
       if (line.geometry) line.geometry.dispose();
@@ -2784,10 +2865,6 @@ class ToolpathAnimation {
       this.toolRadius = previewData.toolInfo.diameter / 2;
     }
 
-    if (toolGroup) {
-      toolGroup.visible = false;
-    }
-
     if (typeof console !== 'undefined' && typeof console.debug === 'function') {
       console.debug('[3DPreview] load finished preview:start', {
         sourceToolpaths: Array.isArray(sourceToolpaths) ? sourceToolpaths.length : 0,
@@ -2811,6 +2888,7 @@ class ToolpathAnimation {
         this.voxelGrid.reset();
         this.voxelMaterialRemover.reset();
         this._replayFromMovementIndexToIndex(0, this.movementTiming.length - 1);
+        this._applyThroughCutRegionRemoval(this.toolpaths, { deferVisualUpdate: true });
         this.voxelGrid.flushVisualUpdates();
 
         if (typeof console !== 'undefined' && typeof console.debug === 'function') {
@@ -2853,6 +2931,8 @@ class ToolpathAnimation {
     if (typeof window.set3DSimulationControlsReady === 'function') {
       window.set3DSimulationControlsReady(false);
     }
+
+    sync3DVisibilityControls();
 
     if (typeof console !== 'undefined' && typeof console.debug === 'function') {
       console.debug('[3DPreview] load finished preview:done', {
@@ -2987,89 +3067,21 @@ class ToolpathAnimation {
      const materialColor = this.workpieceManager.materialColor || 0x8B6914;
      // const materialColor = 0xff0000; // red for testing
 
-      // Calculate toolpath bounding box
-      const bounds = this.calculateToolPathBounds();
-      let gridWidth = width;
-      let gridLength = length;
-      let gridThickness = thickness;
-      let gridOrigin = new THREE.Vector3(0, 0, 0);
+      // Build the voxel grid across the full workpiece so the entire stock is voxel-rendered.
+      const boundsOffset = getWorkpieceBoundsOffset();
+      const gridWidth = width;
+      const gridLength = length;
+      const gridThickness = thickness;
+      const gridOrigin = new THREE.Vector3(-boundsOffset.x, -boundsOffset.y, 0);
 
-      // No toolpaths: use a small 10x10mm voxel grid at center.
-      // The outline box filler will cover the rest of the workpiece seamlessly.
-      if (!bounds) {
-        gridWidth = Math.min(10, width);
-        gridLength = Math.min(10, length);
-        const boundsOffset = getWorkpieceBoundsOffset();
-        gridOrigin = new THREE.Vector3(-boundsOffset.x, -boundsOffset.y, 0);
-      }
-
-      if (bounds) {
-        // Calculate material bounds in world space (accounting for origin position)
-        const boundsOffset = getWorkpieceBoundsOffset();
-        const materialMinX = -width / 2 - boundsOffset.x;
-        const materialMaxX = width / 2 - boundsOffset.x;
-        const materialMinY = -length / 2 - boundsOffset.y;  // Y is inverted in 3D
-        const materialMaxY = length / 2 - boundsOffset.y;
-        const materialMinZ = -thickness;
-        const materialMaxZ = 0;
-
-        // Clip toolpath bounds to material bounds first
-        const clippedMinX = Math.max(bounds.minX, materialMinX);
-        const clippedMaxX = Math.min(bounds.maxX, materialMaxX);
-        const clippedMinY = Math.max(bounds.minY, materialMinY);
-        const clippedMaxY = Math.min(bounds.maxY, materialMaxY);
-        const clippedMinZ = Math.max(bounds.minZ, materialMinZ);
-        const clippedMaxZ = Math.min(bounds.maxZ, materialMaxZ);
-
-        let clippedWidth = clippedMaxX - clippedMinX;
-        let clippedLength = clippedMaxY - clippedMinY;
-        this.voxelSize = CONFIG.DEFAULT_VOXEL_SIZE;
-
-        // Toolpath is entirely outside the (resized) workpiece — skip bounds-based sizing
-        if (clippedWidth > 0 && clippedLength > 0) {
-        let numberOfVoxels = clippedWidth * clippedLength / (this.voxelSize * this.voxelSize);
-      
-          while (numberOfVoxels > CONFIG.MAX_VOXELS) {
-              this.voxelSize += CONFIG.VOXEL_SIZE_INCREMENT;
-              numberOfVoxels = clippedWidth * clippedLength / (this.voxelSize * this.voxelSize);
-          }
-        }
-
-        // Round clipped bounds UP to clean voxel boundaries to ensure all in-bounds toolpath is captured
-        const toolpathWidthMM = Math.ceil((clippedMaxX - clippedMinX) / this.voxelSize) * this.voxelSize;
-        const toolpathLengthMM = Math.ceil((clippedMaxY - clippedMinY) / this.voxelSize) * this.voxelSize;
-
-        // Final clip to material bounds (safety check)
-        gridWidth = Math.min(toolpathWidthMM, width);
-        gridLength = Math.min(toolpathLengthMM, length);
-        gridThickness = thickness;  // Always use full material thickness for 2D height-based voxels
-
-        // Use clipped bounds center for grid origin
-        // (material bounds are already offset, so clipped bounds are in correct space)
-        gridOrigin = new THREE.Vector3(
-          (clippedMinX + clippedMaxX) / 2,
-          (clippedMinY + clippedMaxY) / 2,
-          0  // Keep Z at surface
-        );
-
-        if (typeof console !== 'undefined' && typeof console.debug === 'function') {
-          console.debug('[3DPreview] initialize voxel grid:bounds', {
-            bounds,
-            clippedBounds: {
-              minX: clippedMinX,
-              maxX: clippedMaxX,
-              minY: clippedMinY,
-              maxY: clippedMaxY,
-              minZ: clippedMinZ,
-              maxZ: clippedMaxZ
-            },
-            gridWidth,
-            gridLength,
-            gridThickness,
-            gridOrigin: { x: gridOrigin.x, y: gridOrigin.y, z: gridOrigin.z },
-            voxelSize: this.voxelSize
-          });
-        }
+      if (typeof console !== 'undefined' && typeof console.debug === 'function') {
+        console.debug('[3DPreview] initialize voxel grid:full stock', {
+          gridWidth,
+          gridLength,
+          gridThickness,
+          gridOrigin: { x: gridOrigin.x, y: gridOrigin.y, z: gridOrigin.z },
+          voxelSize: this.voxelSize
+        });
       }
 
 
@@ -3107,7 +3119,6 @@ class ToolpathAnimation {
       this.scene.add(voxelMesh);
 
       // Offset voxel grid so workpiece center aligns with 3D origin
-      const boundsOffset = getWorkpieceBoundsOffset();
       voxelMesh.position.x = boundsOffset.x;
       voxelMesh.position.y = boundsOffset.y;
       voxelMesh.position.z = 0;
@@ -3156,6 +3167,12 @@ class ToolpathAnimation {
    * @param {THREE.Vector3} gridOrigin - Center position of voxel grid in world space
    */
   createWorkpieceOutlineBox(width, length, thickness, gridWidth, gridLength, gridOrigin) {
+    if (Math.abs(gridWidth - width) < 0.001 && Math.abs(gridLength - length) < 0.001) {
+      this.workpieceOutlineBox = new THREE.Group();
+      this.scene.add(this.workpieceOutlineBox);
+      return;
+    }
+
     // Get workpiece color
     let materialColor;
     if (typeof getOption === 'function') {
@@ -3345,10 +3362,8 @@ class ToolpathAnimation {
     this.elapsedTime = 0;
     this.frameCount = 0;
 
-    // Visualize the complete toolpath with G0/G1 distinction
     this.visualizeToolpathWithGCode(visualizationMovements);
 
-    // Offset toolpath lines so workpiece center aligns with 3D origin
     const boundsOffset = getWorkpieceBoundsOffset();
     for (const line of this.toolpathLines) {
       line.position.x = boundsOffset.x;
@@ -3374,6 +3389,8 @@ class ToolpathAnimation {
       this.initializeVoxelGrid();
     }
 
+    this._applyThroughCutRegionRemoval(this.toolpaths, { deferVisualUpdate: true });
+
 
     // Update progress slider range for line-based animation
     const progressSlider = getSimulation3DUIElements().progressSlider;
@@ -3387,9 +3404,9 @@ class ToolpathAnimation {
     // Update status
     this.updateStatus();
 
-    // Before playback starts, keep the tool at machine origin above the stock.
     updateToolMesh(this.toolRadius * 2, 0, 0, 5,
       this.toolInfo?.type || 'End Mill', this.toolInfo?.angle || 0);
+
   }
 
   preprocessGcodeAsync(gcode, profile, requestId) {
@@ -3491,41 +3508,26 @@ class ToolpathAnimation {
   }
 
   visualizeToolpathWithGCode(movements) {
-    // Draw toolpath in chronological order, coloring by G0/G1 type
     if (!movements || movements.length === 0) return;
 
-    // Build line segments in order, grouping consecutive segments of same type
     let currentSegmentPoints = [];
     let currentIsG1 = null;
-    let totalSegments = 0;
 
-    // Skip the synthetic initial movement (index 0) which moves from origin to first position
-    // Start from index 1 which is the first actual G-code line
     for (let i = 1; i < movements.length; i++) {
       const move = movements[i];
-
-      // Skip non-movement lines (comments, empty lines, etc.) - NON_MOVEMENT means no movement
       if (move.m === NON_MOVEMENT) continue;
 
       const point = new THREE.Vector3(move.x, move.y, move.z);
-
-      // Determine if this is a cutting move (CUT=1) or rapid (RAPID=0)
       const isCutting = move.m === CUT;
 
-      // Check if we need to start a new segment (type changed)
       if (currentIsG1 !== null && isCutting !== currentIsG1) {
-        // Draw the current segment and start a new one
         if (currentSegmentPoints.length > 1) {
           this.drawToolpathSegment(currentSegmentPoints, currentIsG1);
-          totalSegments++;
         }
-        // Start new segment with the last point of previous segment AND current point
-        // This ensures continuity between G0 and G1 segments
         const lastPoint = currentSegmentPoints[currentSegmentPoints.length - 1];
         currentSegmentPoints = [lastPoint, point];
         currentIsG1 = isCutting;
       } else {
-        // Continue current segment
         if (currentIsG1 === null) {
           currentIsG1 = isCutting;
         }
@@ -3533,33 +3535,32 @@ class ToolpathAnimation {
       }
     }
 
-    // Draw the final segment
     if (currentSegmentPoints.length > 1) {
       this.drawToolpathSegment(currentSegmentPoints, currentIsG1);
-      totalSegments++;
     }
   }
 
   drawToolpathSegment(points, isG1) {
-    // Draw a single toolpath segment with appropriate color
-    const geometry = new THREE.BufferGeometry().setFromPoints(points);
-    const color = isG1 ? 0x00ffff : 0xff0000;  // Cyan for G1, Red for G0
-    const linewidth = isG1 ? 2 : 1;
+    if (isG1 && shouldHideThroughCutSegment(points)) {
+      return;
+    }
 
+    const geometry = new THREE.BufferGeometry().setFromPoints(points);
     const material = new THREE.LineBasicMaterial({
-      color: color,
-      linewidth: linewidth,
+      color: isG1 ? 0x00ffff : 0xff0000,
+      linewidth: isG1 ? 2 : 1,
       fog: false,
       depthTest: true
     });
 
     const line = new THREE.Line(geometry, material);
     this.scene.add(line);
-    this.toolpathLines.push(line);  // Store for cleanup
+    this.toolpathLines.push(line);
   }
 
   drawToolpathPoint(point, radius) {
     if (!point) return;
+    if (isHiddenThroughCutPointZ(point.z)) return;
 
     const sphereRadius = Math.max(0.25, Number(radius) || 0.5);
     const geometry = new THREE.SphereGeometry(sphereRadius, 18, 12);
@@ -3769,6 +3770,74 @@ class ToolpathAnimation {
     }
   }
 
+  _applyThroughCutRegionRemoval(sourceToolpaths = null, options = {}) {
+    if (!this.voxelGrid || !this.voxelMaterialRemover) {
+      return;
+    }
+
+    const toolpathsToProcess = Array.isArray(sourceToolpaths) ? sourceToolpaths : this.toolpaths;
+    if (!Array.isArray(toolpathsToProcess) || toolpathsToProcess.length === 0) {
+      return;
+    }
+
+    for (const toolpath of toolpathsToProcess) {
+      if (!shouldRemoveInsideRegionForThroughCut(toolpath)) {
+        continue;
+      }
+
+      const closedPath = getClosedToolpathSourcePath(toolpath);
+      if (!closedPath) {
+        continue;
+      }
+
+      this.voxelMaterialRemover.removeClosedRegion(this.voxelGrid, closedPath, options);
+    }
+
+    const fallbackRadius = this.toolRadius || 0.5;
+    const sampleSpacing = this.voxelGrid?.voxelSize || 0.5;
+    const thickness = this.workpieceManager?.thickness || getWorkpieceDimensions().thickness || 0;
+    const subdivisionMovements = buildThroughCutSubdivisionMovements(toolpathsToProcess, thickness, sampleSpacing, fallbackRadius);
+    if (subdivisionMovements.length > 0) {
+      this._replaySyntheticMovements(subdivisionMovements, { deferVisualUpdate: options.deferVisualUpdate !== false });
+    }
+  }
+
+  _replaySyntheticMovements(movements, options = {}) {
+    if (!this.voxelGrid || !this.voxelMaterialRemover || !Array.isArray(movements) || movements.length === 0) {
+      return;
+    }
+
+    const deferVisualUpdate = options.deferVisualUpdate !== false;
+    const stepDist = this.voxelGrid ? Math.max(this.voxelGrid.voxelSize, (this.toolRadius || 0.5) * 0.5) : 1.0;
+    let previousMove = null;
+
+    for (const move of movements) {
+      if (!move) {
+        continue;
+      }
+
+      if (move.isG1 !== true) {
+        previousMove = move;
+        continue;
+      }
+
+      const startMove = previousMove && previousMove.isG1 === true
+        ? previousMove
+        : (previousMove || { x: move.x, y: move.y, z: move.z, isG1: false });
+
+      this.voxelMaterialRemover.removeAlongPath(
+        this.voxelGrid,
+        startMove,
+        move,
+        { diameter: Math.max(0.5, (Number(move.toolRadius) || 0.25) * 2), type: 'End Mill', angle: 0 },
+        stepDist,
+        { deferVisualUpdate }
+      );
+
+      previousMove = move;
+    }
+  }
+
   update() {
     if (this.movementTiming.length === 0 || this.currentMovementIndex >= this.movementTiming.length) return;
 
@@ -3907,7 +3976,6 @@ class ToolpathAnimation {
       }
     }
 
-    // Always update tool mesh position every frame (not just on tool changes)
     const currentTool = this.toolInfo || { diameter: this.toolRadius * 2, type: 'End Mill', angle: 0 };
     updateToolMesh(this.toolRadius * 2, toolX, toolY, toolZ,
       currentTool?.type || 'End Mill', currentTool?.angle || 0);
@@ -3950,7 +4018,6 @@ class ToolpathVisualizer {
   }
 
   visualizeToolpath(path) {
-    // Remove old lines
     if (this.pathLine) {
       this.scene.remove(this.pathLine);
     }
@@ -3960,10 +4027,8 @@ class ToolpathVisualizer {
 
     if (!path || path.length === 0) return;
 
-    // Draw main toolpath on the top surface (Z = 0.1) so it's visible
-    // Use only X, Y from the path, ignore Z depth for visualization
     const points = path.map(p => {
-      return new THREE.Vector3(p.x || 0, p.y || 0, 0.2);  // Z = 0.2 puts it slightly above surface
+      return new THREE.Vector3(p.x || 0, p.y || 0, 0.2);
     });
 
     const geometry = new THREE.BufferGeometry().setFromPoints(points);
@@ -3971,18 +4036,15 @@ class ToolpathVisualizer {
       color: 0x00ffff,
       linewidth: 3,
       fog: false,
-      depthTest: false  // Draw on top regardless of depth
+      depthTest: false
     });
     this.pathLine = new THREE.Line(geometry, material);
-    this.pathLine.renderOrder = 100;  // Render on top
+    this.pathLine.renderOrder = 100;
     this.scene.add(this.pathLine);
 
-    // Also draw a profile showing the cutting depth
-    // Draw vertical lines from surface down to cutting depth
     const profilePoints = [];
     for (let i = 0; i < path.length; i += Math.max(1, Math.floor(path.length / 50))) {
       const p = path[i];
-      // Draw line from surface (0) down to cutting depth (negative Z)
       profilePoints.push(new THREE.Vector3(p.x || 0, p.y || 0, 0));
       profilePoints.push(new THREE.Vector3(p.x || 0, p.y || 0, p.z || -5));
     }
@@ -3990,7 +4052,7 @@ class ToolpathVisualizer {
     if (profilePoints.length > 0) {
       const profileGeom = new THREE.BufferGeometry().setFromPoints(profilePoints);
       const profileMat = new THREE.LineBasicMaterial({
-        color: 0xff8800,  // Orange for depth profile
+        color: 0xff8800,
         linewidth: 1,
         fog: false,
         depthTest: false

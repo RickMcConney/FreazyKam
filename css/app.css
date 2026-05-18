@@ -117,7 +117,6 @@
     min-height: 188px;
     display: flex;
     align-items: center;
-    justify-content: center;
 }
 
 .pm-vertical-range-slider {
@@ -159,7 +158,7 @@
 
 .pm-range-scale {
     position: absolute;
-    left: 65px;
+    left: 30px;
     top: 10px;
     height: 168px;
     width: 56px;
@@ -343,7 +342,7 @@ html, body {
     position: absolute;
     top: 96px;
     left: 300px;
-    width: min(210px, calc(100vw - 24px));
+    width: min(215px, calc(100vw - 24px));
     max-height: calc(100vh - 128px);
     background: #ffffff;
     border: 1px solid rgba(15, 23, 42, 0.08);

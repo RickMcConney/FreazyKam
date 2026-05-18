@@ -179,6 +179,20 @@ function sanitizeToolpathProperties(properties) {
 	return Object.keys(sanitized).length > 0 ? sanitized : null;
 }
 
+function resolveToolpathDepth(toolpath) {
+	const propertyDepth = Number(toolpath?.toolpathProperties?.depth);
+	if (Number.isFinite(propertyDepth) && propertyDepth >= 0) {
+		return propertyDepth;
+	}
+
+	const toolDepth = Number(toolpath?.tool?.depth);
+	if (Number.isFinite(toolDepth) && toolDepth >= 0) {
+		return toolDepth;
+	}
+
+	return 0;
+}
+
 function setToolpathLabel(toolpath, value) {
 	const normalized = normalizeToolpathName(value);
 	if (!toolpath) return normalized;

@@ -465,17 +465,19 @@ class QuadtreeVoxelGrid {
   _updateMatrices(indices) {
     const dummy = new THREE.Object3D();
     const botZ  = this.materialBottomZ;
+    const hiddenScale = 0.000001;
+    const hiddenZ = botZ - Math.max(10, this.workpieceThickness || 0);
 
     for (const i of indices) {
       const leaf = this.leaves[i];
       const topZ = this.voxelTopZ[i];
       const h    = topZ - botZ;
       const visible = h > 0;
-      dummy.position.set(leaf.cx, leaf.cy, (topZ + botZ) / 2);
+      dummy.position.set(leaf.cx, leaf.cy, visible ? (topZ + botZ) / 2 : hiddenZ);
       dummy.scale.set(
-        visible ? leaf.w : 0,
-        visible ? leaf.h : 0,
-        visible ? h      : 0
+        visible ? leaf.w : hiddenScale,
+        visible ? leaf.h : hiddenScale,
+        visible ? h      : hiddenScale
       );
       dummy.updateMatrix();
       this.mesh.setMatrixAt(i, dummy.matrix);

@@ -104,7 +104,7 @@ function buildToolpathWithCutSettings(toolpath, cutSettings) {
 
 	const nextTool = {
 		...nextToolBase,
-		depth: toolpath.tool?.depth,
+		depth: typeof resolveToolpathDepth === 'function' ? resolveToolpathDepth(toolpath) : toolpath.tool?.depth,
 		step: cutSettings.step,
 		rpm: manualRpm > 0 ? manualRpm : (nextToolBase.rpm || 18000),
 		feed: manualFeed > 0 ? manualFeed : (nextToolBase.feed || DEFAULT_FEED_MM_MIN),
@@ -1680,8 +1680,9 @@ function checkTableLimits(tpaths) {
 	var maxDepth = 0;
 	for (var t = 0; t < list.length; t++) {
 		if (!list[t].visible || !list[t].paths) continue;
-		if (list[t].tool && list[t].tool.depth > maxDepth) {
-			maxDepth = list[t].tool.depth;
+		const toolpathDepth = typeof resolveToolpathDepth === 'function' ? resolveToolpathDepth(list[t]) : Number(list[t].tool?.depth) || 0;
+		if (toolpathDepth > maxDepth) {
+			maxDepth = toolpathDepth;
 		}
 		for (var p = 0; p < list[t].paths.length; p++) {
 			var path = list[t].paths[p].path;
@@ -1780,7 +1781,7 @@ function toGcode(cutSettingsOverride) {
 			feed: calculateFeedRate(toolpath.tool, getOption("material"), toolpath.operation),
 			zfeed: calculateZFeedRate(toolpath.tool, getOption("material"), toolpath.operation),
 			rapidFeed: Math.round((getOption('maxFeedRate') || 3000) * 0.75),
-			depth: toolpath.tool.depth,
+			depth: typeof resolveToolpathDepth === 'function' ? resolveToolpathDepth(toolpath) : toolpath.tool.depth,
 			toolStep: toolpath.tool.step || 0,
 			radius: toolpath.tool.diameter / 2,
 			angle: toolpath.tool.angle,

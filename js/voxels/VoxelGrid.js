@@ -377,6 +377,8 @@ class VoxelGrid {
     const dummy = new THREE.Object3D();
     const bottomZ = this.materialBottomZ;
     const originalHeight = 0 - bottomZ;  // 0 to bottom (negative value)
+    const hiddenScale = 0.000001;
+    const hiddenZ = bottomZ - Math.max(10, this.workpieceThickness || 0);
 
     for (const index of voxelIndices) {
       if (index < 0 || index >= this.maxVoxels) continue;
@@ -389,10 +391,11 @@ class VoxelGrid {
       // Voxel Z scale: current height / original height
       const currentHeight = topZ - bottomZ;
       const scaleZ = Math.max(0, currentHeight / originalHeight);
+      const isVisible = scaleZ > 0;
 
       // Use cached X/Y — they never change after initializeGrid()
-      dummy.position.set(this.voxelWorldX[index], this.voxelWorldY[index], worldZ);
-      dummy.scale.set(scaleZ > 0 ? 1 : 0, scaleZ > 0 ? 1 : 0, scaleZ);
+      dummy.position.set(this.voxelWorldX[index], this.voxelWorldY[index], isVisible ? worldZ : hiddenZ);
+      dummy.scale.set(isVisible ? 1 : hiddenScale, isVisible ? 1 : hiddenScale, isVisible ? scaleZ : hiddenScale);
       dummy.updateMatrix();
 
       this.mesh.setMatrixAt(index, dummy.matrix);

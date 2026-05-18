@@ -147,6 +147,69 @@ class VoxelMaterialRemover {
     return this.totalVoxelsRemoved;
   }
 
+  removeClosedRegion(voxelGrid, closedPath, options = {}) {
+    if (!voxelGrid || !Array.isArray(closedPath) || closedPath.length < 4 || typeof pointInPolygon !== 'function') {
+      return 0;
+    }
+
+    const { deferVisualUpdate = false } = options;
+    const updatedIndices = [];
+    const hiddenTopZ = voxelGrid.materialBottomZ - VoxelMaterialRemover.VISUAL_BREAKTHROUGH_OVERCUT_MM;
+
+    if (Array.isArray(voxelGrid.leaves) && voxelGrid.leaves.length > 0) {
+      for (let index = 0; index < voxelGrid.leaves.length; index++) {
+        const leaf = voxelGrid.leaves[index];
+        if (!leaf) continue;
+        if (!pointInPolygon({ x: leaf.cx, y: leaf.cy }, closedPath)) continue;
+        if (typeof voxelGrid.updateVoxelHeight === 'function' && voxelGrid.updateVoxelHeight(index, hiddenTopZ)) {
+          updatedIndices.push(index);
+        }
+      }
+
+      if (updatedIndices.length > 0) {
+        if (deferVisualUpdate && voxelGrid.pendingMatrixUpdates) {
+          for (const index of updatedIndices) {
+            voxelGrid.pendingMatrixUpdates.add(index);
+          }
+        } else if (typeof voxelGrid._updateMatrices === 'function') {
+          voxelGrid._updateMatrices(updatedIndices);
+          if (typeof voxelGrid._updateColors === 'function') {
+            voxelGrid._updateColors();
+          }
+        }
+      }
+
+      this.totalVoxelsRemoved += updatedIndices.length;
+      return updatedIndices.length;
+    }
+
+    const voxelWorldX = voxelGrid.voxelWorldX;
+    const voxelWorldY = voxelGrid.voxelWorldY;
+    const maxVoxels = Number(voxelGrid.maxVoxels) || 0;
+    if (!voxelWorldX || !voxelWorldY || maxVoxels <= 0) {
+      return 0;
+    }
+
+    for (let index = 0; index < maxVoxels; index++) {
+      if (!pointInPolygon({ x: voxelWorldX[index], y: voxelWorldY[index] }, closedPath)) continue;
+      if (typeof voxelGrid.updateVoxelHeight === 'function' && voxelGrid.updateVoxelHeight(index, hiddenTopZ)) {
+        updatedIndices.push(index);
+      }
+    }
+
+    if (updatedIndices.length > 0) {
+      if (typeof voxelGrid.updateVoxelMatrices === 'function') {
+        voxelGrid.updateVoxelMatrices(updatedIndices);
+      }
+      if (typeof voxelGrid.updateVoxelColors === 'function') {
+        voxelGrid.updateVoxelColors();
+      }
+    }
+
+    this.totalVoxelsRemoved += updatedIndices.length;
+    return updatedIndices.length;
+  }
+
   /**
    * Reset removal tracker
    */

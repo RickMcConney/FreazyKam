@@ -284,64 +284,9 @@ window.syncSTLModels = function() {
  * If the scene isn't initialized yet (3D tab not opened), queues for later.
  */
 function addSTLMesh3D(model) {
-    const scene = window.threeScene;
-    if (!scene) {
-        // Scene not ready — will be added when 3D tab opens via addPendingSTLMeshes()
-        return;
-    }
-
-    const material = new THREE.MeshPhongMaterial({
-        color: 0x88aacc,
-        transparent: true,
-        opacity: 0.7,
-        side: THREE.DoubleSide,
-        flatShading: false
-    });
-
-    // Clone geometry and bake in the CNC positioning transform (Y flipped, Z may be capped)
-    const geom = model.geometry.clone();
-    const t = model.transform;
-    const sy = t.scaleY !== undefined ? t.scaleY : t.scale;
-    const sz = t.scaleZ !== undefined ? t.scaleZ : t.scale;
-    const matrix = new THREE.Matrix4();
-    matrix.makeScale(t.scale, sy, sz);
-    matrix.setPosition(t.offsetX, t.offsetY, t.offsetZ);
-    geom.applyMatrix4(matrix);
-
-    const mesh = new THREE.Mesh(geom, material);
-
-    // The 3D view uses CNC coordinates directly (X,Y,Z = CNC X,Y,Z)
-    // with the CNC origin at (0,0,0). The workpiece is offset based on origin position.
-    // Our STL is positioned in absolute workpiece coords (0→width, 0→length).
-    // We need to offset so it aligns with the 3D view's origin-relative system.
-    const getOpt = window.getOption || (() => undefined);
-    const originPos = getOpt('originPosition') || 'middle-center';
-    const wpW = getOpt('workpieceWidth') || 200;
-    const wpL = getOpt('workpieceLength') || 200;
-
-    // Calculate offset from workpiece corner (0,0) to CNC origin
-    let originX = 0, originY = 0;
-    if (originPos.includes('center') && !originPos.includes('top') && !originPos.includes('bottom')) originY = wpL / 2;
-    if (originPos.includes('right')) originX = wpW;
-    else if (originPos.includes('center')) originX = wpW / 2;
-    if (originPos.includes('bottom')) originY = wpL;
-    else if (originPos.includes('middle')) originY = wpL / 2;
-
-    // The geometry has Y flipped (scaleY = -scale) for the 2D canvas.
-    // The 3D view uses G-code coords where Y is not flipped, so mirror Y back.
-    mesh.scale.set(1, -1, 1);
-    mesh.position.set(-originX, originY, 0);
-
-    mesh.castShadow = false;
-    mesh.receiveShadow = false;
-    mesh.userData.stlModelId = model.id;
-
-    model.mesh = mesh;
-    scene.add(mesh);
-
-    // Trigger render
-    if (typeof window.requestThreeRender === 'function') {
-        window.requestThreeRender();
+    // The 3D scene is intentionally voxel-only, so STL meshes are not attached.
+    if (model) {
+        model.mesh = null;
     }
 }
 
@@ -349,11 +294,6 @@ function addSTLMesh3D(model) {
  * Show/hide all STL model meshes in the 3D view.
  */
 window.setSTLVisibility3D = function(visible) {
-    for (const model of window.stlModels) {
-        if (model.mesh) {
-            model.mesh.visible = visible;
-        }
-    }
     if (typeof window.requestThreeRender === 'function') {
         window.requestThreeRender();
     }
@@ -364,13 +304,7 @@ window.setSTLVisibility3D = function(visible) {
  * Called when the 3D tab is first shown.
  */
 window.addPendingSTLMeshes = function() {
-    for (const model of window.stlModels) {
-        if (!model.mesh && model.geometry) {
-            // Sync transform from 2D svgpath before adding (picks up any scaling done in 2D view)
-            syncSTLFromSvgPath(model);
-            addSTLMesh3D(model);
-        }
-    }
+    return;
 };
 
 // Listen for 3D tab activation to add pending meshes

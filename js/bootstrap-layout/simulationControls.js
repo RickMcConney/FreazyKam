@@ -338,7 +338,6 @@ function create3DSimulationMenu(prefix) {
     const showAxes = create3DSimulationMenuItem(prefix + '-show-axes', 'Axis', true);
     const showTool = create3DSimulationMenuItem(prefix + '-show-tool', 'Tool', true);
     const followTool = create3DSimulationMenuItem(prefix + '-follow-tool', 'Follow Tool', false);
-
     menu.appendChild(showWorkpiece.wrapper);
     menu.appendChild(showAxes.wrapper);
     menu.appendChild(showTool.wrapper);
@@ -568,6 +567,7 @@ function ensure3DSimulationControls() {
         menuRefs.followTool.addEventListener('change', function (e) {
             sync3DSimulationMenuState('followTool', e.target.checked);
         });
+
     }
 
     bindMenuControls(summaryMenu);

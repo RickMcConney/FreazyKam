@@ -151,12 +151,11 @@ class PropertiesManager {
                     const mmPerUnit = parseFloat(el.dataset.mmPerUnit || '1') || 1;
                     const sliderValue = isDimension ? Number(value) / mmPerUnit : value;
                     el.value = sliderValue;
-                    display.textContent = isDimension
-                        ? formatDimension(Number(value), true)
-                        : value;
+                    this.updateRangeDisplay(el, display);
                     this.syncVerticalRangeVisual(el);
                 } else {
                     el.value = value;
+                    this.refreshLinkedRangeDisplays(key);
                 }
             } else {
                 el.textContent = value;
@@ -180,6 +179,7 @@ class PropertiesManager {
             const el = document.getElementById(`pm-${field.key}`);
             if (el && values[field.key] !== undefined) {
                 el.value = formatDimension(values[field.key], true);
+                this.refreshLinkedRangeDisplays(field.key);
             }
         }
     }
@@ -260,9 +260,12 @@ class PropertiesManager {
             <input type="text" class="form-control form-control-sm"
                    id="pm-${field.key}" name="${field.key}"
                    data-dimension-input="true"
-                    value="${display}"
-                    onblur="this.value = formatDimension(parseDimension(this.value), true)"
-                    onkeydown="if(event.key==='Enter'){this.value=formatDimension(parseDimension(this.value),true);this.blur();}">${field.help ? `
+                    data-refresh-range-display-key="${field.refreshRangeDisplayKey || ''}"
+                     value="${display}"
+                     oninput="PropertiesManager.handleDimensionInput(this)"
+                     onchange="PropertiesManager.handleDimensionInput(this)"
+                     onblur="PropertiesManager.handleDimensionBlur(this)"
+                     onkeydown="if(event.key==='Enter'){PropertiesManager.handleDimensionBlur(this);}">${field.help ? `
             <div class="form-text">${field.help}</div>` : ''}
         </div>`;
     }
@@ -302,10 +305,8 @@ class PropertiesManager {
         // Dimension ranges: value is stored in mm; slider operates in display units
         const mmPerUnit   = field.mmPerUnit ?? 1;
         const sliderValue = field.dimension ? value / mmPerUnit : value;
-        const displayNow  = field.dimension ? formatDimension(value, true) : value;
-        const oninput     = field.dimension
-            ? `formatDimension(parseFloat(this.value)*${mmPerUnit},true)`
-            : `this.value`;
+        const displayValue = field.displayValue ?? value;
+        const displayNow  = field.dimension ? formatDimension(displayValue, true) : displayValue;
         const orientationClass = field.vertical ? ' pm-range--vertical' : '';
         const orientationAttrs = field.vertical
             ? ' orient="vertical" aria-orientation="vertical"'
@@ -318,10 +319,13 @@ class PropertiesManager {
                 <div class="pm-range-wrap${orientationClass}">
                     <input type="range" class="form-range${orientationClass}"
                            id="pm-${field.key}" name="${field.key}"
+                           data-key="${field.key}"
+                           data-display-id="pm-${field.key}-display"
+                           data-display-add-input-key="${field.displayAddInputKey || ''}"
                            data-dimension-range="${field.dimension ? 'true' : 'false'}"
                            data-mm-per-unit="${mmPerUnit}"
                            min="${min}" max="${max}" step="${step}" value="${sliderValue}"
-                           oninput="document.getElementById('pm-${field.key}-display').textContent=${oninput}"${orientationAttrs}>
+                           oninput="PropertiesManager.handleRangeInput(this, 'pm-${field.key}-display')"${orientationAttrs}>
                 </div>${field.help ? `
                 <div class="form-text">${field.help}</div>` : ''}
             </div>`;
@@ -353,7 +357,9 @@ class PropertiesManager {
                         <div class="pm-vertical-range-thumb" aria-hidden="true"></div>
                         <input type="range" class="form-range${orientationClass}"
                                id="pm-${field.key}" name="${field.key}"
+                               data-key="${field.key}"
                                data-display-id="pm-${field.key}-display"
+                               data-display-add-input-key="${field.displayAddInputKey || ''}"
                                data-dimension-range="${field.dimension ? 'true' : 'false'}"
                                data-mm-per-unit="${mmPerUnit}"
                                min="${min}" max="${max}" step="${step}" value="${sliderValue}"
@@ -369,17 +375,52 @@ class PropertiesManager {
     static handleRangeInput(input, displayId) {
         if (!input) return;
         const display = document.getElementById(displayId);
-        const isDimension = input.dataset.dimensionRange === 'true';
-        const mmPerUnit = parseFloat(input.dataset.mmPerUnit || '1') || 1;
-        const value = parseFloat(input.value);
-
-        if (display) {
-            display.textContent = isDimension
-                ? formatDimension(value * mmPerUnit, true)
-                : String(value);
-        }
+        this.updateRangeDisplay(input, display);
 
         this.syncVerticalRangeVisual(input);
+    }
+
+    static updateRangeDisplay(input, display = null) {
+        if (!input) return;
+
+        const targetDisplay = display || document.getElementById(input.dataset.displayId || `${input.id}-display`);
+        if (!targetDisplay) return;
+
+        const isDimension = input.dataset.dimensionRange === 'true';
+        const mmPerUnit = parseFloat(input.dataset.mmPerUnit || '1') || 1;
+        const inputValue = parseFloat(input.value);
+        const baseValue = Number.isFinite(inputValue)
+            ? (isDimension ? inputValue * mmPerUnit : inputValue)
+            : 0;
+        const extraKey = input.dataset.displayAddInputKey;
+        const extraInput = extraKey ? document.getElementById(`pm-${extraKey}`) : null;
+        const extraValue = extraInput ? parseDimension(extraInput.value) : 0;
+        const combinedValue = baseValue + (Number.isFinite(extraValue) ? extraValue : 0);
+
+        targetDisplay.textContent = isDimension
+            ? formatDimension(combinedValue, true)
+            : String(combinedValue);
+    }
+
+    static handleDimensionInput(input) {
+        if (!input) return;
+        this.refreshLinkedRangeDisplays(input.dataset.refreshRangeDisplayKey);
+    }
+
+    static handleDimensionBlur(input) {
+        if (!input) return;
+        input.value = formatDimension(parseDimension(input.value), true);
+        this.handleDimensionInput(input);
+        input.blur();
+    }
+
+    static refreshLinkedRangeDisplays(changedKey) {
+        if (!changedKey) return;
+
+        document.querySelectorAll(`input[type="range"][data-display-add-input-key="${changedKey}"]`).forEach(input => {
+            this.updateRangeDisplay(input);
+            this.syncVerticalRangeVisual(input);
+        });
     }
 
     static handleVerticalRangePointerDown(event, inputId) {
