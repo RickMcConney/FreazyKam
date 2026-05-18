@@ -47,13 +47,14 @@
     justify-content: center;
     align-items: center;
     min-height: 160px;
-    width: 42px;
-    flex: 0 0 42px;
+    width: 96px;
+    flex: 0 0 96px;
+    overflow: visible;
 }
 
 .pm-range-label.pm-range--vertical {
     width: auto;
-    min-width: 68px;
+    min-width: 72px;
     align-self: stretch;
     justify-content: center;
     text-align: center;
@@ -61,11 +62,127 @@
 }
 
 .form-range.pm-range--vertical {
-    width: 150px;
-    height: 24px;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 168px;
+    height: 16px;
     margin: 0;
-    transform: rotate(90deg);
+    transform: translate(-50%, -50%) rotate(-90deg);
     transform-origin: center;
+    background: transparent;
+    appearance: none;
+    -webkit-appearance: none;
+    pointer-events: none;
+    opacity: 0.001;
+    z-index: 2;
+}
+
+.form-range.pm-range--vertical::-webkit-slider-runnable-track {
+    height: 16px;
+    background: transparent;
+}
+
+.form-range.pm-range--vertical::-moz-range-track {
+    height: 16px;
+    background: transparent;
+}
+
+.form-range.pm-range--vertical::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    cursor: pointer;
+    margin-top: -6px;
+}
+
+.form-range.pm-range--vertical::-moz-range-thumb {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    cursor: pointer;
+}
+
+.pm-vertical-range-shell.pm-range--vertical {
+    position: relative;
+    width: 96px;
+    min-height: 188px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.pm-vertical-range-slider {
+    position: relative;
+    height: 168px;
+    width: 16px;
+    display: flex;
+    justify-content: center;
+    align-items: stretch;
+    cursor: ns-resize;
+    touch-action: none;
+}
+
+.pm-vertical-range-track {
+    position: absolute;
+    inset: 0;
+    width: 16px;
+    height: 100%;
+    border-radius: 10px;
+    background: linear-gradient(to bottom, #d9dde2 0%, #c3c9d1 30%, #6f8297 70%, #31465d 100%);
+    border: 1px solid #b9bec5;
+    overflow: hidden;
+}
+
+.pm-vertical-range-thumb {
+    position: absolute;
+    left: 50%;
+    top: calc(var(--pm-range-ratio, 0) * 100%);
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 2px solid #a9a9a9;
+    background: radial-gradient(circle at 30% 30%, #ffffff, #f1f1f1 60%, #d6d6d6);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.25), inset 0 1px 1px rgba(255,255,255,0.9);
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    z-index: 1;
+}
+
+.pm-range-scale {
+    position: absolute;
+    left: 36px;
+    top: 0;
+    height: 168px;
+    width: 56px;
+    pointer-events: none;
+}
+
+.pm-range-scale-label {
+    position: absolute;
+    transform: translateY(-50%);
+    color: #28415d;
+    font-size: 11px;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.pm-range-scale-label:first-child {
+    top: 0 !important;
+    transform: translateY(0);
+}
+
+.pm-range-scale-label:last-child {
+    top: 100% !important;
+    transform: translateY(-100%);
 }
 
 /* PropertiesManager radio-grid layout */
@@ -377,13 +494,13 @@ html, body {
 }
 
 .floating-properties-body .pm-field > .pm-range-wrap.pm-range--vertical {
-    width: 42px;
-    flex-basis: 42px;
+    width: 96px;
+    flex-basis: 96px;
 }
 
 .floating-properties-body .pm-field > .form-label.pm-range--vertical {
-    width: 68px;
-    min-width: 68px;
+    width: 72px;
+    min-width: 72px;
 }
 
 #tool-properties-editor .pm-field:has(.pm-range--vertical),
@@ -393,7 +510,20 @@ html, body {
 
 #tool-properties-editor .pm-range-wrap.pm-range--vertical,
 #operation-properties-editor .pm-range-wrap.pm-range--vertical {
-    min-height: 170px;
+    min-height: 188px;
+}
+
+#tool-properties-editor #shape-cut-properties-panel .pm-field:has(#pm-depth.pm-range--vertical) {
+    align-items: center;
+}
+
+#tool-properties-editor #shape-cut-properties-panel .pm-field:has(#pm-depth.pm-range--vertical) > .form-label.pm-range--vertical {
+    align-self: center;
+}
+
+#tool-properties-editor #shape-cut-properties-panel .pm-field:has(#pm-depth.pm-range--vertical) > .pm-range-wrap.pm-range--vertical {
+    width: 96px;
+    flex-basis: 96px;
 }
 
 .floating-properties-body .pm-field:has(#pm-lockObject) {

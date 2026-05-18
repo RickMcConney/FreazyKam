@@ -166,7 +166,8 @@ class ToolPathProperties {
                 min: 0,
                 max: sliderMax,
                 step: sliderStep,
-                mmPerUnit
+                mmPerUnit,
+                scaleLabels: [0, sliderMax / 2, sliderMax]
             },
             {
                 key: 'extraDepth',

@@ -154,6 +154,7 @@ class PropertiesManager {
                     display.textContent = isDimension
                         ? formatDimension(Number(value), true)
                         : value;
+                    this.syncVerticalRangeVisual(el);
                 } else {
                     el.value = value;
                 }
@@ -309,20 +310,164 @@ class PropertiesManager {
         const orientationAttrs = field.vertical
             ? ' orient="vertical" aria-orientation="vertical"'
             : '';
+        if (!field.vertical) {
+            return `<div class="mb-3 pm-field">
+                <label for="pm-${field.key}" class="form-label small pm-range-label${orientationClass}">
+                    <strong>${field.label}:</strong> <span id="pm-${field.key}-display">${displayNow}</span>
+                </label>
+                <div class="pm-range-wrap${orientationClass}">
+                    <input type="range" class="form-range${orientationClass}"
+                           id="pm-${field.key}" name="${field.key}"
+                           data-dimension-range="${field.dimension ? 'true' : 'false'}"
+                           data-mm-per-unit="${mmPerUnit}"
+                           min="${min}" max="${max}" step="${step}" value="${sliderValue}"
+                           oninput="document.getElementById('pm-${field.key}-display').textContent=${oninput}"${orientationAttrs}>
+                </div>${field.help ? `
+                <div class="form-text">${field.help}</div>` : ''}
+            </div>`;
+        }
+
+        const scaleValues = this._buildRangeScaleValues(field, min, max);
+        const rangeRatio = max === min
+            ? 0
+            : Math.min(1, Math.max(0, (sliderValue - min) / (max - min)));
+        const scaleHTML = scaleValues.length > 0
+            ? `<div class="pm-range-scale" aria-hidden="true">${scaleValues.map(scaleValue => {
+                const label = field.dimension
+                    ? formatDimension(scaleValue * mmPerUnit, true)
+                    : scaleValue;
+                const position = max === min
+                    ? 0
+                    : ((scaleValue - min) / (max - min)) * 100;
+                return `<span class="pm-range-scale-label" style="top:${position}%">${label}</span>`;
+            }).join('')}</div>`
+            : '';
         return `<div class="mb-3 pm-field">
             <label for="pm-${field.key}" class="form-label small pm-range-label${orientationClass}">
                 <strong>${field.label}:</strong> <span id="pm-${field.key}-display">${displayNow}</span>
             </label>
             <div class="pm-range-wrap${orientationClass}">
-                <input type="range" class="form-range${orientationClass}"
-                       id="pm-${field.key}" name="${field.key}"
-                       data-dimension-range="${field.dimension ? 'true' : 'false'}"
-                       data-mm-per-unit="${mmPerUnit}"
-                       min="${min}" max="${max}" step="${step}" value="${sliderValue}"
-                       oninput="document.getElementById('pm-${field.key}-display').textContent=${oninput}"${orientationAttrs}>
+                <div class="pm-vertical-range-shell${orientationClass}" style="--pm-range-ratio:${rangeRatio};">
+                    <div class="pm-vertical-range-slider" onpointerdown="PropertiesManager.handleVerticalRangePointerDown(event, 'pm-${field.key}')">
+                        <div class="pm-vertical-range-track" aria-hidden="true"></div>
+                        <div class="pm-vertical-range-thumb" aria-hidden="true"></div>
+                        <input type="range" class="form-range${orientationClass}"
+                               id="pm-${field.key}" name="${field.key}"
+                               data-display-id="pm-${field.key}-display"
+                               data-dimension-range="${field.dimension ? 'true' : 'false'}"
+                               data-mm-per-unit="${mmPerUnit}"
+                               min="${min}" max="${max}" step="${step}" value="${sliderValue}"
+                               oninput="PropertiesManager.handleRangeInput(this, 'pm-${field.key}-display')"${orientationAttrs}>
+                    </div>
+                    ${scaleHTML}
+                </div>
             </div>${field.help ? `
             <div class="form-text">${field.help}</div>` : ''}
         </div>`;
+    }
+
+    static handleRangeInput(input, displayId) {
+        if (!input) return;
+        const display = document.getElementById(displayId);
+        const isDimension = input.dataset.dimensionRange === 'true';
+        const mmPerUnit = parseFloat(input.dataset.mmPerUnit || '1') || 1;
+        const value = parseFloat(input.value);
+
+        if (display) {
+            display.textContent = isDimension
+                ? formatDimension(value * mmPerUnit, true)
+                : String(value);
+        }
+
+        this.syncVerticalRangeVisual(input);
+    }
+
+    static handleVerticalRangePointerDown(event, inputId) {
+        const input = document.getElementById(inputId);
+        const slider = event.currentTarget;
+        if (!input || !slider) return;
+
+        event.preventDefault();
+
+        const update = moveEvent => {
+            this._updateVerticalRangeFromPointer(input, slider, moveEvent);
+        };
+
+        const stop = () => {
+            document.removeEventListener('pointermove', update);
+            document.removeEventListener('pointerup', stop);
+            document.removeEventListener('pointercancel', stop);
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+        };
+
+        document.addEventListener('pointermove', update);
+        document.addEventListener('pointerup', stop);
+        document.addEventListener('pointercancel', stop);
+
+        update(event);
+    }
+
+    static _updateVerticalRangeFromPointer(input, slider, event) {
+        const rect = slider.getBoundingClientRect();
+        if (!rect || rect.height <= 0) return;
+
+        const min = parseFloat(input.min);
+        const max = parseFloat(input.max);
+        const step = parseFloat(input.step || '1');
+        if (!Number.isFinite(min) || !Number.isFinite(max) || max <= min) return;
+
+        const rawRatio = (event.clientY - rect.top) / rect.height;
+        const ratio = Math.min(1, Math.max(0, rawRatio));
+        const steppedValue = this._snapRangeValue(min + ratio * (max - min), min, max, step);
+
+        input.value = String(steppedValue);
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+
+    static _snapRangeValue(value, min, max, step) {
+        const safeStep = Number.isFinite(step) && step > 0 ? step : 1;
+        const snapped = min + (Math.round((value - min) / safeStep) * safeStep);
+        const clamped = Math.min(max, Math.max(min, snapped));
+        const precision = this._rangeStepPrecision(safeStep);
+        return Number(clamped.toFixed(precision));
+    }
+
+    static _rangeStepPrecision(step) {
+        if (!Number.isFinite(step)) return 0;
+        const stepString = String(step);
+        if (stepString.includes('e-')) {
+            return parseInt(stepString.split('e-')[1], 10) || 0;
+        }
+        const decimals = stepString.split('.')[1];
+        return decimals ? decimals.length : 0;
+    }
+
+    static syncVerticalRangeVisual(input) {
+        const shell = input?.closest('.pm-vertical-range-shell');
+        if (!shell) return;
+
+        const min = parseFloat(input.min);
+        const max = parseFloat(input.max);
+        const value = parseFloat(input.value);
+        const ratio = (!Number.isFinite(min) || !Number.isFinite(max) || max === min)
+            ? 0
+            : Math.min(1, Math.max(0, (value - min) / (max - min)));
+
+        shell.style.setProperty('--pm-range-ratio', String(ratio));
+    }
+
+    static _buildRangeScaleValues(field, min, max) {
+        if (Array.isArray(field.scaleLabels) && field.scaleLabels.length > 0) {
+            return Array.from(new Set(field.scaleLabels.filter(value => Number.isFinite(value))));
+        }
+        if (!Number.isFinite(min) || !Number.isFinite(max)) {
+            return [];
+        }
+        if (min === max) {
+            return [min];
+        }
+        const midpoint = min + ((max - min) / 2);
+        return Array.from(new Set([min, midpoint, max].map(value => Number(value.toFixed(4)))));
     }
 
     static _checkboxHTML(field, value) {
