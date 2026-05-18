@@ -2336,7 +2336,7 @@ function syncShapeMachiningToolpath(path, options = {}) {
     }
 
     const executionOperation = descriptor.executionOperation || 'Profile';
-    if (executionOperation !== 'Profile' && executionOperation !== 'Pocket' && executionOperation !== 'Drill') {
+    if (executionOperation !== 'Profile' && executionOperation !== 'Pocket' && executionOperation !== 'Drill' && executionOperation !== 'VCarve') {
         return false;
     }
 
@@ -2399,6 +2399,8 @@ function syncShapeMachiningToolpath(path, options = {}) {
                 return false;
             }
             makeHole({ x: shapeCenter.x, y: shapeCenter.y }, { svgId: primaryPath.id, svgIds: [primaryPath.id] });
+        } else if (executionOperation === 'VCarve') {
+            doVcarve();
         } else {
             doProfile({ silent: true });
         }
@@ -3223,6 +3225,8 @@ function showToolpathPropertiesEditor(toolpath) {
             propsOperation,
             toolpath.operation === 'Pocket'
                 ? 'pocket'
+                : toolpath.operation === 'VCarve'
+                    ? 'vcarve'
                 : toolpath.operation === 'Inside'
                     ? 'inside'
                     : toolpath.operation === 'Outside'
@@ -3235,6 +3239,8 @@ function showToolpathPropertiesEditor(toolpath) {
         if (properties.operationType === undefined) {
             properties.operationType = toolpath.operation === 'Pocket'
                 ? 'pocket'
+                : toolpath.operation === 'VCarve'
+                    ? 'vcarve'
                 : toolpath.operation === 'Inside'
                     ? 'inside'
                     : toolpath.operation === 'Outside'

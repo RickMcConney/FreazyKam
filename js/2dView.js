@@ -652,12 +652,16 @@ function getToolpathCutPreviewMode(toolpath) {
 	if (operationType === 'none') {
 		return null;
 	}
+	if (operationType === 'vcarve') {
+		return 'center';
+	}
 	if (operationType === 'pocket' || operationType === 'inside' || operationType === 'outside' || operationType === 'center') {
 		return operationType;
 	}
 
 	if (!toolpath) return 'pocket';
 	if (toolpath.operation === 'Pocket') return 'pocket';
+	if (toolpath.operation === 'VCarve') return 'center';
 	if (toolpath.operation === 'Inside' || toolpath.operation === 'VCarve In') return 'inside';
 	if (toolpath.operation === 'Outside' || toolpath.operation === 'VCarve Out') return 'outside';
 	if (toolpath.tool && (toolpath.tool.inside === 'inside' || toolpath.tool.inside === 'outside' || toolpath.tool.inside === 'center')) {

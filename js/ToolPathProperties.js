@@ -22,6 +22,7 @@ class ToolPathProperties {
                 defaultOperationType: 'none',
                 operationTypeOptions: [
                     { value: 'none', label: 'None' },
+                    { value: 'vcarve', label: 'VCarve' },
                     { value: 'pocket', label: 'Clear out a pocket' },
                     { value: 'center', label: 'Cut on shape path' },
                     { value: 'outside', label: 'Cut outside shape path' },
@@ -110,7 +111,9 @@ class ToolPathProperties {
         const defaultDepth = thickness / 2;
         const saved = PropertiesManager.loadSaved(operationName);
         const advanced = this.getAdvancedDefaults(operationName);
-        const savedOperationType = saved.operationType || (saved.operation === 'Pocket' ? 'pocket' : null);
+        const savedOperationType = saved.operationType
+            || (saved.operation === 'Pocket' ? 'pocket' : null)
+            || (saved.operation === 'VCarve' ? 'vcarve' : null);
         const defaultOperationType = this._operationMeta[operationName]?.defaultOperationType
             || this._operationMeta[operationName]?.operationTypeOptions?.[0]?.value
             || 'center';
@@ -391,6 +394,7 @@ class ToolPathProperties {
         const resolvedOperationName = this._resolveOperationName(operationName, operationType);
         if (resolvedOperationName === 'Pocket') return 'inside';
         if (resolvedOperationName === 'Drill') return 'center';
+        if (resolvedOperationName === 'VCarve') return 'center';
         return operationType === 'outside' || operationType === 'inside' || operationType === 'center'
             ? operationType
             : 'center';
@@ -407,12 +411,14 @@ class ToolPathProperties {
     _resolveOperationName(operationName, operationType) {
         if (operationType === 'drill') return 'Drill';
         if (operationType === 'pocket') return 'Pocket';
+        if (operationType === 'vcarve') return 'VCarve';
         return operationName;
     }
 
     _describeOperationType(operationType) {
         switch (operationType) {
             case 'none': return 'None';
+            case 'vcarve': return 'VCarve';
             case 'pocket': return 'Clear out a pocket';
             case 'outside': return 'Cut outside shape path';
             case 'inside': return 'Cut inside shape path';
@@ -454,8 +460,12 @@ class ToolPathProperties {
             }
         }
 
-        if (!values.operationType && existingProperties?.operation === 'Pocket') {
-            values.operationType = 'pocket';
+        if (!values.operationType) {
+            if (existingProperties?.operation === 'Pocket') {
+                values.operationType = 'pocket';
+            } else if (existingProperties?.operation === 'VCarve') {
+                values.operationType = 'vcarve';
+            }
         }
 
         return `
