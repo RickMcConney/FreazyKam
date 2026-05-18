@@ -397,7 +397,9 @@ html, body {
 }
 
 .floating-properties-body {
-    overflow: auto;
+    display: flex;
+    flex: 1 1 auto;
+    overflow: hidden;
     min-height: 0;
     font-size: 11px;
     padding: 0;
@@ -596,11 +598,20 @@ html, body {
 
 .floating-properties-content {
     display: none;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
     padding: 4px 10px 8px !important;
 }
 
 .floating-properties-content.is-active {
     display: block !important;
+}
+
+.floating-properties-content.is-active:has(.shape-cut-popup) {
+    display: flex !important;
+    flex-direction: column;
+    overflow: hidden;
 }
 
 .floating-properties-content > :first-child {
@@ -628,7 +639,16 @@ html, body {
 }
 
 .shape-cut-tabs {
+    flex-shrink: 0;
     margin: 0 0 0.5rem;
+}
+
+.shape-cut-popup,
+#tool-properties-form:has(.shape-cut-popup) {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
 }
 
 .shape-cut-tabs .nav-link {
@@ -637,7 +657,9 @@ html, body {
 }
 
 .shape-cut-tab-content {
+    flex: 1 1 auto;
     min-height: 0;
+    overflow-y: auto;
 }
 
 .shape-cut-tab-content .tab-pane {
