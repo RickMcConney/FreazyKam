@@ -208,7 +208,9 @@ function appendPreviewDrill(movements, point, depth, toolInfo, options = {}) {
   }
 
   const safeZ = Number.isFinite(Number(options.safeZ)) ? Number(options.safeZ) : 5;
-  const targetDepth = -Math.max(0, Number(depth) || 0);
+  const targetDepth = Number.isFinite(Number(options.targetDepth))
+    ? Number(options.targetDepth)
+    : -Math.max(0, Number(depth) || 0);
 
   pushPreviewMovement(movements, { x: point.x, y: point.y, z: safeZ }, false, toolInfo);
   pushPreviewMovement(movements, { x: point.x, y: point.y, z: targetDepth }, true, toolInfo);
@@ -295,8 +297,17 @@ function buildPreviewMovementsFromToolpaths(sourceToolpaths) {
   const toolChangePoints = [];
   const safeZ = Math.max(5, Number(getOption('safeHeight')) || 5);
   const workpieceThickness = Number(getOption('workpieceThickness')) || 0;
+  const visualBreakthroughDepth = workpieceThickness > 0 ? workpieceThickness + 1 : 0;
   let previousToolKey = null;
   const toolpathSummaries = [];
+
+  const resolvePreviewPassZ = (depthValue) => {
+    const resolvedDepth = Math.max(0, Number(depthValue) || 0);
+    if (workpieceThickness > 0 && resolvedDepth >= workpieceThickness - 0.05) {
+      return -visualBreakthroughDepth;
+    }
+    return -resolvedDepth;
+  };
 
   const registerTool = (toolInfo) => {
     const toolKey = `${toolInfo.recid ?? 'tool'}|${toolInfo.diameter}|${toolInfo.type}|${toolInfo.angle}`;
@@ -362,7 +373,10 @@ function buildPreviewMovementsFromToolpaths(sourceToolpaths) {
       for (const pathGroup of toolpath.paths) {
         const drillPoints = Array.isArray(pathGroup?.path) ? pathGroup.path : Array.isArray(pathGroup?.tpath) ? pathGroup.tpath : [];
         for (const point of drillPoints) {
-          appendPreviewDrill(movements, point, depth, toolInfo, { safeZ });
+          appendPreviewDrill(movements, point, depth, toolInfo, {
+            safeZ,
+            targetDepth: resolvePreviewPassZ(depth)
+          });
         }
       }
       toolpathSummaries.push({ id: toolpath.id, name: toolpath.name, operation: toolpath.operation, previewKind, pathGroups: toolpath.paths.length, passes, movementCount: movements.length - movementStartIndex, depth, step });
@@ -410,7 +424,7 @@ function buildPreviewMovementsFromToolpaths(sourceToolpaths) {
       for (let index = 0; index < toolpath.paths.length; index++) {
         const pathGroup = toolpath.paths[index];
         const surfacePath = Array.isArray(pathGroup?.tpath) ? pathGroup.tpath : [];
-        appendConstantDepthPath(toolInfo, surfacePath, -depth, {
+        appendConstantDepthPath(toolInfo, surfacePath, resolvePreviewPassZ(depth), {
           continuous: index > 0,
           safeZ
         });
@@ -424,7 +438,7 @@ function buildPreviewMovementsFromToolpaths(sourceToolpaths) {
         const profilePath = Array.isArray(pathGroup?.tpath) ? pathGroup.tpath : [];
         for (let pass = 1; pass <= passes; pass++) {
           const passDepth = Math.min(depth, pass * Math.max(step, depth || 1));
-          const passZ = -passDepth;
+          const passZ = resolvePreviewPassZ(passDepth);
           const previewPoints = buildProfilePreviewPoints(profilePath, passZ, tabData);
           appendPreviewPolyline(movements, previewPoints, toolInfo, { continuous: false, safeZ });
         }
@@ -435,7 +449,7 @@ function buildPreviewMovementsFromToolpaths(sourceToolpaths) {
 
     for (let pass = 1; pass <= passes; pass++) {
       const passDepth = Math.min(depth, pass * Math.max(step, depth || 1));
-      const passZ = -passDepth;
+      const passZ = resolvePreviewPassZ(passDepth);
       let previousWasContinuous = false;
 
       for (const pathGroup of toolpath.paths) {
@@ -2497,7 +2511,7 @@ class WorkpieceManager {
     // The stock stays centered in X/Y and spans from Z=0 to Z=-thickness.
     const geometry = new THREE.BoxGeometry(width, length, thickness, 1, 1, 1);
     const matrix = new THREE.Matrix4();
-    matrix.makeTranslation(0, 0, -thickness / 4);
+    matrix.makeTranslation(0, 0, -thickness / 2);
     geometry.applyMatrix4(matrix);
 
     const material = new THREE.MeshPhongMaterial({

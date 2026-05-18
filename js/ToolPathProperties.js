@@ -442,6 +442,18 @@ class ToolPathProperties {
             ...(existingProperties || {})
         };
 
+        if (existingProperties) {
+            const existingCutDepth = Number(existingProperties.cutDepth);
+            const existingExtraDepth = Math.max(0, Number(existingProperties.extraDepth) || 0);
+            const existingResolvedDepth = Number(existingProperties.depth);
+
+            if (Number.isFinite(existingCutDepth) && existingCutDepth >= 0) {
+                values.depth = existingCutDepth;
+            } else if (Number.isFinite(existingResolvedDepth) && existingResolvedDepth >= 0) {
+                values.depth = Math.max(0, existingResolvedDepth - existingExtraDepth);
+            }
+        }
+
         if (!values.operationType && existingProperties?.operation === 'Pocket') {
             values.operationType = 'pocket';
         }

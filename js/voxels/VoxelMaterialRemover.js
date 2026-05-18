@@ -17,6 +17,24 @@ class VoxelMaterialRemover {
     this.vbitTangent = null;       // Pre-calculated: Math.tan(vbitAngle/2 * PI/180)
   }
 
+  static BREAKTHROUGH_EPSILON_MM = 0.05;
+  static VISUAL_BREAKTHROUGH_OVERCUT_MM = 1.0;
+
+  resolveVisualToolZ(voxelGrid, toolZ) {
+    if (!voxelGrid || !Number.isFinite(Number(toolZ))) {
+      return toolZ;
+    }
+
+    const materialBottomZ = Number(voxelGrid.materialBottomZ);
+    if (!Number.isFinite(materialBottomZ)) {
+      return toolZ;
+    }
+
+    return toolZ <= materialBottomZ + VoxelMaterialRemover.BREAKTHROUGH_EPSILON_MM
+      ? materialBottomZ - VoxelMaterialRemover.VISUAL_BREAKTHROUGH_OVERCUT_MM
+      : toolZ;
+  }
+
   /**
    * Pre-calculate tool constants when tool changes
    * Calculates values that don't change during a tool's operation
@@ -66,12 +84,13 @@ class VoxelMaterialRemover {
     const toolRadius = toolInfo.diameter / 2;
     // Use G-code tool type directly (source of truth)
     const toolType = toolInfo.type || 'End Mill';
+    const visualToolZ = this.resolveVisualToolZ(voxelGrid, toolZ);
 
     // Remove voxels at current tool position, passing pre-calculated constants
     const removedVoxels = voxelGrid.removeVoxelsAtToolPosition(
       toolX,
       toolY,
-      toolZ,
+      visualToolZ,
       toolRadius,
       this.toolRadiusSq,
       toolType,

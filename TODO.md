@@ -5,3 +5,4 @@ TODO
 - Add PEN tool
 - Add Aligment panel.
 - Add measure tool
+- Bug with workpiece material and feedrate/plungrate not updated

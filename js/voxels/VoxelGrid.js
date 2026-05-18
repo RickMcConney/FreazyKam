@@ -7,6 +7,8 @@
 
 import * as THREE from '../lib/three.module.js';
 
+const BREAKTHROUGH_EPSILON_MM = 0.05;
+
 class VoxelGrid {
   /**
    * Initialize a voxel grid representation of the workpiece
@@ -224,16 +226,19 @@ class VoxelGrid {
   updateVoxelHeight(index, newTopZ) {
     if (index < 0 || index >= this.maxVoxels) return false;
 
+    const resolvedTopZ = newTopZ <= this.materialBottomZ + BREAKTHROUGH_EPSILON_MM
+      ? this.materialBottomZ
+      : newTopZ;
     const currentTopZ = this.voxelTopZ[index];
 
     // Only shrink, never increase (newTopZ must be more negative)
-    if (newTopZ >= currentTopZ) return false;
+    if (resolvedTopZ >= currentTopZ) return false;
 
         // Mark this voxel as cut for color update
     if(this.voxelTopZ[index] == 0)
       this.voxelHeightChanged.add(index);
     // Update voxel top Z
-    this.voxelTopZ[index] = newTopZ;
+    this.voxelTopZ[index] = resolvedTopZ;
 
     return true;
   }
@@ -284,6 +289,7 @@ class VoxelGrid {
     this.frameNumber++;
 
     const searchRadiusVoxels = Math.ceil(toolRadius / this.voxelSize);
+    const halfVoxelSize = this.voxelSize / 2;
 
     // Convert tool position to grid coordinates
     let gridX = Math.floor((toolX - this.originOffset.x + this.workpieceWidth / 2 - this.voxelSize / 2) / this.voxelSize);
@@ -329,18 +335,19 @@ class VoxelGrid {
         const voxelWorldX = baseWorldX + x * this.voxelSize;
         const voxelWorldY = baseWorldY + y * this.voxelSize;
 
-        // Distance check BEFORE index calculation (OPTIMIZATION: Early exit if tool doesn't reach)
-        const dxWorld = voxelWorldX - toolX;
-        const dyWorld = voxelWorldY - toolY;
-        const distSq = dxWorld * dxWorld + dyWorld * dyWorld;
+        // Use circle-rectangle overlap so edge cuts can still clear a voxel even when its
+        // center is just outside the tool radius.
+        const dxEdge = Math.max(Math.abs(voxelWorldX - toolX) - halfVoxelSize, 0);
+        const dyEdge = Math.max(Math.abs(voxelWorldY - toolY) - halfVoxelSize, 0);
+        const overlapDistSq = dxEdge * dxEdge + dyEdge * dyEdge;
 
-        if (distSq > toolRadiusSq) continue;
+        if (overlapDistSq > toolRadiusSq) continue;
 
         // Only calculate index when we know we need it (OPTIMIZATION: Index not needed for failed checks)
         const index = y + x * this.gridLength;
 
         // Calculate penetration using pre-selected function (OPTIMIZATION: Pass distSq for tools that need it)
-        const penetrationZ = penetrationFunc(distSq);
+        const penetrationZ = penetrationFunc(overlapDistSq);
 
         // Update voxel height if tool penetrates
  

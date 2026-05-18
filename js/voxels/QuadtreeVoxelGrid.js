@@ -13,6 +13,7 @@ import * as THREE from '../lib/three.module.js';
 
 const COARSE_CELL_SIZE = 64;   // mm – mandatory coarse grid pitch
 const MAX_FINE_DEPTH   = 9;   // cap tree depth inside a coarse cell
+const BREAKTHROUGH_EPSILON_MM = 0.05;
 
 // ── QuadTreeNode ────────────────────────────────────────────────────────────
 
@@ -353,10 +354,13 @@ class QuadtreeVoxelGrid {
    */
   updateVoxelHeight(index, newTopZ) {
     if (index < 0 || index >= this.leaves.length) return false;
+    const resolvedTopZ = newTopZ <= this.materialBottomZ + BREAKTHROUGH_EPSILON_MM
+      ? this.materialBottomZ
+      : newTopZ;
     const cur = this.voxelTopZ[index];
-    if (newTopZ >= cur) return false;
+    if (resolvedTopZ >= cur) return false;
     if (cur === 0) this.voxelHeightChanged.add(index);
-    this.voxelTopZ[index] = newTopZ;
+    this.voxelTopZ[index] = resolvedTopZ;
 
     return true;
   }
@@ -422,10 +426,19 @@ class QuadtreeVoxelGrid {
     if (!node.intersectsSquare(cx, cy, r)) return;
 
     if (node.isLeaf) {
-      const dx = node.cx - cx, dy = node.cy - cy;
-      const dSq = dx * dx + dy * dy;
-      if (dSq <= rSq) {
-        const pz = fn(dSq);
+      let nearestX = cx;
+      let nearestY = cy;
+      if (nearestX < node.x) nearestX = node.x;
+      else if (nearestX > node.x + node.w) nearestX = node.x + node.w;
+      if (nearestY < node.y) nearestY = node.y;
+      else if (nearestY > node.y + node.h) nearestY = node.y + node.h;
+
+      const dx = cx - nearestX;
+      const dy = cy - nearestY;
+      const overlapDistSq = dx * dx + dy * dy;
+
+      if (overlapDistSq <= rSq) {
+        const pz = fn(overlapDistSq);
         if (this.updateVoxelHeight(node.leafIndex, pz)) out.push(node.leafIndex);
       }
       return;
