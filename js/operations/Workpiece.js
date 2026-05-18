@@ -222,6 +222,10 @@ class Workpiece extends Operation {
             });
         }
 
+        if ('material' in data && typeof window.syncAutoFeedRatePreview === 'function') {
+            window.syncAutoFeedRatePreview();
+        }
+
         // Force a second redraw on next frame to ensure all updates are visible
         requestAnimationFrame(() => redraw());
 

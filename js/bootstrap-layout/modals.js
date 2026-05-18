@@ -629,52 +629,7 @@ function showCutSettingsModal() {
         }
 
         saveButton.addEventListener('click', function() {
-            const values = PropertiesManager.collectValues(fields);
-            values.tool = Number(values.tool) || null;
-            values.autoDirection = !!values.autoDirection;
-            values.step = Number(values.step) || 0;
-            values.rpm = Number(values.rpm) || 0;
-            values.autoStep = !!values.autoStep;
-            values.autoFeedRate = !!values.autoFeedRate;
-            values.autoZFeedRate = !!values.autoZFeedRate;
-
-            if (values.autoDirection) {
-                values.direction = 'auto';
-            } else if (values.direction !== 'climb' && values.direction !== 'conventional') {
-                values.direction = 'climb';
-            }
-
-            if (values.autoStep) {
-                const previewTool = (window.tools || []).find(tool => Number(tool.recid) === Number(values.tool));
-                if (previewTool) {
-                    values.step = Math.max(0.01, Number(previewTool.diameter) / 2);
-                }
-            }
-
-            if (values.autoFeedRate) {
-                const previewTool = (window.tools || []).find(tool => Number(tool.recid) === Number(values.tool));
-                if (previewTool) {
-                    values.feed = calculateFeedRate({
-                        ...previewTool,
-                        step: values.step,
-                        rpm: values.rpm
-                    }, getOption('material'), 'Profile', true);
-                }
-            }
-
-            if (values.autoZFeedRate) {
-                const previewTool = (window.tools || []).find(tool => Number(tool.recid) === Number(values.tool));
-                if (previewTool) {
-                    const optimalFeed = calculateFeedRate({
-                        ...previewTool,
-                        step: values.step,
-                        rpm: values.rpm
-                    }, getOption('material'), 'Profile', true);
-                    if (Number.isFinite(optimalFeed) && optimalFeed > 0) {
-                        values.zfeed = Math.max(1, Math.round(optimalFeed / 3));
-                    }
-                }
-            }
+            const values = collectCurrentCutSettingsFormValues();
 
             const errors = validateCutSettings(values);
             if (errors.length > 0) {
@@ -973,6 +928,86 @@ function saveCutSettings(values) {
     return window.gcodeCutSettings;
 }
 
+function collectCurrentCutSettingsFormValues() {
+    const values = PropertiesManager.collectValues(getCutSettingsFields());
+    values.tool = Number(values.tool) || null;
+    values.autoDirection = !!values.autoDirection;
+    values.step = Number(values.step) || 0;
+    values.rpm = Number(values.rpm) || 0;
+    values.autoStep = !!values.autoStep;
+    values.feed = Number(values.feed) || 0;
+    values.autoFeedRate = !!values.autoFeedRate;
+    values.zfeed = Number(values.zfeed) || 0;
+    values.autoZFeedRate = !!values.autoZFeedRate;
+
+    if (values.autoDirection) {
+        values.direction = 'auto';
+    } else if (values.direction !== 'climb' && values.direction !== 'conventional') {
+        values.direction = 'climb';
+    }
+
+    if (values.autoStep) {
+        const previewTool = (window.tools || []).find(tool => Number(tool.recid) === Number(values.tool));
+        if (previewTool) {
+            values.step = Math.max(0.01, Number(previewTool.diameter) / 2);
+        }
+    }
+
+    if (values.autoFeedRate) {
+        const previewTool = (window.tools || []).find(tool => Number(tool.recid) === Number(values.tool));
+        if (previewTool) {
+            values.feed = calculateFeedRate({
+                ...previewTool,
+                step: values.step,
+                rpm: values.rpm
+            }, getOption('material'), 'Profile', true);
+        }
+    }
+
+    if (values.autoZFeedRate) {
+        const previewTool = (window.tools || []).find(tool => Number(tool.recid) === Number(values.tool));
+        if (previewTool) {
+            const optimalFeed = calculateFeedRate({
+                ...previewTool,
+                step: values.step,
+                rpm: values.rpm
+            }, getOption('material'), 'Profile', true);
+            if (Number.isFinite(optimalFeed) && optimalFeed > 0) {
+                values.zfeed = Math.max(1, Math.round(optimalFeed / 3));
+            }
+        }
+    }
+
+    return values;
+}
+
+function syncCurrentCutSettingsForPreview() {
+    if (!document.getElementById('pm-tool')) return null;
+
+    const values = collectCurrentCutSettingsFormValues();
+    if (validateCutSettings(values).length > 0) {
+        return null;
+    }
+
+    window.gcodeCutSettings = { ...values };
+    return window.gcodeCutSettings;
+}
+
+function refreshPrepared3DFromCurrentCutSettings() {
+    const cutSettings = syncCurrentCutSettingsForPreview();
+    if (!cutSettings || typeof window.schedulePrepared3DGcodeRefresh !== 'function') {
+        return;
+    }
+
+    window.schedulePrepared3DGcodeRefresh({
+        delay: 0,
+        cutSettings,
+        preserveProgress: true,
+        resetIfMissing: true,
+        reloadIfLoaded: false
+    });
+}
+
 function enhanceCutSettingsAutoControl(fieldKey, autoKey) {
     const valueInput = document.getElementById(`pm-${fieldKey}`);
     const autoInput = document.getElementById(`pm-${autoKey}`);
@@ -1195,17 +1230,22 @@ function bindCutSettingsForm(fields) {
         input.addEventListener('change', function() {
             syncCutSettingsDirectionPreview();
             syncAutoFeedRatePreview();
+            refreshPrepared3DFromCurrentCutSettings();
         });
         if ((input.type === 'text' || input.type === 'number' || input.tagName === 'TEXTAREA')
             && input.id !== 'pm-step'
             && input.id !== 'pm-feed'
             && input.id !== 'pm-zfeed') {
-            input.addEventListener('input', syncAutoFeedRatePreview);
+            input.addEventListener('input', function() {
+                syncAutoFeedRatePreview();
+                refreshPrepared3DFromCurrentCutSettings();
+            });
         }
     });
 
     syncCutSettingsDirectionPreview();
     syncAutoFeedRatePreview();
+    syncCurrentCutSettingsForPreview();
 }
 
 function loadCutSettingsIntoForm(values) {
@@ -1231,6 +1271,7 @@ window.getSavedCutSettings = getSavedCutSettings;
 window.getCompleteCutSettings = getCompleteCutSettings;
 window.showCutSettingsModal = showCutSettingsModal;
 window.refreshCutSettingsPanelForUnits = refreshCutSettingsPanelForUnits;
+window.syncAutoFeedRatePreview = syncAutoFeedRatePreview;
 
 /**
  * Show a reusable confirmation dialog
