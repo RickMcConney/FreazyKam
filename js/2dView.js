@@ -678,7 +678,8 @@ function drawToolpathShapePreview(svgpath, toolpath) {
 	if (!mode) return;
 	var color = getToolpathShadeColor(toolpath?.toolpathProperties?.depth ?? toolpath?.tool?.depth);
 	var toolDiameter = Number(toolpath?.tool?.diameter) || 0;
-	var strokeWidth = Math.max(4, toolDiameter * viewScale * zoomLevel);
+	var toolDiameterScreen = toolDiameter * viewScale * zoomLevel;
+	var strokeWidth = Math.max(4, toolDiameterScreen);
 	var compositeCtx = null;
 
 	ctx.save();
@@ -692,6 +693,9 @@ function drawToolpathShapePreview(svgpath, toolpath) {
 
 	if (mode === 'inside' || mode === 'outside') {
 		compositeCtx = getPreviewCompositeContext();
+		// Inside/outside previews are clipped from a stroke centered on the source path,
+		// so the source stroke must be doubled to leave one full tool diameter visible.
+		strokeWidth = Math.max(4, toolDiameterScreen * 2);
 
 		if (!traceClosedScreenPath(screenPath, compositeCtx)) {
 			ctx.restore();

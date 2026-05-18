@@ -6,4 +6,3 @@ TODO
 - Add PEN tool
 - Add Aligment panel.
 - Add measure tool
-- Fix: Cut on path is twice as large as cut outside path
