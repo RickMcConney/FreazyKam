@@ -769,9 +769,8 @@ function getCutSettingsFields() {
             key: 'direction',
             label: 'Milling direction',
             type: 'choice',
-            default: 'auto',
+            default: 'climb',
             options: [
-                { value: 'auto', label: 'Auto' },
                 { value: 'climb', label: 'Climb' },
                 { value: 'conventional', label: 'Conventional' }
             ]
@@ -1057,17 +1056,37 @@ function syncCutSettingsDirectionPreview() {
     setCutSettingsAutoButtonState('autoDirection', isAuto);
 
     if (isAuto) {
+        ensureCutSettingsDirectionAutoOption(directionInput, true);
         directionInput.value = 'auto';
         directionInput.disabled = true;
         directionInput.title = 'Resolved automatically during toolpath generation';
         return;
     }
 
+    ensureCutSettingsDirectionAutoOption(directionInput, false);
     directionInput.disabled = false;
     directionInput.title = '';
     if (directionInput.value === 'auto') {
         directionInput.value = 'climb';
     }
+}
+
+function ensureCutSettingsDirectionAutoOption(directionInput, isAuto) {
+    if (!directionInput) return;
+
+    const existingAutoOption = directionInput.querySelector('option[value="auto"]');
+    if (isAuto) {
+        if (!existingAutoOption) {
+            const autoOption = document.createElement('option');
+            autoOption.value = 'auto';
+            autoOption.textContent = 'Automatic';
+            autoOption.hidden = true;
+            directionInput.insertBefore(autoOption, directionInput.firstChild);
+        }
+        return;
+    }
+
+    existingAutoOption?.remove();
 }
 
 function setCutSettingsAutoButtonState(autoKey, isActive) {
