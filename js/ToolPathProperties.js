@@ -9,7 +9,7 @@
 class ToolPathProperties {
     constructor() {
         this._advancedDefaults = {
-            direction: 'climb',
+            direction: 'auto',
             plunge: 'vertical',
             strategy: 'adaptive'
         };
@@ -201,6 +201,7 @@ class ToolPathProperties {
                 type: 'choice',
                 default: defaults.direction,
                 options: [
+                    { value: 'auto', label: 'Auto' },
                     { value: 'climb', label: 'Climb' },
                     { value: 'conventional', label: 'Conventional' }
                 ]

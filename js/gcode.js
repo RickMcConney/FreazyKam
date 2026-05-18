@@ -29,6 +29,40 @@ function getChipLoad(material, toolDiameter, toolType) {
 
 const DEFAULT_FEED_MM_MIN = 600; // Fallback feed rate when no tool or auto-feed is disabled
 
+function normalizeMillingDirection(direction, fallback = 'climb') {
+	return direction === 'conventional'
+		? 'conventional'
+		: (direction === 'auto' ? 'auto' : fallback);
+}
+
+function resolveToolpathMillingDirection(direction, operation, toolpathProperties = null) {
+	const normalizedDirection = normalizeMillingDirection(direction);
+	if (normalizedDirection !== 'auto') {
+		return normalizedDirection;
+	}
+
+	const normalizedOperation = String(operation || '').trim();
+	const opType = toolpathProperties?.operationType;
+
+	if (normalizedOperation === 'Pocket' || opType === 'pocket') {
+		return 'auto';
+	}
+
+	if (opType === 'inside' || normalizedOperation === 'Inside' || normalizedOperation === 'VCarve In') {
+		return 'conventional';
+	}
+
+	if (opType === 'outside' || normalizedOperation === 'Outside' || normalizedOperation === 'VCarve Out') {
+		return 'climb';
+	}
+
+	if (normalizedOperation === 'VCarve') {
+		return toolpathProperties?.inside === 'inside' ? 'conventional' : 'climb';
+	}
+
+	return 'climb';
+}
+
 function getResolvedGcodeCutSettings(rawSettings = null) {
 	if (typeof window === 'undefined') return null;
 	const resolvedRawSettings = rawSettings || (typeof window.getCompleteCutSettings === 'function'
@@ -45,7 +79,7 @@ function getResolvedGcodeCutSettings(rawSettings = null) {
 	return {
 		toolId: Number(tool.recid),
 		tool: tool,
-		direction: resolvedRawSettings.direction === 'conventional' ? 'conventional' : 'climb',
+		direction: normalizeMillingDirection(resolvedRawSettings.direction, 'auto'),
 		step: step,
 		rpm: Number(resolvedRawSettings.rpm) > 0 ? Number(resolvedRawSettings.rpm) : (tool.rpm || 18000),
 		feed: Number(resolvedRawSettings.feed) > 0 ? Number(resolvedRawSettings.feed) : (tool.feed || DEFAULT_FEED_MM_MIN),
@@ -60,20 +94,29 @@ function getResolvedGcodeCutSettings(rawSettings = null) {
 function buildToolpathWithCutSettings(toolpath, cutSettings) {
 	if (!toolpath || !cutSettings || !cutSettings.tool) return toolpath;
 
-	const nextTool = {
+	const nextToolBase = {
 		...toolpath.tool,
-		...cutSettings.tool,
+		...cutSettings.tool
+	};
+	const manualFeed = Number(cutSettings.feed);
+	const manualZFeed = Number(cutSettings.zfeed);
+	const manualRpm = Number(cutSettings.rpm);
+
+	const nextTool = {
+		...nextToolBase,
 		depth: toolpath.tool?.depth,
 		step: cutSettings.step,
-		rpm: cutSettings.rpm,
-		feed: cutSettings.feed,
+		rpm: manualRpm > 0 ? manualRpm : (nextToolBase.rpm || 18000),
+		feed: manualFeed > 0 ? manualFeed : (nextToolBase.feed || DEFAULT_FEED_MM_MIN),
 		autoFeedRate: cutSettings.autoFeedRate,
-		zfeed: cutSettings.zfeed,
+		zfeed: manualZFeed > 0 ? manualZFeed : (nextToolBase.zfeed || 200),
 		autoZFeedRate: cutSettings.autoZFeedRate,
-		direction: cutSettings.direction,
+		direction: resolveToolpathMillingDirection(cutSettings.direction, toolpath.operation, toolpath.toolpathProperties),
 		plunge: cutSettings.plunge,
 		strategy: cutSettings.strategy
 	};
+
+	const resolvedDirection = nextTool.direction;
 
 	return {
 		...toolpath,
@@ -82,7 +125,8 @@ function buildToolpathWithCutSettings(toolpath, cutSettings) {
 			...(toolpath.toolpathProperties || {}),
 			tool: cutSettings.toolId,
 			toolId: cutSettings.toolId,
-			direction: cutSettings.direction,
+			direction: resolvedDirection,
+			resolvedDirection,
 			plunge: cutSettings.plunge,
 			strategy: cutSettings.strategy,
 			step: cutSettings.step,

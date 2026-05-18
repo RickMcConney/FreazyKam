@@ -83,10 +83,11 @@ function buildExpandedHullBoundary(allClearanceOuters, expand) {
 
 function appendCutOutGroup(cutOut, outerBoundary, pocketRadius, direction, materialDepth, cutOutGroups) {
 	if (!cutOut) return;
+	const resolvedDirection = direction === 'conventional' ? 'conventional' : 'climb';
 	let cutOutOffset = offsetPath(outerBoundary, pocketRadius, false);
 	if (cutOutOffset.length > 0) {
 		let cutOutContour = cutOutOffset[0].slice();
-		if (direction == 'climb') cutOutContour = reversePath(cutOutContour);
+		if (resolvedDirection == 'climb') cutOutContour = reversePath(cutOutContour);
 		cutOutGroups.push([{ tpath: cutOutContour, isContour: true, cutOutDepth: materialDepth }]);
 	}
 }
@@ -132,6 +133,7 @@ function buildClearancePaths(inputPaths, depths, clearance, joinType, prepPath) 
 }
 
 function generateInlayFemalePaths(outerPath, islandPaths, pocketRadius, finishRadius, stepover, angle, direction, pocketGroups, profileGroups) {
+	const resolvedDirection = direction === 'conventional' ? 'conventional' : 'climb';
 	let roundedOuter = roundConvexCorners(roundConcaveCorners(outerPath, finishRadius), finishRadius);
 	let roundedIslands = islandPaths.map(p => roundConcaveCorners(roundConvexCorners(p, finishRadius), finishRadius));
 
@@ -142,14 +144,14 @@ function generateInlayFemalePaths(outerPath, islandPaths, pocketRadius, finishRa
 	let profileOffset = offsetPath(roundedOuter, finishRadius, false);
 	if (profileOffset.length > 0) {
 		let profileContour = profileOffset[0].slice();
-		if (direction == 'climb') profileContour = reversePath(profileContour);
+		if (resolvedDirection == 'climb') profileContour = reversePath(profileContour);
 		shapeProfPaths.push({ tpath: profileContour, isContour: true, passStart: true });
 	}
 	for (let island of roundedIslands) {
 		let islandProfileOffset = offsetPath(island, finishRadius, true);
 		if (islandProfileOffset.length > 0) {
 			let islandContour = islandProfileOffset[0].slice();
-			if (direction != 'climb') islandContour = reversePath(islandContour);
+			if (resolvedDirection != 'climb') islandContour = reversePath(islandContour);
 			shapeProfPaths.push({ tpath: islandContour, isContour: true, passStart: true });
 		}
 	}
@@ -157,6 +159,7 @@ function generateInlayFemalePaths(outerPath, islandPaths, pocketRadius, finishRa
 }
 
 function generateInlayMalePaths(inputPaths, depths, clearance, diameterScale, pocketRadius, finishRadius, stepover, angle, direction, cutOut, materialDepth, pocketGroups, profileGroups, cutOutGroups) {
+	const resolvedDirection = direction === 'conventional' ? 'conventional' : 'climb';
 	let expand = 2 * diameterScale;
 	let clearancePaths = buildClearancePaths(inputPaths, depths, clearance, ClipperLib.JoinType.jtRound,
 		(path, isRaised) => isRaised
@@ -178,9 +181,9 @@ function generateInlayMalePaths(inputPaths, depths, clearance, diameterScale, po
 		if (profileOffset.length > 0) {
 			let profileContour = profileOffset[0].slice();
 			if (isRaised) {
-				if (direction != 'climb') profileContour = reversePath(profileContour);
+				if (resolvedDirection != 'climb') profileContour = reversePath(profileContour);
 			} else {
-				if (direction == 'climb') profileContour = reversePath(profileContour);
+				if (resolvedDirection == 'climb') profileContour = reversePath(profileContour);
 			}
 			shapeProfPaths.push({ tpath: profileContour, isContour: true, passStart: true });
 		}

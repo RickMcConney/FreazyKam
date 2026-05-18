@@ -719,6 +719,28 @@ function buildProfilePendingKey(config, svgpath) {
 	].join('|');
 }
 
+function resolveOperationMillingDirection(direction, context = {}) {
+	if (direction === 'conventional' || direction === 'climb') {
+		return direction;
+	}
+
+	const mode = context.mode || context.inside || context.operationType || 'center';
+	const operation = context.operation || '';
+	if (mode === 'pocket' || operation === 'Pocket') {
+		return 'auto';
+	}
+
+	if (mode === 'inside') {
+		return 'conventional';
+	}
+
+	if (mode === 'outside') {
+		return 'climb';
+	}
+
+	return 'climb';
+}
+
 function doProfile(options = {}) {
 	const silent = options.silent === true;
 
@@ -738,6 +760,9 @@ function doProfile(options = {}) {
 	var tolerance = getOption("tolerance") * viewScale;
 	let selectedPaths = selectMgr.selectedPaths();
 	let config;
+	const resolvedDirection = resolveOperationMillingDirection(currentTool.direction, {
+		mode: currentTool.inside
+	});
 
 	if (currentTool.inside == "inside") {
 		config = {
@@ -747,7 +772,7 @@ function doProfile(options = {}) {
 			numLoops: numLoops,
 			overCutWorld: overCutWorld,
 			tolerance: tolerance,
-			direction: currentTool.direction == "climb" ? 'reverse' : 'forward'
+			direction: resolvedDirection == "climb" ? 'reverse' : 'forward'
 		};
 	} else if (currentTool.inside == "outside") {
 		config = {
@@ -757,7 +782,7 @@ function doProfile(options = {}) {
 			numLoops: numLoops,
 			overCutWorld: overCutWorld,
 			tolerance: tolerance,
-			direction: currentTool.direction != "climb" ? 'reverse' : 'forward'
+			direction: resolvedDirection != "climb" ? 'reverse' : 'forward'
 		};
 	} else {
 		config = {
@@ -767,7 +792,7 @@ function doProfile(options = {}) {
 			numLoops: numLoops,
 			overCutWorld: overCutWorld,
 			tolerance: tolerance,
-			direction: currentTool.direction != "climb" ? 'reverse' : 'forward'
+			direction: resolvedDirection != "climb" ? 'reverse' : 'forward'
 		};
 	}
 
@@ -1401,6 +1426,7 @@ function rotateContoursToNearestEntry(paths) {
 
 function generatePocketPaths(outerPath, islandPaths, pocketRadius, stepover, angle, direction, finishingRadius, strategy) {
 	if (!strategy) strategy = 'adaptive';
+	const resolvedDirection = direction === 'conventional' ? 'conventional' : 'climb';
 
 	// First offset inward/outward by tool radius to get the machinable boundaries
 	let outerOffset = offsetPath(outerPath, pocketRadius, false);
@@ -1448,7 +1474,7 @@ function generatePocketPaths(outerPath, islandPaths, pocketRadius, stepover, ang
 		for (let i = 0; i < allContours.length; i++) {
 			if (contourLevels[i] !== lvl) continue;
 			let contour = allContours[i].slice();
-			if (direction == "climb") contour = reversePath(contour);
+			if (resolvedDirection == "climb") contour = reversePath(contour);
 			levelPaths.push({ tpath: contour, isContour: true, passStart: true });
 		}
 		if (levelPaths.length > 0) {
@@ -1461,7 +1487,7 @@ function generatePocketPaths(outerPath, islandPaths, pocketRadius, stepover, ang
 		if (!contoursByLevel[startLevel]) contoursByLevel[startLevel] = [];
 		for (let island of machinedIslands) {
 			let islandContour = island.slice();
-			if (direction != "climb") islandContour = reversePath(islandContour);
+			if (resolvedDirection != "climb") islandContour = reversePath(islandContour);
 			contoursByLevel[startLevel].push({ tpath: islandContour, isContour: true, passStart: true });
 		}
 	}
@@ -2033,7 +2059,7 @@ function doVbitInlay(inputPaths, depths, allOuters, allIslands, props, pocketing
 	const clearance = clearanceMM * viewScale;
 	const cutOut = props?.cutOut || false;
 	const glueGapMM = props?.glueGap || 0.5;
-	const direction = pocketingTool.direction || 'climb';
+	const direction = pocketingTool.direction === 'conventional' ? 'conventional' : 'climb';
 
 	const pocketRadius = pocketingTool.diameter / 2 * viewScale;
 	const stepover = 2 * pocketRadius * pocketingTool.stepover / 100;
@@ -2475,7 +2501,7 @@ function doPocket(options = {}) {
 	var angle = window.currentToolpathProperties?.angle || 0;
 	var strategy = window.currentToolpathProperties?.strategy || 'adaptive';
 	var selected = selectMgr.selectedPaths();
-	var direction = currentTool.direction || 'climb';
+	var direction = currentTool.direction || 'auto';
 	const selectionGroups = buildMachiningSelectionGroups(selected).map(function(group) {
 		const sourceIds = group.map(function(path) {
 			return path.id;
@@ -2683,6 +2709,9 @@ function startVcarveGeneration(config) {
 	const worker = new Worker('js/workers/vcarveWorker.js');
 	registerGenerationWorker('vcarve', worker);
 	notify('Generating VCarve paths…', 'info');
+	const resolvedDirection = resolveOperationMillingDirection(currentTool.direction, {
+		mode: config.mode
+	});
 
 	worker.onmessage = function(event) {
 		if (!isGenerationWorkerActive('vcarve', worker)) {
@@ -2758,7 +2787,7 @@ function startVcarveGeneration(config) {
 				path: path.path
 			};
 		}),
-		tool: { ...currentTool },
+		tool: { ...currentTool, direction: resolvedDirection },
 		viewScale: viewScale,
 		tolerance: getOption('tolerance')
 	});

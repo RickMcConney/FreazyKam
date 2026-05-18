@@ -631,11 +631,18 @@ function showCutSettingsModal() {
         saveButton.addEventListener('click', function() {
             const values = PropertiesManager.collectValues(fields);
             values.tool = Number(values.tool) || null;
+            values.autoDirection = !!values.autoDirection;
             values.step = Number(values.step) || 0;
             values.rpm = Number(values.rpm) || 0;
             values.autoStep = !!values.autoStep;
             values.autoFeedRate = !!values.autoFeedRate;
             values.autoZFeedRate = !!values.autoZFeedRate;
+
+            if (values.autoDirection) {
+                values.direction = 'auto';
+            } else if (values.direction !== 'climb' && values.direction !== 'conventional') {
+                values.direction = 'climb';
+            }
 
             if (values.autoStep) {
                 const previewTool = (window.tools || []).find(tool => Number(tool.recid) === Number(values.tool));
@@ -708,6 +715,7 @@ function refreshCutSettingsPanelForUnits() {
 
     const toolInput = document.getElementById('pm-tool');
     const directionInput = document.getElementById('pm-direction');
+    const autoDirectionInput = document.getElementById('pm-autoDirection');
     const stepInput = document.getElementById('pm-step');
     const autoStepInput = document.getElementById('pm-autoStep');
     const rpmInput = document.getElementById('pm-rpm');
@@ -722,6 +730,7 @@ function refreshCutSettingsPanelForUnits() {
         ...getSavedCutSettings(),
         tool: toolInput ? Number(toolInput.value) || null : undefined,
         direction: directionInput ? directionInput.value : undefined,
+        autoDirection: autoDirectionInput ? !!autoDirectionInput.checked : undefined,
         step: stepInput ? parseDimension(stepInput.value) : undefined,
         autoStep: autoStepInput ? !!autoStepInput.checked : undefined,
         rpm: rpmInput ? Number(rpmInput.value) || 0 : undefined,
@@ -805,11 +814,18 @@ function getCutSettingsFields() {
             key: 'direction',
             label: 'Milling direction',
             type: 'choice',
-            default: 'climb',
+            default: 'auto',
             options: [
+                { value: 'auto', label: 'Auto' },
                 { value: 'climb', label: 'Climb' },
                 { value: 'conventional', label: 'Conventional' }
             ]
+        },
+        {
+            key: 'autoDirection',
+            label: 'Auto Calculate Milling Direction',
+            type: 'checkbox',
+            default: true
         },
         {
             key: 'step',
@@ -824,7 +840,7 @@ function getCutSettingsFields() {
             key: 'autoStep',
             label: 'Auto Calculate Depth per Pass',
             type: 'checkbox',
-            default: false
+            default: true
         },
         {
             key: 'rpm',
@@ -850,7 +866,7 @@ function getCutSettingsFields() {
             key: 'autoFeedRate',
             label: 'Auto Calculate Feed Rates',
             type: 'checkbox',
-            default: false
+            default: true
         },
         {
             key: 'zfeed',
@@ -865,7 +881,7 @@ function getCutSettingsFields() {
             key: 'autoZFeedRate',
             label: 'Auto Calculate Plunge Rate',
             type: 'checkbox',
-            default: false
+            default: true
         },
         {
             key: 'plunge',
@@ -906,14 +922,19 @@ function getSavedCutSettings() {
 
     return {
         tool: hasSavedTool ? savedToolId : defaultToolId,
-        direction: saved.direction || 'climb',
+        direction: saved.direction === 'conventional'
+            ? 'conventional'
+            : (saved.direction === 'climb' ? 'climb' : 'auto'),
+        autoDirection: saved.autoDirection !== undefined
+            ? !!saved.autoDirection
+            : !(saved.direction === 'climb' || saved.direction === 'conventional'),
         step: Number(saved.step) > 0 ? Number(saved.step) : defaultStep,
-        autoStep: saved.autoStep !== undefined ? !!saved.autoStep : false,
+        autoStep: saved.autoStep !== undefined ? !!saved.autoStep : true,
         rpm: Number(saved.rpm) > 0 ? Number(saved.rpm) : ((window.tools || []).find(tool => Number(tool.recid) === Number(defaultToolId))?.rpm || 18000),
         feed: Number(saved.feed) > 0 ? Number(saved.feed) : ((window.tools || []).find(tool => Number(tool.recid) === Number(defaultToolId))?.feed || 600),
-	        autoFeedRate: saved.autoFeedRate !== undefined ? !!saved.autoFeedRate : false,
+	        autoFeedRate: saved.autoFeedRate !== undefined ? !!saved.autoFeedRate : true,
         zfeed: Number(saved.zfeed) > 0 ? Number(saved.zfeed) : ((window.tools || []).find(tool => Number(tool.recid) === Number(defaultToolId))?.zfeed || 200),
-        autoZFeedRate: saved.autoZFeedRate !== undefined ? !!saved.autoZFeedRate : false,
+        autoZFeedRate: saved.autoZFeedRate !== undefined ? !!saved.autoZFeedRate : true,
         plunge: saved.plunge || 'vertical',
         strategy: saved.strategy || 'adaptive'
     };
@@ -992,6 +1013,28 @@ function enhanceCutSettingsAutoControl(fieldKey, autoKey) {
     valueField.dataset.autoEnhanced = 'true';
 }
 
+function syncCutSettingsDirectionPreview() {
+    const directionInput = document.getElementById('pm-direction');
+    const autoDirectionInput = document.getElementById('pm-autoDirection');
+    if (!directionInput || !autoDirectionInput) return;
+
+    const isAuto = !!autoDirectionInput.checked;
+    setCutSettingsAutoButtonState('autoDirection', isAuto);
+
+    if (isAuto) {
+        directionInput.value = 'auto';
+        directionInput.disabled = true;
+        directionInput.title = 'Resolved automatically during toolpath generation';
+        return;
+    }
+
+    directionInput.disabled = false;
+    directionInput.title = '';
+    if (directionInput.value === 'auto') {
+        directionInput.value = 'climb';
+    }
+}
+
 function setCutSettingsAutoButtonState(autoKey, isActive) {
     const label = document.querySelector(`label[for="pm-${autoKey}"]`);
     if (!label) return;
@@ -1011,6 +1054,7 @@ function formatCutSettingsDimensionValue(value) {
 
 function restoreCutSettingsManualValue(input) {
     if (!input) return false;
+    if (document.activeElement === input) return false;
     const mmValue = Number(input.dataset.manualValueMm);
     if (!Number.isFinite(mmValue) || mmValue <= 0) return false;
     input.value = formatDimension(mmValue, true);
@@ -1109,6 +1153,7 @@ function syncAutoFeedRatePreview() {
 }
 
 function bindCutSettingsForm(fields) {
+    enhanceCutSettingsAutoControl('direction', 'autoDirection');
     enhanceCutSettingsAutoControl('step', 'autoStep');
     enhanceCutSettingsAutoControl('feed', 'autoFeedRate');
     enhanceCutSettingsAutoControl('zfeed', 'autoZFeedRate');
@@ -1139,12 +1184,27 @@ function bindCutSettingsForm(fields) {
                 }
             });
         }
-        input.addEventListener('change', syncAutoFeedRatePreview);
-        if (input.type === 'text' || input.type === 'number' || input.tagName === 'TEXTAREA') {
+        if (input.id === 'pm-direction') {
+            input.addEventListener('change', function() {
+                if (!document.getElementById('pm-autoDirection')?.checked && input.value === 'auto') {
+                    input.value = 'climb';
+                }
+                syncCutSettingsDirectionPreview();
+            });
+        }
+        input.addEventListener('change', function() {
+            syncCutSettingsDirectionPreview();
+            syncAutoFeedRatePreview();
+        });
+        if ((input.type === 'text' || input.type === 'number' || input.tagName === 'TEXTAREA')
+            && input.id !== 'pm-step'
+            && input.id !== 'pm-feed'
+            && input.id !== 'pm-zfeed') {
             input.addEventListener('input', syncAutoFeedRatePreview);
         }
     });
 
+    syncCutSettingsDirectionPreview();
     syncAutoFeedRatePreview();
 }
 

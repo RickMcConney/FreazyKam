@@ -2322,7 +2322,7 @@ function syncShapeMachiningToolpath(path, options = {}) {
         : data.inside;
     if (advancedDefaults) {
         data.tool = data.tool || advancedDefaults.tool;
-        data.direction = data.direction || advancedDefaults.direction;
+        data.direction = data.direction || advancedDefaults.direction || 'auto';
         data.plunge = data.plunge || advancedDefaults.plunge;
         data.strategy = data.strategy || advancedDefaults.strategy;
     }

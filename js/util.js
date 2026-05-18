@@ -156,6 +156,18 @@ function sanitizeToolpathProperties(properties) {
 		sanitized.operation = properties.operation.trim();
 	}
 
+	if (typeof properties.direction === 'string' && properties.direction.trim()) {
+		sanitized.direction = properties.direction.trim();
+	}
+
+	if (typeof properties.plunge === 'string' && properties.plunge.trim()) {
+		sanitized.plunge = properties.plunge.trim();
+	}
+
+	if (typeof properties.strategy === 'string' && properties.strategy.trim()) {
+		sanitized.strategy = properties.strategy.trim();
+	}
+
 	if (Number.isFinite(numericCutDepth) && numericCutDepth >= 0) {
 		sanitized.cutDepth = numericCutDepth;
 	}

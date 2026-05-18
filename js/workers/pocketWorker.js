@@ -277,6 +277,7 @@ function eliminateUnnecessaryRetracts(paths, machinedIslands, originalIslands, m
 
 function generatePocketPaths(outerPath, islandPaths, pocketRadius, stepover, angle, direction, finishingRadius, strategy) {
 	if (!strategy) strategy = 'adaptive';
+	const resolvedDirection = direction === 'conventional' ? 'conventional' : 'climb';
 
 	let outerOffset = offsetPath(outerPath, pocketRadius, false);
 	if (outerOffset.length === 0) return [];
@@ -312,7 +313,7 @@ function generatePocketPaths(outerPath, islandPaths, pocketRadius, stepover, ang
 		for (let i = 0; i < allContours.length; i++) {
 			if (contourLevels[i] !== lvl) continue;
 			let contour = allContours[i].slice();
-			if (direction == 'climb') contour = reversePath(contour);
+			if (resolvedDirection == 'climb') contour = reversePath(contour);
 			levelPaths.push({ tpath: contour, isContour: true, passStart: true });
 		}
 		if (levelPaths.length > 0) {
@@ -324,7 +325,7 @@ function generatePocketPaths(outerPath, islandPaths, pocketRadius, stepover, ang
 		if (!contoursByLevel[startLevel]) contoursByLevel[startLevel] = [];
 		for (let island of machinedIslands) {
 			let islandContour = island.slice();
-			if (direction != 'climb') islandContour = reversePath(islandContour);
+			if (resolvedDirection != 'climb') islandContour = reversePath(islandContour);
 			contoursByLevel[startLevel].push({ tpath: islandContour, isContour: true, passStart: true });
 		}
 	}
