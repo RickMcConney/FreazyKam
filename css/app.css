@@ -159,8 +159,8 @@
 
 .pm-range-scale {
     position: absolute;
-    left: 36px;
-    top: 0;
+    left: 65px;
+    top: 10px;
     height: 168px;
     width: 56px;
     pointer-events: none;
