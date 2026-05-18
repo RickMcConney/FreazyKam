@@ -41,18 +41,29 @@ class Select extends Operation {
         return Select.selected.has(path);
     }
 
+    getSelectablePaths(path) {
+        if (!path) return [];
+        if (path.textGroupId) {
+            return svgpaths.filter(candidate => candidate.textGroupId === path.textGroupId);
+        }
+        return [path];
+    }
+
     /**
      * Add a path to the selection set
      * Detects and logs duplicate selection attempts
      * @param {Object} path - The path to select
      */
     selectPath(path) {
-        if (Select.selected.has(path)) {
-            return;  // Path already selected, don't add again
-        }
-        Select.selected.add(path);
-        selectSidebarNode(path.id);
-        path.highlight = false;
+        const paths = this.getSelectablePaths(path);
+        paths.forEach(candidate => {
+            if (Select.selected.has(candidate)) {
+                return;
+            }
+            Select.selected.add(candidate);
+            selectSidebarNode(candidate.id);
+            candidate.highlight = false;
+        });
     }
 
     /**
@@ -60,10 +71,13 @@ class Select extends Operation {
      * @param {Object} path - The path to deselect
      */
     unselectPath(path) {
-        Select.selected.delete(path);
-        path.highlight = false;
-        delete path.originalPath;
-        unselectSidebarNode(path.id);
+        const paths = this.getSelectablePaths(path);
+        paths.forEach(candidate => {
+            Select.selected.delete(candidate);
+            candidate.highlight = false;
+            delete candidate.originalPath;
+            unselectSidebarNode(candidate.id);
+        });
     }
 
     /**
@@ -333,7 +347,9 @@ class Select extends Operation {
         this.dragPath = this.potentialDragPath || closestPath(mouse, false);
 
         if (this.dragPath) {
-            const isShapePath = this.dragPath.creationTool === 'Shape' || (window.SHAPE_TOOL_NAMES || []).includes(this.dragPath.creationTool);
+            const isShapePath = this.dragPath.creationTool === 'Shape'
+                || this.dragPath.creationTool === 'Text'
+                || (window.SHAPE_TOOL_NAMES || []).includes(this.dragPath.creationTool);
             if (this.isPathLocked(this.dragPath)) {
                 Select.state = Select.SELECTING;
                 this.updateSelectBox(mouse, evt, canvas);
@@ -438,7 +454,9 @@ class Select extends Operation {
             this.toggleSelection(path, evt);
 
             const isShapePath = path && path.creationProperties
-                && (path.creationTool === 'Shape' || (window.SHAPE_TOOL_NAMES || []).includes(path.creationTool));
+                && (path.creationTool === 'Shape'
+                    || path.creationTool === 'Text'
+                    || (window.SHAPE_TOOL_NAMES || []).includes(path.creationTool));
             if (isShapePath && !evt.shiftKey) {
                 editorTargetPath = path;
             }

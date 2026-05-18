@@ -514,6 +514,22 @@ html, body {
     padding-bottom: 0.1rem;
 }
 
+.text-properties-stack {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+}
+
+.text-properties-stack .text-properties-grid-main .pm-field,
+.text-properties-stack .text-properties-grid-side .pm-field {
+    margin-bottom: 0;
+}
+
+.text-properties-stack textarea {
+    min-height: 72px;
+    resize: vertical;
+}
+
 .floating-properties-window .btn-close {
     width: 16px;
     height: 16px;

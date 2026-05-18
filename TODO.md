@@ -6,3 +6,4 @@ TODO
 - Add PEN tool
 - Add Aligment panel.
 - Add measure tool
+- Fix: cutpath change (in shape window, operationType) does not update 3D view

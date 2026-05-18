@@ -1,16 +1,16 @@
-# FreazyKam
+# Maslow CAM
 
 <p align="center">
-  <img src="icons/logo.svg" alt="FreazyKam Logo" width="200">
+  <img src="icons/logo.svg" alt="Maslow CAM Logo" width="200">
 </p>
 
-**[Launch FreazyKam](https://rickmcconney.github.io/FreazyKam/)**
+**[Launch Maslow CAM](https://iarchi.github.io/MaslowCAM/)**
 
 Free and easy browser-based CAM for CNC machines. Turn your designs into G-code — no software to install, no accounts, no cost. Import SVGs, set up your project, and export G-code ready for your router.
 
 ## Quick Start
 
-1. **Open FreazyKam** - Click the link above (no installation needed)
+1. **Open Maslow CAM** - Click the link above (no installation needed)
 2. **Set up your workpiece** - Enter dimensions and choose your wood species
 3. **Add your design** - Import an SVG or draw directly in the browser
 4. **Create toolpaths** - Choose your operation (profile, pocket, V-carve, inlay, etc.)
@@ -61,9 +61,9 @@ The V-bit inlay mode preserves sharp design features that end mill inlay cannot 
 
 ## Getting Started
 
-### Using FreazyKam Online (Easiest)
+### Using Maslow CAM Online (Easiest)
 
-Just click here: **[Launch FreazyKam](https://rickmcconney.github.io/FreazyKam/)**
+Just click here: **[Launch FreazMaslow CAMyKam](https://iarchi.github.io/MaslowCAM/)**
 
 Works in any modern browser (Chrome, Firefox, Safari, Edge). No installation needed.
 
@@ -71,7 +71,7 @@ Works in any modern browser (Chrome, Firefox, Safari, Edge). No installation nee
 
 ```bash
 # Clone the repository
-git clone https://github.com/rickmcconney/FreazyKam.git
+git clone https://github.com/iarchi/MaslowCAM.git
 cd toGcode
 
 # Start a local web server (required for ES6 modules)
@@ -135,8 +135,8 @@ This project welcomes contributions:
 
 ## Support
 
-- **Issues**: [GitHub Issues](https://github.com/rickmcconney/FreazyKam/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/rickmcconney/FreazyKam/discussions)
+- **Issues**: [GitHub Issues](https://github.com/iarchi/MaslowCAM/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/iarchi/MaslowCAM/discussions)
 
 ## License
 
@@ -144,4 +144,4 @@ This project is open source. Please check the repository for specific license te
 
 ---
 
-*FreazyKam - Free and easy CAM for makers, woodworkers, and hobbyists*
+*Maslow CAM - Free and easy CAM for makers, woodworkers, and hobbyists*
