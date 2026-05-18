@@ -59,11 +59,7 @@ class Workpiece extends Operation {
         const fh = (field, value) => PropertiesManager.fieldHTML(field, value);
 
         return `
-            <div class="alert alert-info mb-3">
-                <strong>Workpiece Setup</strong><br>
-                Configure your workpiece dimensions and material properties
-            </div>
-
+            <div><h5>Workpiece Setup</h5></div>
             <div class="row g-2">
                 <div class="col-6">${fh(this.fields.workpieceWidth,  formatDimension(currentWidth,     true))}</div>
                 <div class="col-6">${fh(this.fields.workpieceLength, formatDimension(currentLength,    true))}</div>

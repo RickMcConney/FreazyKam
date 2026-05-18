@@ -128,18 +128,17 @@ function getDefaultOptions() {
         { recid: 8,  option: 'workpieceLength',     value: 200,             desc: 'Workpiece Length (mm)',                       hidden: true  },
         { recid: 9,  option: 'workpieceThickness',  value: 19,              desc: 'Workpiece Thickness (mm)',                    hidden: true  },
         { recid: 10, option: 'material',            value: 'Softwood / MDF', desc: 'Material',                                   hidden: true  },
-        { recid: 11, option: 'autoFeedRate',        value: false,           desc: 'Auto Calculate Feed Rates',                   hidden: false },
-        { recid: 12, option: 'minFeedRate',         value: 100,             desc: 'Minimum Feed Rate (mm/min)',                  hidden: false },
-        { recid: 13, option: 'maxFeedRate',         value: 2000,            desc: 'Maximum Feed Rate (mm/min)',                  hidden: false },
-        { recid: 14, option: 'originPosition',      value: 'middle-center', desc: 'Origin Position',                             hidden: true  },
-        { recid: 15, option: 'gridSize',            value: defaultGridSize, desc: 'Grid Size (mm)',                              hidden: true  },
-        { recid: 16, option: 'showWorkpiece',       value: true,            desc: 'Show Workpiece',                              hidden: true  },
-        { recid: 17, option: 'tableWidth',          value: 4000,            desc: 'Max cutting width (X travel) in mm',          hidden: false },
-        { recid: 18, option: 'tableDepth',          value: 2000,            desc: 'Max cutting length (Y travel) in mm',         hidden: false },
-        { recid: 21, option: 'tableHeight',         value: 100,             desc: 'Max cutting depth (Z travel) in mm',          hidden: false },
-        { recid: 19, option: 'showTooltips',        value: true,            desc: 'Tooltips enabled',                            hidden: false },
-        { recid: 20, option: 'snapGrid',            value: true,            desc: 'Snap to Grid',                                hidden: true  }
-    ];
+		{ recid: 11, option: 'minFeedRate',         value: 100,             desc: 'Minimum Feed Rate (mm/min)',                  hidden: false },
+		{ recid: 12, option: 'maxFeedRate',         value: 2000,            desc: 'Maximum Feed Rate (mm/min)',                  hidden: false },
+		{ recid: 13, option: 'originPosition',      value: 'middle-center', desc: 'Origin Position',                             hidden: true  },
+		{ recid: 14, option: 'gridSize',            value: defaultGridSize, desc: 'Grid Size (mm)',                              hidden: true  },
+		{ recid: 15, option: 'showWorkpiece',       value: true,            desc: 'Show Workpiece',                              hidden: true  },
+		{ recid: 16, option: 'tableWidth',          value: 4000,            desc: 'Max cutting width (X travel) in mm',          hidden: false },
+		{ recid: 17, option: 'tableDepth',          value: 2000,            desc: 'Max cutting length (Y travel) in mm',         hidden: false },
+		{ recid: 21, option: 'tableHeight',         value: 100,             desc: 'Max cutting depth (Z travel) in mm',          hidden: false },
+		{ recid: 18, option: 'showTooltips',        value: true,            desc: 'Tooltips enabled',                            hidden: false },
+		{ recid: 19, option: 'snapGrid',            value: true,            desc: 'Snap to Grid',                                hidden: true  }
+	];
 }
 
 // Load options from localStorage
@@ -240,22 +239,11 @@ function loadTools() {
         }];
     }
 
-    // Migration: Add flutes, rpm, and percentage fields to existing tools that don't have them
+    // Migration: Add flutes and percentage fields to existing tools that don't have them
     let needsSave = false;
     tools.forEach(tool => {
         if (tool.flutes === undefined) {
             tool.flutes = 2; // Default to 2 flutes
-            needsSave = true;
-        }
-        if (tool.rpm === undefined) {
-            // Set RPM based on tool type
-            if (tool.bit === 'VBit') {
-                tool.rpm = 16000;
-            } else if (tool.bit === 'Drill') {
-                tool.rpm = 12000;
-            } else {
-                tool.rpm = 18000;
-            }
             needsSave = true;
         }
         // Add percentage fields if they don't exist (null means no percentage, use absolute value)
@@ -752,17 +740,13 @@ function createToolbar() {
                         <i data-lucide="wrench"></i>
                         <span>Tools</span>
                     </button>
-                    <button type="button" class="dropdown-item app-menu-item" data-action="project-workpiece" title="Open Workpiece">
-                        <i data-lucide="package"></i>
-                        <span>Workpiece</span>
+                    <button type="button" class="dropdown-item app-menu-item" data-action="project-cut-settings" title="Open Cut Settings">
+                        <i data-lucide="scissors"></i>
+                        <span>Cut Settings</span>
                     </button>
                     <button type="button" class="dropdown-item app-menu-item" data-action="project-grbl" title="Open GRBL">
                         <i data-lucide="cpu"></i>
                         <span>GRBL</span>
-                    </button>
-                    <button type="button" class="dropdown-item app-menu-item" data-action="project-cut-settings" title="Open Cut Settings">
-                        <i data-lucide="scissors"></i>
-                        <span>Cut Settings</span>
                     </button>
                 </div>
             </div>
@@ -845,9 +829,6 @@ function createToolbar() {
                 break;
             case 'project-tools':
                 showToolsModal();
-                break;
-            case 'project-workpiece':
-                showWorkpieceModal();
                 break;
             case 'project-grbl':
                 showGrblModal();
@@ -3390,9 +3371,6 @@ function createToolPanel(targetId) {
                         <th><i data-lucide="wrench" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Tool"></i> Tool</th>
                         <th><i data-lucide="diameter" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Diameter"></i>Diameter (<span id="tool-table-unit">${getUnitLabel()}</span>)</th>
                         <th><i data-lucide="hash" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Number of cutting edges"></i> Flutes</th>
-                        <th><i data-lucide="gauge" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Spindle speed (RPM)"></i> RPM</th>
-                        <th><i data-lucide="move" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Feed rate"></i> Feed rate (<span id="tool-table-feed-unit">${getUnitLabel()}/min</span>)</th>
-                        <th><i data-lucide="arrow-down" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Plunge rate"></i> Plunge rate (<span id="tool-table-zfeed-unit">${getUnitLabel()}/min</span>)</th>
                         <th><i data-lucide="triangle" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Angle"></i> Angle</th>
                     </tr>
                 </thead>
@@ -3568,29 +3546,6 @@ function createToolRow(tool, index) {
     flutesInput.title = 'Number of cutting edges';
     flutesCell.appendChild(flutesInput);
 
-    const rpmCell = document.createElement('td');
-    const rpmInput = document.createElement('input');
-    rpmInput.type = 'number';
-    rpmInput.dataset.field = 'rpm';
-    rpmInput.min = '1000';
-    rpmInput.max = '30000';
-    rpmInput.step = '100';
-    rpmInput.setAttribute('data-bs-toggle', 'tooltip');
-    rpmInput.title = 'Spindle speed (RPM)';
-    rpmCell.appendChild(rpmInput);
-
-    const feedCell = document.createElement('td');
-    const feedInput = document.createElement('input');
-    feedInput.type = 'text';
-    feedInput.dataset.field = 'feed';
-    feedCell.appendChild(feedInput);
-
-    const zfeedCell = document.createElement('td');
-    const zfeedInput = document.createElement('input');
-    zfeedInput.type = 'number';
-    zfeedInput.dataset.field = 'zfeed';
-    zfeedCell.appendChild(zfeedInput);
-
     const angleCell = document.createElement('td');
     const angleActions = document.createElement('div');
     angleActions.className = 'tool-angle-actions';
@@ -3618,9 +3573,6 @@ function createToolRow(tool, index) {
     row.appendChild(bitCell);
     row.appendChild(diameterCell);
     row.appendChild(flutesCell);
-    row.appendChild(rpmCell);
-    row.appendChild(feedCell);
-    row.appendChild(zfeedCell);
     row.appendChild(angleCell);
 
     row._toolRefs = {
@@ -3629,9 +3581,6 @@ function createToolRow(tool, index) {
         bitSelect,
         diameterInput,
         flutesInput,
-        rpmInput,
-        feedInput,
-        zfeedInput,
         angleInput,
         deleteButton
     };
@@ -3663,26 +3612,7 @@ function syncToolRow(row, tool, index) {
 
     const refs = row._toolRefs;
     const useInches = getOption('Inches');
-    const autoFeedRateEnabled = getOption('autoFeedRate');
-    const material = getOption('material');
-
     const displayDiameter = formatDimension(tool.diameter, useInches, true);
-    const autoCalculatedFeed = autoFeedRateEnabled ? calculateFeedRate(tool, material, 'Profile') : null;
-    const autoCalculatedFeedDisplay = autoCalculatedFeed === null
-        ? null
-        : (useInches ? Math.round(autoCalculatedFeed / 25.4) : autoCalculatedFeed);
-    const feedUnitLabel = useInches ? 'in/min' : 'mm/min';
-    const displayFeed = autoFeedRateEnabled
-        ? `Auto (${autoCalculatedFeedDisplay} ${feedUnitLabel})`
-        : (useInches ? Math.round(tool.feed / 25.4) : tool.feed);
-    const displayZFeed = useInches ? Math.round(tool.zfeed / 25.4) : tool.zfeed;
-
-    const feedMax = useInches ? 40 : 1000;
-    const feedMin = useInches ? 1 : 10;
-    const feedStep = useInches ? 1 : 10;
-    const feedTitle = autoFeedRateEnabled && autoCalculatedFeed !== null
-        ? `Automatic (${useInches ? Math.round(autoCalculatedFeed / 25.4) : autoCalculatedFeed} ${useInches ? 'in/min' : 'mm/min'})`
-        : 'Manual XY feed rate';
 
     row.dataset.toolIndex = index;
     row.dataset.recid = tool.recid;
@@ -3699,21 +3629,6 @@ function syncToolRow(row, tool, index) {
     refs.diameterInput.placeholder = useInches ? '1/4' : '6';
 
     setInputValueIfNeeded(refs.flutesInput, tool.flutes || 2);
-    setInputValueIfNeeded(refs.rpmInput, tool.rpm || 18000);
-
-    setInputValueIfNeeded(refs.feedInput, displayFeed);
-    refs.feedInput.readOnly = autoFeedRateEnabled;
-    refs.feedInput.min = String(feedMin);
-    refs.feedInput.max = String(feedMax);
-    refs.feedInput.step = String(feedStep);
-    refs.feedInput.dataset.unitType = useInches ? 'inches' : 'mm';
-    refs.feedInput.title = feedTitle;
-
-    setInputValueIfNeeded(refs.zfeedInput, displayZFeed);
-    refs.zfeedInput.min = String(feedMin);
-    refs.zfeedInput.max = String(feedMax);
-    refs.zfeedInput.step = String(feedStep);
-    refs.zfeedInput.dataset.unitType = useInches ? 'inches' : 'mm';
 
     setInputValueIfNeeded(refs.angleInput, tool.angle);
 }
@@ -3721,11 +3636,7 @@ function syncToolRow(row, tool, index) {
 function syncToolTableUnits() {
     const unitLabel = getUnitLabel();
     const unitElem = document.getElementById('tool-table-unit');
-    const feedUnitElem = document.getElementById('tool-table-feed-unit');
-    const zfeedUnitElem = document.getElementById('tool-table-zfeed-unit');
     if (unitElem) unitElem.textContent = unitLabel;
-    if (feedUnitElem) feedUnitElem.textContent = `${unitLabel}/min`;
-    if (zfeedUnitElem) zfeedUnitElem.textContent = `${unitLabel}/min`;
 }
 
 function updateRenderedToolRow(index) {
@@ -3791,7 +3702,7 @@ function selectTool(index) {
 function updateTool(index, field, value) {
     if (tools[index]) {
         // Convert numeric fields
-        if (['diameter', 'feed', 'zfeed', 'angle'].includes(field)) {
+        if (['diameter', 'angle'].includes(field)) {
             // Check if we're in inch mode
             const useInches = getOption('Inches');
 
@@ -3803,14 +3714,8 @@ function updateTool(index, field, value) {
                     value = parseFloat(value);
                 }
             } else {
-                // For other numeric fields (feed, zfeed, angle)
+                // For other numeric fields (angle)
                 value = parseFloat(value);
-
-                // Convert feed rates from in/min to mm/min if needed
-                if (useInches && ['feed', 'zfeed'].includes(field)) {
-                    value = value * 25.4;
-                }
-                // angle is not unit-dependent
             }
         }
 
@@ -3836,9 +3741,6 @@ function addTool() {
         direction: currentTool ? currentTool.direction : 'Climb',
         diameter: currentTool ? currentTool.diameter : 6,
         flutes: currentTool ? currentTool.flutes : 2,
-        rpm: currentTool ? currentTool.rpm : 18000,
-        feed: currentTool ? currentTool.feed : 600,
-        zfeed: currentTool ? currentTool.zfeed : 200,
         angle: currentTool ? currentTool.angle : 0,
         bit: currentTool ? currentTool.bit : 'End Mill',
         depth: currentTool ? currentTool.depth : 1.5,
@@ -4918,6 +4820,9 @@ function refreshDisplayUnitsUI() {
     }
     if (typeof createWorkpiecePanel === 'function' && document.getElementById('workpiece-panel')) {
         createWorkpiecePanel('workpiece-panel');
+    }
+    if (typeof window.refreshCutSettingsPanelForUnits === 'function') {
+        window.refreshCutSettingsPanelForUnits();
     }
     refreshVisibleDimensionInputs();
 

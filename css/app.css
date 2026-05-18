@@ -878,6 +878,50 @@ html, body {
     max-width: 720px;
 }
 
+#cut-settings-workpiece-panel .workpiece-panel-content {
+    max-width: none;
+}
+
+.project-panel-modal-body--cut-settings {
+    padding-top: 1rem;
+}
+
+.cut-settings-section-card {
+    padding: 1rem;
+    border: 1px solid var(--color-gray-300);
+    border-radius: 0.5rem;
+    background-color: var(--color-white);
+}
+
+.cut-settings-section-card .alert:last-child,
+.cut-settings-section-card .pm-field:last-child {
+    margin-bottom: 0;
+}
+
+.cut-settings-auto-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.cut-settings-auto-row__input {
+    flex: 1 1 auto;
+}
+
+.cut-settings-auto-row__toggle {
+    flex: 0 0 auto;
+    margin: 0;
+}
+
+.cut-settings-auto-row__button {
+    min-width: 4.5rem;
+}
+
+.cut-settings-auto-row__input:disabled {
+    background-color: var(--color-gray-200);
+    cursor: not-allowed;
+}
+
 .tool-table {
     font-size: 12px;
 }

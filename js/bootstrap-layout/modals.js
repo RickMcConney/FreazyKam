@@ -529,15 +529,28 @@ function renderOptionsWorkpieceSettings() {
 
 function showProjectPanelModal(title, renderCallback) {
     const modalElement = document.getElementById('projectPanelModal');
+    const dialogElement = modalElement?.querySelector('.modal-dialog');
     const titleElement = document.getElementById('project-panel-modal-title');
     const bodyElement = document.getElementById('project-panel-modal-body');
-    if (!modalElement || !titleElement || !bodyElement) return;
+    if (!modalElement || !titleElement || !bodyElement || !dialogElement) return;
+
+    dialogElement.className = 'modal-dialog modal-xl modal-dialog-scrollable';
+    bodyElement.className = '';
 
     titleElement.textContent = title;
     bodyElement.innerHTML = '<div id="project-panel-content"></div>';
 
-    if (typeof renderCallback === 'function') {
-        renderCallback('project-panel-content');
+    const renderOptions =
+        typeof renderCallback === 'function'
+            ? (renderCallback('project-panel-content') || {})
+            : {};
+
+    if (renderOptions.dialogClass) {
+        dialogElement.className = `modal-dialog ${renderOptions.dialogClass}`;
+    }
+
+    if (renderOptions.bodyClass) {
+        bodyElement.classList.add(renderOptions.bodyClass);
     }
 
     modalElement.addEventListener('hidden.bs.modal', function handleProjectPanelHidden() {
@@ -583,16 +596,32 @@ function showCutSettingsModal() {
         }
 
         container.innerHTML = `
-            <div class="alert alert-info mb-3">
-                These settings are applied when generating G-code from the 3D view.
-            </div>
-            ${PropertiesManager.formHTML(fields, currentValues, null)}
-            <div class="d-flex justify-content-end mt-3">
-                <button type="button" class="btn btn-primary" id="project-save-cut-settings-button">Save</button>
+            <div class="cut-settings-sections row g-3">
+                <section class="col-12 col-lg-6">
+                    <div class="cut-settings-section-card h-100">
+                        <div id="cut-settings-workpiece-panel"></div>
+                    </div>
+                </section>
+                <section class="col-12 col-lg-6">
+                    <div class="cut-settings-section-card h-100 d-flex flex-column">
+                        <div><h5>Cut Settings</h5></div>
+                        <div id="cut-settings-machining-panel">
+                            ${PropertiesManager.formHTML(fields, currentValues, null)}
+                        </div>
+                        <div class="d-flex justify-content-end mt-3">
+                            <button type="button" class="btn btn-primary" id="project-save-cut-settings-button">Save</button>
+                        </div>
+                    </div>
+                </section>
             </div>
         `;
 
+        if (typeof createWorkpiecePanel === 'function') {
+            createWorkpiecePanel('cut-settings-workpiece-panel');
+        }
+
         loadCutSettingsIntoForm(currentValues);
+        bindCutSettingsForm(fields);
 
         const saveButton = document.getElementById('project-save-cut-settings-button');
         if (!saveButton) {
@@ -603,6 +632,42 @@ function showCutSettingsModal() {
             const values = PropertiesManager.collectValues(fields);
             values.tool = Number(values.tool) || null;
             values.step = Number(values.step) || 0;
+            values.rpm = Number(values.rpm) || 0;
+            values.autoStep = !!values.autoStep;
+            values.autoFeedRate = !!values.autoFeedRate;
+            values.autoZFeedRate = !!values.autoZFeedRate;
+
+            if (values.autoStep) {
+                const previewTool = (window.tools || []).find(tool => Number(tool.recid) === Number(values.tool));
+                if (previewTool) {
+                    values.step = Math.max(0.01, Number(previewTool.diameter) / 2);
+                }
+            }
+
+            if (values.autoFeedRate) {
+                const previewTool = (window.tools || []).find(tool => Number(tool.recid) === Number(values.tool));
+                if (previewTool) {
+                    values.feed = calculateFeedRate({
+                        ...previewTool,
+                        step: values.step,
+                        rpm: values.rpm
+                    }, getOption('material'), 'Profile', true);
+                }
+            }
+
+            if (values.autoZFeedRate) {
+                const previewTool = (window.tools || []).find(tool => Number(tool.recid) === Number(values.tool));
+                if (previewTool) {
+                    const optimalFeed = calculateFeedRate({
+                        ...previewTool,
+                        step: values.step,
+                        rpm: values.rpm
+                    }, getOption('material'), 'Profile', true);
+                    if (Number.isFinite(optimalFeed) && optimalFeed > 0) {
+                        values.zfeed = Math.max(1, Math.round(optimalFeed / 3));
+                    }
+                }
+            }
 
             const errors = validateCutSettings(values);
             if (errors.length > 0) {
@@ -625,7 +690,86 @@ function showCutSettingsModal() {
                 modalInstance.hide();
             }
         });
+
+        return {
+            dialogClass: 'modal-lg modal-dialog-scrollable',
+            bodyClass: 'project-panel-modal-body--cut-settings'
+        };
     });
+}
+
+function refreshCutSettingsPanelForUnits() {
+    const modalElement = document.getElementById('projectPanelModal');
+    const titleElement = document.getElementById('project-panel-modal-title');
+    const bodyElement = document.getElementById('project-panel-modal-body');
+    if (!modalElement || !titleElement || !bodyElement) return;
+    if (titleElement.textContent !== 'Cut Settings') return;
+    if (modalElement.classList.contains('show') === false) return;
+
+    const toolInput = document.getElementById('pm-tool');
+    const directionInput = document.getElementById('pm-direction');
+    const stepInput = document.getElementById('pm-step');
+    const autoStepInput = document.getElementById('pm-autoStep');
+    const rpmInput = document.getElementById('pm-rpm');
+    const feedInput = document.getElementById('pm-feed');
+    const autoFeedInput = document.getElementById('pm-autoFeedRate');
+    const zfeedInput = document.getElementById('pm-zfeed');
+    const autoZFeedInput = document.getElementById('pm-autoZFeedRate');
+    const plungeInput = document.getElementById('pm-plunge');
+    const strategyInput = document.getElementById('pm-strategy');
+
+    const currentValues = {
+        ...getSavedCutSettings(),
+        tool: toolInput ? Number(toolInput.value) || null : undefined,
+        direction: directionInput ? directionInput.value : undefined,
+        step: stepInput ? parseDimension(stepInput.value) : undefined,
+        autoStep: autoStepInput ? !!autoStepInput.checked : undefined,
+        rpm: rpmInput ? Number(rpmInput.value) || 0 : undefined,
+        feed: feedInput ? parseDimension(feedInput.value) : undefined,
+        autoFeedRate: autoFeedInput ? !!autoFeedInput.checked : undefined,
+        zfeed: zfeedInput ? parseDimension(zfeedInput.value) : undefined,
+        autoZFeedRate: autoZFeedInput ? !!autoZFeedInput.checked : undefined,
+        plunge: plungeInput ? plungeInput.value : undefined,
+        strategy: strategyInput ? strategyInput.value : undefined
+    };
+
+    showCutSettingsModal();
+    loadCutSettingsIntoForm(currentValues);
+
+    const refreshedStepInput = document.getElementById('pm-step');
+    const refreshedAutoStepInput = document.getElementById('pm-autoStep');
+    const refreshedFeedInput = document.getElementById('pm-feed');
+    const refreshedAutoFeedInput = document.getElementById('pm-autoFeedRate');
+    const refreshedZFeedInput = document.getElementById('pm-zfeed');
+    const refreshedAutoZFeedInput = document.getElementById('pm-autoZFeedRate');
+
+    if (refreshedStepInput && Number.isFinite(currentValues.step) && currentValues.step > 0) {
+        const formattedStep = formatDimension(currentValues.step, true);
+        refreshedStepInput.dataset.manualValueMm = String(currentValues.step);
+        if (!refreshedAutoStepInput?.checked) {
+            refreshedStepInput.value = formattedStep;
+        }
+    }
+
+    if (refreshedFeedInput && Number.isFinite(currentValues.feed) && currentValues.feed > 0) {
+        const formattedFeed = formatDimension(currentValues.feed, true);
+        refreshedFeedInput.dataset.manualValueMm = String(currentValues.feed);
+        if (!refreshedAutoFeedInput?.checked) {
+            refreshedFeedInput.value = formattedFeed;
+        }
+    }
+
+    if (refreshedZFeedInput && Number.isFinite(currentValues.zfeed) && currentValues.zfeed > 0) {
+        const formattedZFeed = formatDimension(currentValues.zfeed, true);
+        refreshedZFeedInput.dataset.manualValueMm = String(currentValues.zfeed);
+        if (!refreshedAutoZFeedInput?.checked) {
+            refreshedZFeedInput.value = formattedZFeed;
+        }
+    }
+
+    if (typeof syncAutoFeedRatePreview === 'function') {
+        syncAutoFeedRatePreview();
+    }
 }
 
 function showHelpModal() {
@@ -640,6 +784,7 @@ function getCutSettingsStorageKey() {
 }
 
 function getCutSettingsFields() {
+    const unitLabel = getUnitLabel();
     const toolOptions = (window.tools || []).map(tool => ({
         value: tool.recid,
         label: `${tool.name} (${tool.diameter}mm ${tool.bit})`
@@ -668,12 +813,59 @@ function getCutSettingsFields() {
         },
         {
             key: 'step',
-            label: 'Depth per pass',
+            label: `Depth per pass (${unitLabel})`,
             type: 'dimension',
             default: toolOptions.length > 0
                 ? ((window.tools || []).find(tool => tool.recid === defaultToolId)?.step || 1)
                 : 1,
             min: 0.01
+        },
+        {
+            key: 'autoStep',
+            label: 'Auto Calculate Depth per Pass',
+            type: 'checkbox',
+            default: false
+        },
+        {
+            key: 'rpm',
+            label: 'RPM',
+            type: 'number',
+            default: toolOptions.length > 0
+                ? ((window.tools || []).find(tool => Number(tool.recid) === Number(defaultToolId))?.rpm || 18000)
+                : 18000,
+            min: 1000,
+            max: 30000,
+            step: 100
+        },
+        {
+            key: 'feed',
+            label: `Feed rate (${unitLabel}/min)`,
+            type: 'dimension',
+            default: toolOptions.length > 0
+                ? ((window.tools || []).find(tool => Number(tool.recid) === Number(defaultToolId))?.feed || 600)
+                : 600,
+            min: 1,
+        },
+        {
+            key: 'autoFeedRate',
+            label: 'Auto Calculate Feed Rates',
+            type: 'checkbox',
+            default: false
+        },
+        {
+            key: 'zfeed',
+            label: `Plunge rate (${unitLabel}/min)`,
+            type: 'dimension',
+            default: toolOptions.length > 0
+                ? ((window.tools || []).find(tool => Number(tool.recid) === Number(defaultToolId))?.zfeed || 200)
+                : 200,
+            min: 1,
+        },
+        {
+            key: 'autoZFeedRate',
+            label: 'Auto Calculate Plunge Rate',
+            type: 'checkbox',
+            default: false
         },
         {
             key: 'plunge',
@@ -716,6 +908,12 @@ function getSavedCutSettings() {
         tool: hasSavedTool ? savedToolId : defaultToolId,
         direction: saved.direction || 'climb',
         step: Number(saved.step) > 0 ? Number(saved.step) : defaultStep,
+        autoStep: saved.autoStep !== undefined ? !!saved.autoStep : false,
+        rpm: Number(saved.rpm) > 0 ? Number(saved.rpm) : ((window.tools || []).find(tool => Number(tool.recid) === Number(defaultToolId))?.rpm || 18000),
+        feed: Number(saved.feed) > 0 ? Number(saved.feed) : ((window.tools || []).find(tool => Number(tool.recid) === Number(defaultToolId))?.feed || 600),
+	        autoFeedRate: saved.autoFeedRate !== undefined ? !!saved.autoFeedRate : false,
+        zfeed: Number(saved.zfeed) > 0 ? Number(saved.zfeed) : ((window.tools || []).find(tool => Number(tool.recid) === Number(defaultToolId))?.zfeed || 200),
+        autoZFeedRate: saved.autoZFeedRate !== undefined ? !!saved.autoZFeedRate : false,
         plunge: saved.plunge || 'vertical',
         strategy: saved.strategy || 'adaptive'
     };
@@ -732,6 +930,18 @@ function validateCutSettings(values) {
         errors.push('Depth per pass must be greater than 0');
     }
 
+    if (!Number.isFinite(values.rpm) || values.rpm <= 0) {
+        errors.push('RPM must be greater than 0');
+    }
+
+    if (!Number.isFinite(values.feed) || values.feed <= 0) {
+        errors.push('Feed rate must be greater than 0');
+    }
+
+    if (!Number.isFinite(values.zfeed) || values.zfeed <= 0) {
+        errors.push('Plunge rate must be greater than 0');
+    }
+
     return errors;
 }
 
@@ -742,12 +952,212 @@ function saveCutSettings(values) {
     return window.gcodeCutSettings;
 }
 
+function enhanceCutSettingsAutoControl(fieldKey, autoKey) {
+    const valueInput = document.getElementById(`pm-${fieldKey}`);
+    const autoInput = document.getElementById(`pm-${autoKey}`);
+    if (!valueInput || !autoInput) return;
+
+    const valueField = valueInput.closest('.pm-field');
+    const autoField = autoInput.closest('.pm-field');
+    if (!valueField || !autoField || valueField.dataset.autoEnhanced === 'true') return;
+
+    const helperText = valueField.querySelector('.form-text');
+    const autoLabel = autoField.querySelector(`label[for="pm-${autoKey}"]`) || autoField.querySelector('.form-check-label');
+    const formCheck = autoField.querySelector('.form-check') || autoField;
+    const row = document.createElement('div');
+
+    row.className = 'cut-settings-auto-row';
+    valueInput.classList.add('cut-settings-auto-row__input');
+
+    autoInput.classList.remove('form-check-input');
+    autoInput.classList.add('btn-check');
+
+    formCheck.className = 'cut-settings-auto-row__toggle';
+
+    if (autoLabel) {
+        autoLabel.textContent = 'AUTO';
+        autoLabel.className = 'btn btn-outline-secondary btn-sm cut-settings-auto-row__button';
+    }
+
+    row.appendChild(valueInput);
+    row.appendChild(formCheck);
+
+    if (helperText) {
+        valueField.insertBefore(row, helperText);
+    } else {
+        valueField.appendChild(row);
+    }
+
+    autoField.remove();
+    valueField.dataset.autoEnhanced = 'true';
+}
+
+function setCutSettingsAutoButtonState(autoKey, isActive) {
+    const label = document.querySelector(`label[for="pm-${autoKey}"]`);
+    if (!label) return;
+
+    label.classList.toggle('btn-primary', isActive);
+    label.classList.toggle('btn-outline-secondary', !isActive);
+    label.classList.toggle('active', isActive);
+    label.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+}
+
+function formatCutSettingsDimensionValue(value) {
+    const parsed = parseDimension(value);
+    return Number.isFinite(parsed) && parsed > 0
+        ? formatDimension(parsed, true)
+        : value;
+}
+
+function restoreCutSettingsManualValue(input) {
+    if (!input) return false;
+    const mmValue = Number(input.dataset.manualValueMm);
+    if (!Number.isFinite(mmValue) || mmValue <= 0) return false;
+    input.value = formatDimension(mmValue, true);
+    return true;
+}
+
+function storeCutSettingsManualValue(input) {
+    if (!input) return;
+    const mmValue = parseDimension(input.value);
+    if (!Number.isFinite(mmValue) || mmValue <= 0) return;
+    input.dataset.manualValueMm = String(mmValue);
+}
+
+function syncAutoFeedRatePreview() {
+    const toolIdInput = document.getElementById('pm-tool');
+    const stepInput = document.getElementById('pm-step');
+    const autoStepInput = document.getElementById('pm-autoStep');
+    const rpmInput = document.getElementById('pm-rpm');
+    const feedInput = document.getElementById('pm-feed');
+    const zfeedInput = document.getElementById('pm-zfeed');
+    const autoFeedInput = document.getElementById('pm-autoFeedRate');
+    const autoZFeedInput = document.getElementById('pm-autoZFeedRate');
+    if (!toolIdInput || !stepInput || !autoStepInput || !rpmInput || !feedInput || !zfeedInput || !autoFeedInput || !autoZFeedInput) return;
+
+    const tool = (window.tools || []).find(candidate => Number(candidate.recid) === Number(toolIdInput.value));
+    const step = parseDimension(stepInput.value);
+    const autoStep = !!autoStepInput.checked;
+    const rpm = Number(rpmInput.value) || 0;
+    const autoFeedRate = !!autoFeedInput.checked;
+    const autoZFeedRate = !!autoZFeedInput.checked;
+    const autoStepValue = tool && Number.isFinite(Number(tool.diameter)) && Number(tool.diameter) > 0
+        ? Math.max(0.01, Number(tool.diameter) / 2)
+        : null;
+
+    setCutSettingsAutoButtonState('autoStep', autoStep);
+    const previewTool = tool ? {
+        ...tool,
+        step: autoStep && Number.isFinite(autoStepValue) && autoStepValue > 0
+            ? autoStepValue
+            : (Number.isFinite(step) && step > 0 ? step : (tool.step || 1)),
+        rpm: rpm > 0 ? rpm : (tool.rpm || 18000)
+    } : null;
+    let optimalFeed = null;
+
+    if (autoStep && Number.isFinite(autoStepValue) && autoStepValue > 0) {
+        stepInput.value = formatDimension(autoStepValue, true);
+        stepInput.disabled = true;
+        stepInput.title = 'Automatically calculated as one half of the router bit diameter';
+    } else {
+        stepInput.disabled = false;
+        if (!restoreCutSettingsManualValue(stepInput)) {
+            storeCutSettingsManualValue(stepInput);
+            restoreCutSettingsManualValue(stepInput);
+        }
+        stepInput.title = '';
+    }
+
+    setCutSettingsAutoButtonState('autoFeedRate', autoFeedRate);
+    setCutSettingsAutoButtonState('autoZFeedRate', autoZFeedRate);
+
+    if (autoFeedRate && previewTool && typeof calculateFeedRate === 'function') {
+        optimalFeed = calculateFeedRate(previewTool, getOption('material'), 'Profile', true);
+        if (Number.isFinite(optimalFeed) && optimalFeed > 0) {
+            feedInput.value = formatDimension(optimalFeed, true);
+            feedInput.disabled = true;
+            feedInput.title = 'Automatically calculated from tool, material, and depth per pass';
+        }
+    }
+
+    if (!autoFeedRate) {
+        feedInput.disabled = false;
+        if (!restoreCutSettingsManualValue(feedInput)) {
+            storeCutSettingsManualValue(feedInput);
+            restoreCutSettingsManualValue(feedInput);
+        }
+        feedInput.title = '';
+    }
+
+    if (!optimalFeed && previewTool && typeof calculateFeedRate === 'function') {
+        optimalFeed = calculateFeedRate(previewTool, getOption('material'), 'Profile', true);
+    }
+
+    if (autoZFeedRate && Number.isFinite(optimalFeed) && optimalFeed > 0) {
+        const autoZFeed = Math.max(1, Math.round(optimalFeed / 3));
+        zfeedInput.value = formatDimension(autoZFeed, true);
+        zfeedInput.disabled = true;
+        zfeedInput.title = 'Automatically calculated as one third of the optimal feed rate';
+    } else {
+        zfeedInput.disabled = false;
+        if (!restoreCutSettingsManualValue(zfeedInput)) {
+            storeCutSettingsManualValue(zfeedInput);
+            restoreCutSettingsManualValue(zfeedInput);
+        }
+        zfeedInput.title = '';
+    }
+}
+
+function bindCutSettingsForm(fields) {
+    enhanceCutSettingsAutoControl('step', 'autoStep');
+    enhanceCutSettingsAutoControl('feed', 'autoFeedRate');
+    enhanceCutSettingsAutoControl('zfeed', 'autoZFeedRate');
+
+    const formInputs = fields
+        .map(field => document.getElementById(`pm-${field.key}`))
+        .filter(Boolean);
+
+    formInputs.forEach(input => {
+        if (input.id === 'pm-step') {
+            input.addEventListener('input', function() {
+                if (!document.getElementById('pm-autoStep')?.checked) {
+                    storeCutSettingsManualValue(input);
+                }
+            });
+        }
+        if (input.id === 'pm-feed') {
+            input.addEventListener('input', function() {
+                if (!document.getElementById('pm-autoFeedRate')?.checked) {
+                    storeCutSettingsManualValue(input);
+                }
+            });
+        }
+        if (input.id === 'pm-zfeed') {
+            input.addEventListener('input', function() {
+                if (!document.getElementById('pm-autoZFeedRate')?.checked) {
+                    storeCutSettingsManualValue(input);
+                }
+            });
+        }
+        input.addEventListener('change', syncAutoFeedRatePreview);
+        if (input.type === 'text' || input.type === 'number' || input.tagName === 'TEXTAREA') {
+            input.addEventListener('input', syncAutoFeedRatePreview);
+        }
+    });
+
+    syncAutoFeedRatePreview();
+}
+
 function loadCutSettingsIntoForm(values) {
     const fields = getCutSettingsFields();
     for (let i = 0; i < fields.length; i++) {
         const field = fields[i];
         const nextValue = values[field.key] !== undefined ? values[field.key] : field.default;
-        PropertiesManager.setValue(field.key, nextValue);
+        if (field.type === 'dimension' && Number.isFinite(Number(nextValue))) {
+            PropertiesManager.setValue(field.key, formatDimension(Number(nextValue), true));
+        } else {
+            PropertiesManager.setValue(field.key, nextValue);
+        }
     }
 }
 
@@ -760,6 +1170,7 @@ function getCompleteCutSettings() {
 window.getSavedCutSettings = getSavedCutSettings;
 window.getCompleteCutSettings = getCompleteCutSettings;
 window.showCutSettingsModal = showCutSettingsModal;
+window.refreshCutSettingsPanelForUnits = refreshCutSettingsPanelForUnits;
 
 /**
  * Show a reusable confirmation dialog
@@ -1051,12 +1462,8 @@ function updateToolTableHeaders() {
     // Update unit labels in tool table headers
     const unitLabel = getUnitLabel();
     const unitElem = document.getElementById('tool-table-unit');
-    const feedUnitElem = document.getElementById('tool-table-feed-unit');
-    const zfeedUnitElem = document.getElementById('tool-table-zfeed-unit');
 
     if (unitElem) unitElem.textContent = unitLabel;
-    if (feedUnitElem) feedUnitElem.textContent = unitLabel + '/min';
-    if (zfeedUnitElem) zfeedUnitElem.textContent = unitLabel + '/min';
 }
 
 function roundWorkpieceDimensions(useInches) {

@@ -29,26 +29,31 @@ function getChipLoad(material, toolDiameter, toolType) {
 
 const DEFAULT_FEED_MM_MIN = 600; // Fallback feed rate when no tool or auto-feed is disabled
 
-function getResolvedGcodeCutSettings() {
+function getResolvedGcodeCutSettings(rawSettings = null) {
 	if (typeof window === 'undefined') return null;
-	const rawSettings = typeof window.getCompleteCutSettings === 'function'
+	const resolvedRawSettings = rawSettings || (typeof window.getCompleteCutSettings === 'function'
 		? window.getCompleteCutSettings()
-		: (window.gcodeCutSettings || null);
-	if (!rawSettings) return null;
+		: (window.gcodeCutSettings || null));
+	if (!resolvedRawSettings) return null;
 
-	const tool = (window.tools || []).find(candidate => Number(candidate.recid) === Number(rawSettings.tool));
+	const tool = (window.tools || []).find(candidate => Number(candidate.recid) === Number(resolvedRawSettings.tool));
 	if (!tool) return null;
 
-	const step = Number(rawSettings.step);
+	const step = Number(resolvedRawSettings.step);
 	if (!Number.isFinite(step) || step <= 0) return null;
 
 	return {
 		toolId: Number(tool.recid),
 		tool: tool,
-		direction: rawSettings.direction === 'conventional' ? 'conventional' : 'climb',
+		direction: resolvedRawSettings.direction === 'conventional' ? 'conventional' : 'climb',
 		step: step,
-		plunge: rawSettings.plunge || 'vertical',
-		strategy: rawSettings.strategy || 'adaptive'
+		rpm: Number(resolvedRawSettings.rpm) > 0 ? Number(resolvedRawSettings.rpm) : (tool.rpm || 18000),
+		feed: Number(resolvedRawSettings.feed) > 0 ? Number(resolvedRawSettings.feed) : (tool.feed || DEFAULT_FEED_MM_MIN),
+		autoFeedRate: !!resolvedRawSettings.autoFeedRate,
+		zfeed: Number(resolvedRawSettings.zfeed) > 0 ? Number(resolvedRawSettings.zfeed) : (tool.zfeed || 200),
+		autoZFeedRate: !!resolvedRawSettings.autoZFeedRate,
+		plunge: resolvedRawSettings.plunge || 'vertical',
+		strategy: resolvedRawSettings.strategy || 'adaptive'
 	};
 }
 
@@ -60,6 +65,11 @@ function buildToolpathWithCutSettings(toolpath, cutSettings) {
 		...cutSettings.tool,
 		depth: toolpath.tool?.depth,
 		step: cutSettings.step,
+		rpm: cutSettings.rpm,
+		feed: cutSettings.feed,
+		autoFeedRate: cutSettings.autoFeedRate,
+		zfeed: cutSettings.zfeed,
+		autoZFeedRate: cutSettings.autoZFeedRate,
 		direction: cutSettings.direction,
 		plunge: cutSettings.plunge,
 		strategy: cutSettings.strategy
@@ -75,14 +85,30 @@ function buildToolpathWithCutSettings(toolpath, cutSettings) {
 			direction: cutSettings.direction,
 			plunge: cutSettings.plunge,
 			strategy: cutSettings.strategy,
-			step: cutSettings.step
+			step: cutSettings.step,
+			rpm: cutSettings.rpm,
+			feed: cutSettings.feed,
+			autoFeedRate: cutSettings.autoFeedRate,
+			zfeed: cutSettings.zfeed,
+			autoZFeedRate: cutSettings.autoZFeedRate
 		}
 	};
 }
 
-function calculateFeedRate(tool, material, operation) {
+
+function shouldUseAutomaticFeedRate(tool, forceAuto = false) {
+	if (forceAuto) return true;
+	return !!tool?.autoFeedRate;
+}
+
+function shouldUseAutomaticZFeedRate(tool, forceAuto = false) {
+	if (forceAuto) return true;
+	return !!tool?.autoZFeedRate;
+}
+
+function calculateFeedRate(tool, material, operation, forceAuto = false) {
 	// Manual mode - return user-specified feed rate
-	if (!getOption("autoFeedRate") || !tool) {
+	if (!shouldUseAutomaticFeedRate(tool, forceAuto) || !tool) {
 		return tool ? tool.feed : DEFAULT_FEED_MM_MIN;
 	}
 
@@ -139,12 +165,12 @@ const ZFEED_VBIT_FACTOR        = 0.75; // V-bits are fragile at the tip
 // Calculate Z feed rate (plunge rate)
 function calculateZFeedRate(tool, material, operation) {
 	// Manual mode - return user-specified Z feed rate
-	if (!getOption("autoFeedRate") || !tool) {
+	if (!shouldUseAutomaticZFeedRate(tool) || !tool) {
 		return tool ? tool.zfeed : 200;
 	}
 
 	// Z feed is typically 25-35% of XY feed for wood
-	const xyFeed = calculateFeedRate(tool, material, operation);
+	const xyFeed = calculateFeedRate(tool, material, operation, !!tool?.autoFeedRate);
 	let zFeedRate = xyFeed * ZFEED_XY_RATIO;
 
 	// Additional reduction for deep plunges
@@ -1266,28 +1292,54 @@ function getPointAlongPath(path, distance) {
 	return { point, segIdx };
 }
 
-// HELPER FUNCTION: Generate ramp-in G-code sequence
-// Instead of plunging straight down, ramps in along the path direction:
-// 1. Rapid to a point offset 2x tool diameter along the path from start
-// 2. Plunge to previous pass depth (one stepdown shallower)
-// 3. Cut back to path start while ramping down to current depth
-function generateRampIn(path, toolDiameter, currentZ, stepdown, safeHeight, profile, useInches, feedXY, feedZ, feedRapid) {
+function getRampLengthForPlungeMode(plungeMode, toolDiameter, zDelta) {
+	if (!Number.isFinite(zDelta) || zDelta <= 0) return 0;
+	if (plungeMode === 'vertical') return 0;
+
+	var angleDeg = 0;
+	if (plungeMode === 'ramp-5') angleDeg = 5;
+	else if (plungeMode === 'ramp-20') angleDeg = 20;
+	else return 0;
+
+	var angleRad = angleDeg * Math.PI / 180;
+	if (angleRad <= 0) return 0;
+
+	var minRampMM = Math.max(toolDiameter * 2, 0);
+	var rampMM = zDelta / Math.tan(angleRad);
+	return Math.max(minRampMM, rampMM) * viewScale;
+}
+
+// HELPER FUNCTION: Generate plunge / ramp-in G-code sequence.
+// Vertical mode rapids to the path start and plunges straight down.
+// Ramp modes approach from a point offset along the path and ramp back to the start.
+function generateRampIn(path, toolDiameter, currentZ, stepdown, safeHeight, profile, useInches, feedXY, feedZ, feedRapid, plungeMode) {
 	var output = '';
-	var rampDistWorld = 2 * toolDiameter * viewScale; // world units
 	var safeZCoord = toGcodeUnitsZ(safeHeight, useInches);
+	var normalizedPlunge = plungeMode || 'vertical';
 
 	// Previous pass depth (one stepdown shallower, capped at surface)
 	var prevZ = (stepdown > 0) ? Math.min(0, currentZ + stepdown) : 0;
 	var prevZCoord = toGcodeUnitsZ(prevZ, useInches);
 	var currentZCoord = toGcodeUnitsZ(currentZ, useInches);
+	var plungeDelta = Math.abs(currentZ - prevZ);
+	var rampDistWorld = getRampLengthForPlungeMode(normalizedPlunge, toolDiameter, plungeDelta);
+	var shouldRamp = normalizedPlunge !== 'vertical' && rampDistWorld > 0;
+	var startCoord = toGcodeUnits(path[0].x, path[0].y, useInches);
+
+	// Retract to safe height
+	output += applyGcodeTemplate(profile.rapidFormater, { z: safeZCoord, f: feedZ }) + '\n';
+
+	if (!shouldRamp) {
+		output += applyGcodeTemplate(profile.rapidFormater, { x: startCoord.x, y: startCoord.y, f: feedRapid }) + '\n';
+		output += applyGcodeTemplate(profile.cutFormater, { z: currentZCoord, f: feedZ }) + '\n';
+		return output;
+	}
 
 	// Find the ramp point and which segment index it lands on
 	var { point: rampPt, segIdx: rampSegIdx } = getPointAlongPath(path, rampDistWorld);
 
 	var rampCoord = toGcodeUnits(rampPt.x, rampPt.y, useInches);
 
-	// Retract to safe height
-	output += applyGcodeTemplate(profile.rapidFormater, { z: safeZCoord, f: feedZ }) + '\n';
 	// Rapid to ramp start point (offset along path)
 	output += applyGcodeTemplate(profile.rapidFormater, { x: rampCoord.x, y: rampCoord.y, f: feedRapid }) + '\n';
 	// Plunge to previous pass depth
@@ -1332,7 +1384,6 @@ function generateRampIn(path, toolDiameter, currentZ, stepdown, safeHeight, prof
 	}
 
 	// Ensure we end exactly at path start at full depth
-	var startCoord = toGcodeUnits(path[0].x, path[0].y, useInches);
 	output += applyGcodeTemplate(profile.cutFormater, { x: startCoord.x, y: startCoord.y, z: currentZCoord, f: feedXY }) + '\n';
 
 	return output;
@@ -1400,7 +1451,7 @@ function _generatePocketOperationGcode(toolpath, profile, useInches, settings) {
 				output += applyGcodeTemplate(profile.cutFormater, { x: startP.x, y: startP.y, z: zCoord, f: feedXY }) + '\n';
 			} else {
 				// Full ramp-in with retract
-				output += generateRampIn(path, toolpath.tool.diameter, z, toolStep, safeHeight, profile, useInches, feedXY, feedZ, feedRapid);
+				output += generateRampIn(path, toolpath.tool.diameter, z, toolStep, safeHeight, profile, useInches, feedXY, feedZ, feedRapid, toolpath.tool.plunge);
 			}
 
 			// Cut entire path (with arc fitting if enabled)
@@ -1480,7 +1531,7 @@ function _generateProfilePass(augmentedPath, pass, z, tabData, toolDiameter, too
 	var targetZ = (tabBlocksStart && tabLift > 0) ? z + tabLift : z;
 	currentlyLifted = startedLifted = (tabBlocksStart && tabLift > 0);
 
-	output += generateRampIn(augmentedPath, toolDiameter, targetZ, toolStep, safeHeight, profile, useInches, feedXY, feedZ, feedRapid);
+	output += generateRampIn(augmentedPath, toolDiameter, targetZ, toolStep, safeHeight, profile, useInches, feedXY, feedZ, feedRapid, tabData.toolPlunge);
 
 	// Process remaining path points (skip j=0, which is the ramp-in start)
 	for (var j = 1; j < augmentedPath.length; j++) {
@@ -1556,7 +1607,7 @@ function _generateProfileOperationGcode(toolpath, profile, useInches, settings) 
 		var markers = tabs.length > 0 ? calculateTabMarkers(path, tabs, tabLengthMM, toolRadiusWorld, viewScale) : [];
 		var augmentedPath = markers.length > 0 ? augmentToolpathWithMarkers(path, markers) : path;
 
-		var tabData = { tabs, workpieceThickness: getOption("workpieceThickness"), tabHeightMM, toolRadiusWorld };
+		var tabData = { tabs, workpieceThickness: getOption("workpieceThickness"), tabHeightMM, toolRadiusWorld, toolPlunge: toolpath.tool.plunge };
 
 		var left = depth;
 		var pass = 0;
@@ -1633,7 +1684,7 @@ function toGcode(cutSettingsOverride) {
 	// 1. SETUP AND VALIDATION
 	var profile = _setupGcodeProfile();
 	var useInches = profile.gcodeUnits === 'inches';
-	var resolvedCutSettings = cutSettingsOverride || getResolvedGcodeCutSettings();
+	var resolvedCutSettings = getResolvedGcodeCutSettings(cutSettingsOverride);
 	var sourceToolpaths = resolvedCutSettings
 		? toolpaths.map(function(toolpath) { return buildToolpathWithCutSettings(toolpath, resolvedCutSettings); })
 		: toolpaths;
