@@ -2310,9 +2310,28 @@ function syncShapeMachiningToolpath(path, options = {}) {
     const shapeCutOperationName = primaryPath?.creationTool === 'Text'
         ? 'Pocket'
         : (primaryPath?.creationProperties?.shape === 'DrillShape' ? 'Drill' : 'Profile');
-    const descriptor = window.toolPathProperties.getOperationDescriptor(shapeCutOperationName, data.operationType);
+    const resolvedOperationType = data.operationType
+        || window.toolPathProperties.getDefaults(shapeCutOperationName).operationType;
+    const descriptor = window.toolPathProperties.getOperationDescriptor(shapeCutOperationName, resolvedOperationType);
+    const advancedDefaults = typeof window.toolPathProperties.getAdvancedDefaults === 'function'
+        ? window.toolPathProperties.getAdvancedDefaults(descriptor?.executionOperation || shapeCutOperationName)
+        : null;
+    data.operationType = resolvedOperationType;
+    data.inside = typeof window.toolPathProperties._mapOperationTypeToInside === 'function'
+        ? window.toolPathProperties._mapOperationTypeToInside(shapeCutOperationName, resolvedOperationType)
+        : data.inside;
+    if (advancedDefaults) {
+        data.tool = data.tool || advancedDefaults.tool;
+        data.direction = data.direction || advancedDefaults.direction;
+        data.plunge = data.plunge || advancedDefaults.plunge;
+        data.strategy = data.strategy || advancedDefaults.strategy;
+    }
+    if (!descriptor) {
+        return false;
+    }
+
     const selectedTool = window.toolPathProperties.getToolById(data.tool);
-    if (!descriptor || !selectedTool) {
+    if (!selectedTool) {
         return false;
     }
 
@@ -2333,7 +2352,7 @@ function syncShapeMachiningToolpath(path, options = {}) {
                 previewCount: previewToolpaths.length
             });
         }
-        return false;
+        return 'pending';
     }
 
     if (previewToolpaths.length === 0 && options.createIfMissing !== true) {
@@ -2437,8 +2456,15 @@ function scheduleShapeMachiningToolpathSync(path, options = {}) {
     const delay = Number.isFinite(options.delay) ? options.delay : 120;
     const timeoutId = window.setTimeout(() => {
         pendingShapeMachiningSyncs.delete(path.id);
-        const changed = syncShapeMachiningToolpath(path, options);
-        if (changed) {
+        const result = syncShapeMachiningToolpath(path, options);
+        if (result === 'pending') {
+            scheduleShapeMachiningToolpathSync(path, {
+                ...options,
+                delay: 80
+            });
+            return;
+        }
+        if (result) {
             refresh3DPreviewForShape(path);
         }
     }, Math.max(0, delay));
@@ -2464,14 +2490,6 @@ function refresh3DPreviewForShape(path) {
                 pending: toolpath.pending === true,
                 segments: Array.isArray(toolpath.paths) ? toolpath.paths.length : 0
             }))
-        });
-    }
-
-    if (typeof window.schedule3DViewRefresh === 'function') {
-        window.schedule3DViewRefresh({
-            preserveProgress: false,
-            resetIfMissing: true,
-            seekToLatestState: false
         });
     }
 }
