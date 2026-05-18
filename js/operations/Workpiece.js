@@ -215,7 +215,11 @@ class Workpiece extends Operation {
         }
 
         if (typeof window.schedulePrepared3DGcodeRefresh === 'function') {
-            window.schedulePrepared3DGcodeRefresh({ preserveProgress: true, resetIfMissing: true });
+            window.schedulePrepared3DGcodeRefresh({
+                preserveProgress: true,
+                resetIfMissing: true,
+                reloadIfLoaded: false
+            });
         }
 
         // Force a second redraw on next frame to ensure all updates are visible

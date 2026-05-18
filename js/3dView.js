@@ -565,6 +565,7 @@ function preprocessPreparedGcodeAsync(gcode, profile, requestId) {
 }
 
 async function refreshPrepared3DGcodeNow(options = {}) {
+  const reloadIfLoaded = options.reloadIfLoaded !== false;
   const requestId = ++prepared3DGcodeRequestId;
 
   if (toolpathAnimation) {
@@ -621,7 +622,7 @@ async function refreshPrepared3DGcodeNow(options = {}) {
       && toolpathAnimation.movementTiming.length > 0
       && toolpathAnimation.totalGcodeLines > 0);
 
-    if (hasLoadedSimulation) {
+    if (hasLoadedSimulation && reloadIfLoaded) {
       window._cachedGcode = gcode;
       if (scene && toolpathAnimation && workpieceManager) {
         schedule3DViewRefresh({
@@ -1655,7 +1656,7 @@ function updateToolMesh(toolDiameter, posX, posY, posZ, toolType = 'End Mill', t
 
   // Apply origin offset so tool aligns with toolpath visualization
   const boundsOffset = getWorkpieceBoundsOffset();
-  const offsetPosX = posX - boundsOffset.x;
+  const offsetPosX = posX + boundsOffset.x;
   const offsetPosY = posY + boundsOffset.y;
 
   // Only regenerate geometry when tool properties change (not every frame)
@@ -1947,20 +1948,22 @@ window.setWorkpieceVisibility3D = function(visible) {
   // This keeps them rendering but hidden from view, avoiding blotchy discoloration
   const offscreenPosition = new THREE.Vector3(10000, 10000, 10000);  // Far behind camera
   const fixedWorkpiecePosition = new THREE.Vector3(0, 0, 0);
+  const boundsOffset = getWorkpieceBoundsOffset();
+  const offsetWorkpiecePosition = new THREE.Vector3(boundsOffset.x, boundsOffset.y, 0);
 
   // Keep workpiece fixed in the 3D scene regardless of origin choice
   if (workpieceManager && workpieceManager.mesh) {
     workpieceManager.mesh.position.copy(visible ? fixedWorkpiecePosition : offscreenPosition);
   }
 
-  // Keep filler workpiece boxes fixed too
+  // The voxel stock shell and filler blocks are offset to align with the selected origin.
   if (toolpathAnimation && toolpathAnimation.workpieceOutlineBox) {
-    toolpathAnimation.workpieceOutlineBox.position.copy(visible ? fixedWorkpiecePosition : offscreenPosition);
+    toolpathAnimation.workpieceOutlineBox.position.copy(visible ? offsetWorkpiecePosition : offscreenPosition);
   }
 
-  // Keep voxel grid fixed too
+  // The voxel grid uses the same offset as the outline shell.
   if (toolpathAnimation && toolpathAnimation.voxelGrid && toolpathAnimation.voxelGrid.mesh) {
-    toolpathAnimation.voxelGrid.mesh.position.copy(visible ? fixedWorkpiecePosition : offscreenPosition);
+    toolpathAnimation.voxelGrid.mesh.position.copy(visible ? offsetWorkpiecePosition : offscreenPosition);
   }
 
   requestThreeRender();
@@ -2783,7 +2786,7 @@ class ToolpathAnimation {
 
     const boundsOffset = getWorkpieceBoundsOffset();
     for (const line of this.toolpathLines) {
-      line.position.x = -boundsOffset.x;
+      line.position.x = boundsOffset.x;
       line.position.y = boundsOffset.y;
       line.position.z = 0;
     }
@@ -2982,13 +2985,15 @@ class ToolpathAnimation {
       if (!bounds) {
         gridWidth = Math.min(10, width);
         gridLength = Math.min(10, length);
+        const boundsOffset = getWorkpieceBoundsOffset();
+        gridOrigin = new THREE.Vector3(-boundsOffset.x, -boundsOffset.y, 0);
       }
 
       if (bounds) {
         // Calculate material bounds in world space (accounting for origin position)
         const boundsOffset = getWorkpieceBoundsOffset();
-        const materialMinX = -width / 2 + boundsOffset.x;
-        const materialMaxX = width / 2 + boundsOffset.x;
+        const materialMinX = -width / 2 - boundsOffset.x;
+        const materialMaxX = width / 2 - boundsOffset.x;
         const materialMinY = -length / 2 - boundsOffset.y;  // Y is inverted in 3D
         const materialMaxY = length / 2 - boundsOffset.y;
         const materialMinZ = -thickness;
@@ -3089,7 +3094,7 @@ class ToolpathAnimation {
 
       // Offset voxel grid so workpiece center aligns with 3D origin
       const boundsOffset = getWorkpieceBoundsOffset();
-      voxelMesh.position.x = -boundsOffset.x;
+      voxelMesh.position.x = boundsOffset.x;
       voxelMesh.position.y = boundsOffset.y;
       voxelMesh.position.z = 0;
 
@@ -3147,8 +3152,8 @@ class ToolpathAnimation {
 
     // Calculate workpiece boundaries (accounting for origin position)
     const boundsOffset = getWorkpieceBoundsOffset();
-    const wpMinX = -width / 2 + boundsOffset.x;
-    const wpMaxX = width / 2 + boundsOffset.x;
+    const wpMinX = -width / 2 - boundsOffset.x;
+    const wpMaxX = width / 2 - boundsOffset.x;
     const wpMinY = -length / 2 - boundsOffset.y;  // Y is inverted in 3D
     const wpMaxY = length / 2 - boundsOffset.y;
 
@@ -3188,7 +3193,7 @@ class ToolpathAnimation {
       fillerBoxes.push({
         width: width,
         length: vgMinY - wpMinY,
-        x: boundsOffset.x,
+        x: -boundsOffset.x,
         y: wpMinY + (vgMinY - wpMinY) / 2,
         z: -thickness / 2
       });
@@ -3199,7 +3204,7 @@ class ToolpathAnimation {
       fillerBoxes.push({
         width: width,
         length: wpMaxY - vgMaxY,
-        x: boundsOffset.x,
+        x: -boundsOffset.x,
         y: vgMaxY + (wpMaxY - vgMaxY) / 2,
         z: -thickness / 2
       });
@@ -3265,7 +3270,7 @@ class ToolpathAnimation {
     this.scene.add(this.workpieceOutlineBox);
 
     // Offset filler boxes so workpiece center aligns with 3D origin
-    this.workpieceOutlineBox.position.x = -boundsOffset.x;
+    this.workpieceOutlineBox.position.x = boundsOffset.x;
     this.workpieceOutlineBox.position.y = boundsOffset.y;
     this.workpieceOutlineBox.position.z = 0;
   }
@@ -3332,7 +3337,7 @@ class ToolpathAnimation {
     // Offset toolpath lines so workpiece center aligns with 3D origin
     const boundsOffset = getWorkpieceBoundsOffset();
     for (const line of this.toolpathLines) {
-      line.position.x = -boundsOffset.x;
+      line.position.x = boundsOffset.x;
       line.position.y = boundsOffset.y;
       line.position.z = 0;
     }
@@ -3359,21 +3364,18 @@ class ToolpathAnimation {
     // Update progress slider range for line-based animation
     const progressSlider = getSimulation3DUIElements().progressSlider;
     if (progressSlider) {
-      progressSlider.min = 1;
+      progressSlider.min = 0;
       progressSlider.max = this.totalGcodeLines;
       progressSlider.step = 1;
-      progressSlider.value = 1;  // Start at line 1
+      progressSlider.value = 0;
     }
 
     // Update status
     this.updateStatus();
 
-    // Position tool at first movement
-    if (movements.length > 0) {
-      const firstMovement = movements[0];
-      updateToolMesh(this.toolRadius * 2, firstMovement.x, firstMovement.y, firstMovement.z,
-        this.toolInfo?.type || 'End Mill', this.toolInfo?.angle || 0);
-    }
+    // Before playback starts, keep the tool at machine origin above the stock.
+    updateToolMesh(this.toolRadius * 2, 0, 0, 5,
+      this.toolInfo?.type || 'End Mill', this.toolInfo?.angle || 0);
   }
 
   preprocessGcodeAsync(gcode, profile, requestId) {
