@@ -201,10 +201,6 @@ class QuadtreeVoxelGrid {
         this._maxFineDepth = maxSafeDepth;
         this.minCellSize   = COARSE_CELL_SIZE / Math.pow(2, this._maxFineDepth);
         this.voxelSize     = this.minCellSize;
-        // console.log(
-        //   `[QuadtreeVoxelGrid] Pre-capping fine depth to ${maxSafeDepth} ` +
-        //   `(${this.minCellSize.toFixed(2)}mm cells) for ${numCoarseCells} coarse cells`
-        // );
       }
     }
 
@@ -248,7 +244,6 @@ class QuadtreeVoxelGrid {
     this.gridLength = 1;
 
     this._createMesh(N);
-    console.log(`[QuadtreeVoxelGrid] ${N} adaptive voxels (${radiusGroups.size} radius groups)`);
   }
 
   // ── Tree construction ──────────────────────────────────────────────────────

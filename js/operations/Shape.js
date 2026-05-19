@@ -888,10 +888,6 @@ class Shape extends Operation {
                 }
             };
             svgpaths.push(svgPath);
-            if (typeof console !== 'undefined' && typeof console.debug === 'function') {
-                console.debug('Shape default cut preview initialized', svgPath.id, svgPath.toolpathProperties);
-            }
-
             selectSidebarNode(svgPath.id);
             this.currentPath = svgPath;
 

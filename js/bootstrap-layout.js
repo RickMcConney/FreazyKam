@@ -2496,16 +2496,6 @@ function syncShapeMachiningToolpath(path, options = {}) {
         return removeShapePreviewToolpaths(path.id) > 0;
     }
 
-    if (typeof console !== 'undefined' && typeof console.debug === 'function') {
-        console.debug('[ShapePreview] sync request', {
-            pathId: path.id,
-            operationType: data.operationType,
-            depth: data.depth,
-            tool: data.tool,
-            createIfMissing: options.createIfMissing === true
-        });
-    }
-
     const shapeCutOperationName = primaryPath?.creationTool === 'Text'
         ? 'Pocket'
         : (primaryPath?.creationProperties?.shape === 'DrillShape' ? 'Drill' : 'Profile');
@@ -2545,21 +2535,10 @@ function syncShapeMachiningToolpath(path, options = {}) {
 
     const previewToolpaths = getShapePreviewToolpaths(primaryPath.id);
     if (previewToolpaths.some(toolpath => toolpath.pending === true)) {
-        if (typeof console !== 'undefined' && typeof console.debug === 'function') {
-            console.debug('[ShapePreview] skip sync because preview generation is pending', {
-                pathId: primaryPath.id,
-                previewCount: previewToolpaths.length
-            });
-        }
         return 'pending';
     }
 
     if (previewToolpaths.length === 0 && options.createIfMissing !== true) {
-        if (typeof console !== 'undefined' && typeof console.debug === 'function') {
-            console.debug('[ShapePreview] skip sync because no preview toolpath exists yet', {
-                pathId: primaryPath.id
-            });
-        }
         return false;
     }
 
@@ -2626,17 +2605,6 @@ function syncShapeMachiningToolpath(path, options = {}) {
     });
     markShapePreviewToolpaths(primaryPath.id, previewToolpaths.concat(newPreviewToolpaths));
 
-    if (typeof console !== 'undefined' && typeof console.debug === 'function') {
-        const finalPreviewToolpaths = getShapePreviewToolpaths(primaryPath.id);
-        console.debug('[ShapePreview] sync result', {
-            pathId: primaryPath.id,
-            previewCount: finalPreviewToolpaths.length,
-            operations: finalPreviewToolpaths.map(toolpath => toolpath.operation),
-            pending: finalPreviewToolpaths.map(toolpath => toolpath.pending === true),
-            pathCounts: finalPreviewToolpaths.map(toolpath => Array.isArray(toolpath.paths) ? toolpath.paths.length : 0)
-        });
-    }
-
     if (typeof refreshToolPathsDisplay === 'function') {
         refreshToolPathsDisplay();
     }
@@ -2680,18 +2648,6 @@ function refresh3DPreviewForShape(path) {
 
     if (typeof window.schedulePrepared3DGcodeRefresh === 'function') {
         window.schedulePrepared3DGcodeRefresh();
-    }
-
-    if (typeof console !== 'undefined' && typeof console.debug === 'function') {
-        console.debug('[ShapePreview] refresh 3D preview', {
-            pathId: path.id,
-            linkedPreviewToolpaths: getShapePreviewToolpaths(path.id).map(toolpath => ({
-                id: toolpath.id,
-                operation: toolpath.operation,
-                pending: toolpath.pending === true,
-                segments: Array.isArray(toolpath.paths) ? toolpath.paths.length : 0
-            }))
-        });
     }
 }
 

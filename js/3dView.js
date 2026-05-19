@@ -122,28 +122,6 @@ function getPreviewSourceToolpaths(cutSettings = null) {
     return toolpath && toolpath.visible !== false && toolpath.pending !== true && Array.isArray(toolpath.paths) && toolpath.paths.length > 0;
   });
 
-  if (typeof console !== 'undefined' && typeof console.debug === 'function') {
-    console.debug('[3DPreview] source toolpaths resolved', {
-      requestedCutSettings: !!cutSettings,
-      totalToolpaths: Array.isArray(window.toolpaths) ? window.toolpaths.length : 0,
-      previewToolpaths: previewToolpaths.length,
-      toolpaths: previewToolpaths.map((toolpath) => ({
-        id: toolpath.id,
-        name: toolpath.name,
-        operation: toolpath.operation,
-        displayOperation: toolpath.displayOperation,
-        pathGroups: Array.isArray(toolpath.paths) ? toolpath.paths.length : 0,
-        tool: toolpath.tool ? {
-          name: toolpath.tool.name,
-          bit: toolpath.tool.bit,
-          diameter: toolpath.tool.diameter,
-          depth: typeof resolveToolpathDepth === 'function' ? resolveToolpathDepth(toolpath) : toolpath.tool.depth,
-          step: toolpath.tool.step
-        } : null
-      }))
-    });
-  }
-
   return previewToolpaths;
 }
 
@@ -465,19 +443,6 @@ function buildPreviewMovementsFromToolpaths(sourceToolpaths) {
     toolpathSummaries.push({ id: toolpath.id, name: toolpath.name, operation: toolpath.operation, previewKind, pathGroups: toolpath.paths.length, passes, movementCount: movements.length - movementStartIndex, depth, step });
   }
 
-  if (typeof console !== 'undefined' && typeof console.debug === 'function') {
-    console.debug('[3DPreview] built preview movements', {
-      toolpathCount: sourceToolpaths.length,
-      movementCount: movements.length,
-      cuttingMoveCount: movements.filter((move) => move && move.isG1 === true).length,
-      rapidMoveCount: movements.filter((move) => move && move.isG1 !== true).length,
-      toolChangePoints: toolChangePoints.length,
-      safeZ,
-      workpieceThickness,
-      toolpathSummaries
-    });
-  }
-
   return {
     movements,
     toolChangePoints,
@@ -747,16 +712,6 @@ async function reload3DViewFromCurrentState(options = {}) {
   if (!gcode) {
     const previewToolpaths = getPreviewSourceToolpaths(options.cutSettings || null);
     if (previewToolpaths.length > 0) {
-      if (typeof console !== 'undefined' && typeof console.debug === 'function') {
-        console.debug('[3DPreview] reload using finished preview instead of G-code', {
-          preserveProgress,
-          resetIfMissing,
-          showLoading,
-          force,
-          seekToLatestState,
-          previewToolpaths: previewToolpaths.length
-        });
-      }
       toolpathAnimation.loadFinishedPreviewFromToolpaths(previewToolpaths);
       updateSimulation3DUI();
       updateSimulation3DDisplays();
@@ -2825,16 +2780,6 @@ class ToolpathAnimation {
       this.toolRadius = previewData.toolInfo.diameter / 2;
     }
 
-    if (typeof console !== 'undefined' && typeof console.debug === 'function') {
-      console.debug('[3DPreview] load finished preview:start', {
-        sourceToolpaths: Array.isArray(sourceToolpaths) ? sourceToolpaths.length : 0,
-        movementCount: this.movementTiming.length,
-        cuttingMoveCount: this.movementTiming.filter((move) => move && move.isG1 === true).length,
-        toolChangePoints: this.toolChangePoints.length,
-        toolInfo: this.toolInfo
-      });
-    }
-
     const boundsOffset = getWorkpieceBoundsOffset();
     for (const line of this.toolpathLines) {
       line.position.x = boundsOffset.x;
@@ -2850,32 +2795,6 @@ class ToolpathAnimation {
         this._replayFromMovementIndexToIndex(0, this.movementTiming.length - 1);
         this._applyThroughCutRegionRemoval(this.toolpaths, { deferVisualUpdate: true });
         this.voxelGrid.flushVisualUpdates();
-
-        if (typeof console !== 'undefined' && typeof console.debug === 'function') {
-          let carvedVoxelCount = 0;
-          let minTopZ = 0;
-          const voxelTopZ = this.voxelGrid.voxelTopZ;
-          if (voxelTopZ && typeof voxelTopZ.length === 'number') {
-            for (let i = 0; i < voxelTopZ.length; i++) {
-              const topZ = voxelTopZ[i];
-              if (topZ < 0) {
-                carvedVoxelCount++;
-                if (topZ < minTopZ) minTopZ = topZ;
-              }
-            }
-          }
-
-          console.debug('[3DPreview] load finished preview:voxel replay result', {
-            carvedVoxelCount,
-            totalVoxels: this.voxelGrid?.voxelTopZ?.length || 0,
-            minTopZ,
-            materialBottomZ: this.voxelGrid?.materialBottomZ,
-            voxelSize: this.voxelGrid?.voxelSize,
-            workpieceVisible: this.workpieceManager?.mesh?.visible,
-            outlineBoxVisible: this.workpieceOutlineBox?.visible,
-            totalRemovedSamples: this.voxelMaterialRemover?.totalVoxelsRemoved
-          });
-        }
       }
     }
 
@@ -2893,15 +2812,6 @@ class ToolpathAnimation {
     }
 
     sync3DVisibilityControls();
-
-    if (typeof console !== 'undefined' && typeof console.debug === 'function') {
-      console.debug('[3DPreview] load finished preview:done', {
-        toolpathLineCount: this.toolpathLines.length,
-        currentMovementIndex: this.currentMovementIndex,
-        totalGcodeLines: this.totalGcodeLines,
-        simulationReady: false
-      });
-    }
 
     this.updateStatus();
   }
@@ -2981,36 +2891,6 @@ class ToolpathAnimation {
         movementSignature: this.getMovementSignature()
       };
 
-      if (typeof console !== 'undefined' && typeof console.debug === 'function') {
-        console.debug('[3DPreview] initialize voxel grid:start', {
-          width,
-          length,
-          thickness,
-          voxelSize: this.voxelSize,
-          movementCount: Array.isArray(this.movementTiming) ? this.movementTiming.length : 0,
-          toolpathCount: Array.isArray(this.toolpaths) ? this.toolpaths.length : 0,
-          boundsOffset: currentConfig.boundsOffset
-        });
-      }
-
-      // Quick check if voxel grid exists and has same dimensions
-      const configChanged = !this.lastVoxelConfig ||
-        this.lastVoxelConfig.width !== currentConfig.width ||
-        this.lastVoxelConfig.length !== currentConfig.length ||
-        this.lastVoxelConfig.thickness !== currentConfig.thickness ||
-        this.lastVoxelConfig.voxelSize !== currentConfig.voxelSize ||
-        this.lastVoxelConfig.movementSignature !== currentConfig.movementSignature;
-
-      if (!configChanged && this.voxelGrid) {
-        if (typeof console !== 'undefined' && typeof console.debug === 'function') {
-          console.debug('[3DPreview] initialize voxel grid:reuse existing grid', {
-            movementSignature: currentConfig.movementSignature,
-            leafCount: this.voxelGrid?.leaves?.length || 0
-          });
-        }
-        return;  // Dimensions haven't changed, keep using existing voxel grid
-      }
-
       // Dispose of old voxel grid only if we need to recreate
       if (this.voxelGrid) {
         const voxelMesh = this.voxelGrid.getMesh();
@@ -3033,17 +2913,6 @@ class ToolpathAnimation {
       const gridLength = length;
       const gridThickness = thickness;
       const gridOrigin = new THREE.Vector3(-boundsOffset.x, -boundsOffset.y, 0);
-
-      if (typeof console !== 'undefined' && typeof console.debug === 'function') {
-        console.debug('[3DPreview] initialize voxel grid:full stock', {
-          gridWidth,
-          gridLength,
-          gridThickness,
-          gridOrigin: { x: gridOrigin.x, y: gridOrigin.y, z: gridOrigin.z },
-          voxelSize: this.voxelSize
-        });
-      }
-
 
       // Build adaptive quadtree voxel grid.
       // Coarse 8mm cells fill uncut areas; fine cells (≈ originalVoxelSize) are placed
@@ -3099,19 +2968,6 @@ class ToolpathAnimation {
 
       // PHASE 2.1: Save current config so we don't recreate unnecessarily
       this.lastVoxelConfig = currentConfig;
-
-      if (typeof console !== 'undefined' && typeof console.debug === 'function') {
-        console.debug('[3DPreview] initialize voxel grid:done', {
-          leafCount: this.voxelGrid?.leaves?.length || 0,
-          voxelSize: this.voxelGrid?.voxelSize,
-          workpieceVisible: this.workpieceManager?.mesh?.visible,
-          hasOutlineBox: !!this.workpieceOutlineBox,
-          gridWidth,
-          gridLength,
-          gridThickness
-        });
-      }
-
     } catch (error) {
       console.error('Error initializing voxel grid:', error);
       this.enableVoxelRemoval = false;  // Disable voxel removal if initialization fails
