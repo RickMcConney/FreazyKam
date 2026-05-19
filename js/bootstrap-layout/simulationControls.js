@@ -334,11 +334,11 @@ function create3DSimulationMenu(prefix) {
     const menu = document.createElement('div');
     menu.className = 'dropdown-menu dropdown-menu-end simulation-overlay-menu';
 
-    const showWorkpiece = create3DSimulationMenuItem(prefix + '-show-workpiece', 'Workpiece', true);
+    const showWorkpiece = false; //create3DSimulationMenuItem(prefix + '-show-workpiece', 'Workpiece', true);
     const showAxes = create3DSimulationMenuItem(prefix + '-show-axes', 'Axis', true);
     const showTool = create3DSimulationMenuItem(prefix + '-show-tool', 'Tool', true);
     const followTool = create3DSimulationMenuItem(prefix + '-follow-tool', 'Follow Tool', false);
-    menu.appendChild(showWorkpiece.wrapper);
+    if (!!showWorkpiece) menu.appendChild(showWorkpiece.wrapper);
     menu.appendChild(showAxes.wrapper);
     menu.appendChild(showTool.wrapper);
     menu.appendChild(followTool.wrapper);
@@ -348,7 +348,7 @@ function create3DSimulationMenu(prefix) {
 
     return {
         container: container,
-        showWorkpiece: showWorkpiece.input,
+        showWorkpiece: !!showWorkpiece ?showWorkpiece.input: false,
         showAxes: showAxes.input,
         showTool: showTool.input,
         followTool: followTool.input
@@ -536,13 +536,14 @@ function ensure3DSimulationControls() {
     });
 
     function bindMenuControls(menuRefs) {
-        menuRefs.showWorkpiece.addEventListener('change', function (e) {
-            sync3DSimulationMenuState('showWorkpiece', e.target.checked);
-            if (typeof setWorkpieceVisibility3D === 'function') {
-                setWorkpieceVisibility3D(e.target.checked);
-            }
-        });
-
+        if (!!menuRefs.showWorkpiece) {
+            menuRefs.showWorkpiece.addEventListener('change', function (e) {
+                sync3DSimulationMenuState('showWorkpiece', e.target.checked);
+                if (typeof setWorkpieceVisibility3D === 'function') {
+                    setWorkpieceVisibility3D(e.target.checked);
+                }
+            });
+        }
         menuRefs.showAxes.addEventListener('change', function (e) {
             sync3DSimulationMenuState('showAxes', e.target.checked);
             if (typeof setAxesVisibility3D === 'function') {

@@ -42,7 +42,6 @@ function createModals() {
                     <div class="modal-footer">
                         <button type="button" class="btn btn-danger" id="reset-options">Reset to Defaults</button>
                         <div class="ms-auto">
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
                             <button type="button" class="btn btn-primary" id="save-options">Save</button>
                         </div>
                     </div>
@@ -94,10 +93,10 @@ function createModals() {
                                 <li class="mb-2"><strong>Import SVG:</strong> Click "Import SVG" to import your design file</li>
                                 <li class="mb-2"><strong>Configure Workpiece:</strong> Set material dimensions and origin point</li>
                                 <li class="mb-2"><strong>Select Paths:</strong> Choose which SVG paths to machine</li>
-                                <li class="mb-2"><strong>Assign Operations:</strong> Apply machining operations to selected paths</li>
-                                <li class="mb-2"><strong>Set Tools:</strong> Define cutting tools in the Tool Library</li>
-                                <li class="mb-2"><strong>Simulate Toolpaths:</strong> Preview machining in 2D/3D simulation</li>
-                                <li class="mb-2"><strong>Export G-code:</strong> Click "Gcode" to download your toolpaths</li>
+                                <li class="mb-2"><strong>Assign cut operations:</strong> Apply machining operations to selected paths</li>
+                                <li class="mb-2"><strong>Set cut settings:</strong> Select the bit you want to use and configure cutting parameters</li>
+                                <li class="mb-2"><strong>Simulate Toolpaths:</strong> Preview machining in 3D simulation</li>
+                                <li class="mb-2"><strong>Export G-code:</strong> Export your "Gcode" to your CNC machine</li>
                             </ol>
                         </div>
 
@@ -174,51 +173,9 @@ function createModals() {
 
                         <hr>
 
-                        <!-- Tips & Tricks -->
-                        <div class="mb-4">
-                            <h6 class="text-primary mb-3">
-                                <i data-lucide="lightbulb"></i>
-                                Tips & Tricks
-                            </h6>
-                            <ul class="small">
-                                <li class="mb-2"><strong>Tool Library:</strong> Configure your tools in the Tools tab - set diameter, feed rates, and RPM</li>
-                                <li class="mb-2"><strong>Operation Order:</strong> Toolpaths are cut in the order they are in the side panel. Use the toolpath context menu to reorder operations</li>
-                                <li class="mb-2"><strong>Visibility:</strong> Toggle path visibility with the eye icon to control what gets exported</li>
-                                <li class="mb-2"><strong>G-code Profiles:</strong> Create custom post-processor profiles for different CNC machines</li>
-                                <li class="mb-2"><strong>Material Selection:</strong> Choose wood species in Workpiece settings for optimized feed rates</li>
-                                <li class="mb-2"><strong>Simulation:</strong> Use the 2D or 3Dsimulation controls to preview toolpaths before exporting</li>
-                            </ul>
-                        </div>
-
-                        <hr>
-
-                        <!-- Advanced Features -->
-                        <div class="mb-4">
-                            <h6 class="text-primary mb-3">
-                                <i data-lucide="settings"></i>
-                                Advanced Features
-                            </h6>
-                            <div class="small">
-                                <p class="mb-2"><strong>Post Processor Templates:</strong></p>
-                                <ul>
-                                    <li>Use <code>X Y Z F S</code> placeholders in G-code templates</li>
-                                    <li>Axis inversion: <code>-X -Y -Z</code> negates values</li>
-                                    <li>Axis swapping: <code>Y X Z</code> swaps coordinates</li>
-                                    <li><code>S</code> placeholder uses tool RPM for spindle speed</li>
-                                </ul>
-                                <p class="mb-2 mt-3"><strong>Path Editing:</strong></p>
-                                <ul>
-                                    <li>Text objects can be re-edited after creation</li>
-                                    <li>Shape properties can be changed after creation</li>
-                                </ul>
-                            </div>
-                        </div>
-
-                        <hr>
-
                         <div class="text-center">
-                            <p class="text-muted small mb-0">&copy; 2025 Rick McConney</p>
-                            <p class="text-muted small">Browser-based CNC CAM Application</p>
+                            <p class="text-muted small mb-0">CC BY-NC 4.0</p>
+                            <p class="text-muted small">Source: <a href="https://github.com/iarchi/freazykam" target="_blank">GitHub</a></p>
                         </div>
                     </div>
                     <div class="modal-footer">
