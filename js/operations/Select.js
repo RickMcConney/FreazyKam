@@ -512,11 +512,18 @@ class Select extends Operation {
         const selectedPaths = this.selectedPaths();
         const selectedShapePaths = selectedPaths.filter(path => path && path.creationProperties && (
             path.creationTool === 'Shape'
+            || path.creationTool === 'Text'
             || (window.SHAPE_TOOL_NAMES || []).includes(path.creationTool)
         ));
 
         if (isOnDrawTab && selectedShapePaths.length > 1 && typeof showShapeGroupPropertiesEditor === 'function') {
             showShapeGroupPropertiesEditor(selectedShapePaths);
+            redraw();
+            return;
+        }
+
+        if (isOnDrawTab && selectedShapePaths.length === 1 && typeof openPathEditor === 'function') {
+            openPathEditor(selectedShapePaths[0]);
             redraw();
             return;
         }
