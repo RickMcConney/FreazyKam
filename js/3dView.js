@@ -1047,7 +1047,9 @@ const CONFIG = {
   CAMERA_FOV: 75,
   CAMERA_NEAR: 0.1,
   CAMERA_FAR: 5000,
-  INITIAL_CAMERA_POSITION: { x: 0, y: -140, z: 100 },
+  INITIAL_CAMERA_POSITION: { x: 0, y: 0, z: 140 },
+  CAMERA_FIT_PADDING: 1.02,
+  CAMERA_MIN_TILT_Y_RATIO: 0.22,
 
   // Lighting (brightened for better visibility)
   DIRECTIONAL_LIGHT_COLOR: 0xffffff,
@@ -1135,6 +1137,128 @@ function getWorkpieceDimensions() {
     thickness: (typeof getOption === 'function') ? getOption('workpieceThickness') : CONFIG.WORKPIECE_DEFAULT_THICKNESS,
     originPosition: (typeof getOption === 'function') ? getOption('originPosition') : 'middle-center'
   };
+}
+
+function getDefaultCameraSphericalPosition() {
+  const camPos = CONFIG.INITIAL_CAMERA_POSITION;
+  const minTiltRatio = Math.max(0, Math.min(0.95, Number(CONFIG.CAMERA_MIN_TILT_Y_RATIO) || 0));
+  let adjustedY = camPos.y;
+
+  if (Math.abs(adjustedY) < Math.abs(camPos.z) * minTiltRatio) {
+    adjustedY = -Math.max(1, Math.abs(camPos.z) * minTiltRatio);
+  }
+
+  const distance = Math.sqrt(camPos.x * camPos.x + adjustedY * adjustedY + camPos.z * camPos.z);
+
+  if (!Number.isFinite(distance) || distance <= 0) {
+    return {
+      distance: 1,
+      phi: 0,
+      theta: 0
+    };
+  }
+
+  return {
+    distance,
+    phi: Math.asin(adjustedY / distance),
+    theta: Math.atan2(camPos.x, camPos.z)
+  };
+}
+
+function getFitDistanceForWorkpiece(width, length, thickness, aspect) {
+  const safeWidth = Math.max(1, Number(width) || 0);
+  const safeLength = Math.max(1, Number(length) || 0);
+  const safeThickness = Math.max(1, Number(thickness) || 0);
+  const safeAspect = Number.isFinite(aspect) && aspect > 0 ? aspect : 1;
+  const defaultCamera = getDefaultCameraSphericalPosition();
+  const cameraDirection = new THREE.Vector3(
+    Math.cos(defaultCamera.phi) * Math.sin(defaultCamera.theta),
+    Math.sin(defaultCamera.phi),
+    Math.cos(defaultCamera.phi) * Math.cos(defaultCamera.theta)
+  ).normalize();
+  const tempCamera = new THREE.PerspectiveCamera(
+    camera?.fov || CONFIG.CAMERA_FOV,
+    safeAspect,
+    CONFIG.CAMERA_NEAR,
+    CONFIG.CAMERA_FAR
+  );
+  const visibleLimit = 1 / CONFIG.CAMERA_FIT_PADDING;
+  const halfWidth = safeWidth / 2;
+  const halfLength = safeLength / 2;
+  const halfThickness = safeThickness / 2;
+  const corners = [
+    new THREE.Vector3(-halfWidth, -halfLength, -halfThickness),
+    new THREE.Vector3(-halfWidth, -halfLength, halfThickness),
+    new THREE.Vector3(-halfWidth, halfLength, -halfThickness),
+    new THREE.Vector3(-halfWidth, halfLength, halfThickness),
+    new THREE.Vector3(halfWidth, -halfLength, -halfThickness),
+    new THREE.Vector3(halfWidth, -halfLength, halfThickness),
+    new THREE.Vector3(halfWidth, halfLength, -halfThickness),
+    new THREE.Vector3(halfWidth, halfLength, halfThickness)
+  ];
+
+  const fitsAtDistance = (distance) => {
+    tempCamera.position.copy(cameraDirection).multiplyScalar(distance);
+    tempCamera.lookAt(0, 0, 0);
+    tempCamera.updateProjectionMatrix();
+    tempCamera.updateMatrixWorld(true);
+
+    for (const corner of corners) {
+      const projectedCorner = corner.clone().project(tempCamera);
+      if (
+        !Number.isFinite(projectedCorner.x) ||
+        !Number.isFinite(projectedCorner.y) ||
+        !Number.isFinite(projectedCorner.z) ||
+        Math.abs(projectedCorner.x) > visibleLimit ||
+        Math.abs(projectedCorner.y) > visibleLimit
+      ) {
+        return false;
+      }
+    }
+
+    return true;
+  };
+
+  let minDistance = 1;
+  let maxDistance = Math.max(10, Math.max(safeWidth, safeLength, safeThickness));
+
+  while (!fitsAtDistance(maxDistance) && maxDistance < CONFIG.CAMERA_FAR) {
+    minDistance = maxDistance;
+    maxDistance *= 1.5;
+  }
+
+  for (let i = 0; i < 24; i++) {
+    const midDistance = (minDistance + maxDistance) / 2;
+    if (fitsAtDistance(midDistance)) {
+      maxDistance = midDistance;
+    } else {
+      minDistance = midDistance;
+    }
+  }
+
+  return maxDistance;
+}
+
+function reset3DCameraToWorkpieceFit(width, length, thickness) {
+  if (!camera || !orbitControls) {
+    return;
+  }
+
+  const safeWidth = Math.max(1, Number(width) || CONFIG.WORKPIECE_DEFAULT_WIDTH);
+  const safeLength = Math.max(1, Number(length) || CONFIG.WORKPIECE_DEFAULT_LENGTH);
+  const safeThickness = Math.max(1, Number(thickness) || CONFIG.WORKPIECE_DEFAULT_THICKNESS);
+  const defaultCamera = getDefaultCameraSphericalPosition();
+  const fitDistance = getFitDistanceForWorkpiece(safeWidth, safeLength, safeThickness, camera.aspect);
+
+  orbitControls.minDistance = 10;
+  orbitControls.maxDistance = Math.max(3000, fitDistance * 4);
+  orbitControls.distance = Math.max(orbitControls.minDistance, Math.min(orbitControls.maxDistance, fitDistance));
+  orbitControls.phi = defaultCamera.phi;
+  orbitControls.theta = defaultCamera.theta;
+  orbitControls.target.set(0, 0, -safeThickness / 2);
+  orbitControls.updateCamera();
+  updateProgressiveGrid3D(true);
+  requestThreeRender();
 }
 
 function getWorkpieceBoundsOffset(originPositionOverride, widthOverride, lengthOverride) {
@@ -1516,16 +1640,16 @@ async function initThree(loadToken = threeViewLoadToken) {
   scene.background = new THREE.Color(CONFIG.SCENE_BACKGROUND_COLOR);
   window.threeScene = scene;
 
-  // Setup camera - perspective view from above and negative Y
+  // Setup camera - default perspective view facing the top machining surface
   camera = new THREE.PerspectiveCamera(CONFIG.CAMERA_FOV, width / height, CONFIG.CAMERA_NEAR, CONFIG.CAMERA_FAR);
 
   // Get workpiece dimensions (in mm)
   const { width: workpieceWidth, length: workpieceLength, thickness: workpieceThickness, originPosition } = getWorkpieceDimensions();
 
-  // Position camera: above origin (0,0,0), along negative Y axis
-  // This gives us a perspective view where:
+  // Position camera above the workpiece, looking straight at the top face.
+  // This gives us a default view where:
   // - X axis points right (red)
-  // - Y axis points away (green)
+  // - Y axis points toward the top of the screen (green)
   // - Z axis points up (blue)
   const camPos = CONFIG.INITIAL_CAMERA_POSITION;
   camera.position.set(camPos.x, camPos.y, camPos.z);
@@ -1585,15 +1709,7 @@ async function initThree(loadToken = threeViewLoadToken) {
 
   // Setup orbit controls - center on world origin (0, 0, 0)
   orbitControls = new OrbitControls(camera, renderer.domElement);
-
-  // Initialize orbit controls with correct camera position
-  // Calculate distance, phi, theta from desired position (0, -140, 100)
-  const camX = 0, camY = -140, camZ = 100;
-  orbitControls.distance = Math.sqrt(camX*camX + camY*camY + camZ*camZ);
-  orbitControls.phi = Math.asin(camY / orbitControls.distance);
-  orbitControls.theta = Math.atan2(camX, camZ);
-
-  orbitControls.setTarget(0, 0, 0);
+  reset3DCameraToWorkpieceFit(workpieceWidth, workpieceLength, workpieceThickness);
   updateProgressiveGrid3D(true);
 
   // Simulation controls are now created by bootstrap-layout.js overlay system
@@ -1975,6 +2091,8 @@ function updateWorkpiece3D(width, length, thickness, originPosition, material) {
       toolpathAnimation.workpieceManager = workpieceManager;
       toolpathAnimation.lastVoxelConfig = null;
     }
+
+    reset3DCameraToWorkpieceFit(width, length, thickness);
   } else {
     // Origin change only: keep the workpiece fixed and move only the axes helper
     workpieceManager.originPosition = originPosition;
