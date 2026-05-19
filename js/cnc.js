@@ -579,7 +579,7 @@ async function saveProject() {
 	a.click();
 	document.body.removeChild(a);
 	URL.revokeObjectURL(url);
-	notify('Project download started');
+	notify('Project download started', 'success');
 }
 
 function loadProject(json) {
@@ -2939,5 +2939,5 @@ async function doGcode(cutSettingsOverride) {
 
 	const projectName = filename.replace(/\.[^.]+$/, '');
 	saveString(_gcodeNameComment(projectName) + text, filename);
-	notify('G-code download started');
+	notify('G-code download started', 'success');
 }
