@@ -85,7 +85,8 @@ class QuadtreeVoxelGrid {
     workpieceWidth, workpieceLength, workpieceThickness,
     voxelSize = 1.0,
     originOffset  = new THREE.Vector3(),
-    workpieceColor = 0x8B6914
+    workpieceColor = 0x8B6914,
+    options = {}
   ) {
     this.workpieceWidth     = workpieceWidth;
     this.workpieceLength    = workpieceLength;
@@ -93,6 +94,9 @@ class QuadtreeVoxelGrid {
     this.originOffset       = originOffset;
     this.workpieceColor     = workpieceColor;
     this.materialBottomZ    = -workpieceThickness;
+    this.maxVoxels          = Number.isFinite(options.maxVoxels)
+      ? Math.max(1, Math.floor(options.maxVoxels))
+      : QuadtreeVoxelGrid.MAX_VOXELS;
 
     // Compute fine-cell depth so that leaf size ≈ voxelSize
     const idealDepth = Math.round(Math.log2(COARSE_CELL_SIZE / Math.max(voxelSize, 0.05)));
@@ -191,7 +195,7 @@ class QuadtreeVoxelGrid {
       const numCoarseY = Math.ceil(this.workpieceLength / COARSE_CELL_SIZE);
       const numCoarseCells = numCoarseX * numCoarseY;
       const maxSafeDepth = Math.max(1, Math.floor(
-        Math.log(QuadtreeVoxelGrid.MAX_VOXELS / numCoarseCells) / Math.log(4)
+        Math.log(this.maxVoxels / numCoarseCells) / Math.log(4)
       ));
       if (this._maxFineDepth > maxSafeDepth) {
         this._maxFineDepth = maxSafeDepth;
@@ -204,7 +208,7 @@ class QuadtreeVoxelGrid {
       }
     }
 
-    // Build tree, then reduce fine resolution if the leaf count exceeds MAX_VOXELS.
+    // Build tree, then reduce fine resolution if the leaf count exceeds the configured budget.
     // This mirrors the original VoxelGrid auto-scaling and keeps GPU instance count
     // within a renderable budget.  Rebuilding takes < 100ms and happens at most a
     // handful of times for very dense toolpaths.
@@ -229,7 +233,7 @@ class QuadtreeVoxelGrid {
       this._flatten(this.root);
       N = this.leaves.length;
 
-      if (N <= QuadtreeVoxelGrid.MAX_VOXELS) break;
+      if (N <= this.maxVoxels) break;
 
       // Too many voxels: coarsen fine cells by one depth level (doubles minCellSize)
       this._maxFineDepth = Math.max(1, this._maxFineDepth - 1);

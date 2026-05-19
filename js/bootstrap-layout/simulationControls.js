@@ -401,23 +401,7 @@ function ensure3DSimulationControls() {
 
     const fragment = document.createDocumentFragment();
     const summaryRow = document.createElement('div');
-    summaryRow.className = 'd-flex w-100 align-items-center justify-content-between gap-3 flex-wrap';
-
-    const estimateWrap = document.createElement('div');
-    estimateWrap.className = 'd-flex align-items-center gap-2';
-
-    const estimateLabel = document.createElement('span');
-    estimateLabel.className = 'small';
-    estimateLabel.textContent = 'Estimated Carve Time:';
-
-    const estimateValue = document.createElement('span');
-    estimateValue.id = '3d-estimated-carve-time';
-    estimateValue.className = 'small fw-semibold';
-    estimateValue.textContent = '0:00';
-
-    estimateWrap.appendChild(estimateLabel);
-    estimateWrap.appendChild(estimateValue);
-    summaryRow.appendChild(estimateWrap);
+    summaryRow.className = 'd-flex w-100 align-items-center justify-content-end gap-3 flex-wrap';
 
     const cutSettingsBtn = document.createElement('button');
     cutSettingsBtn.type = 'button';
@@ -534,10 +518,6 @@ function ensure3DSimulationControls() {
     });
 
     simulateBtn.addEventListener('click', async function () {
-        if (typeof waitForPrepared3DGcodeRefresh === 'function') {
-            await waitForPrepared3DGcodeRefresh();
-        }
-
         if (typeof generateAndLoad3DGcode === 'function') {
             const loaded = await generateAndLoad3DGcode({ showLoading: true, seekToLatestState: true });
             if (loaded) {
@@ -599,7 +579,6 @@ function ensure3DSimulationControls() {
         progressInput: progressInput,
         simulationTime: simulationTime,
         totalTime: totalTime,
-        estimateValue: estimateValue,
         isSimulationReady: false
     };
 

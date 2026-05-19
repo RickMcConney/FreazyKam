@@ -493,15 +493,6 @@ function getPreparedSimulation3DGcode() {
   return window._preparedSimulation3DGcode || null;
 }
 
-function updatePreparedSimulationEstimateDisplay(seconds) {
-  const ui = getSimulation3DUIElements();
-  const formatted = formatTime(Math.max(0, Number(seconds) || 0));
-
-  if (ui.estimateTimeElem) {
-    ui.estimateTimeElem.textContent = formatted;
-  }
-}
-
 function clearPreparedSimulation3DState() {
   if (window._importedGcode) {
     return;
@@ -510,7 +501,6 @@ function clearPreparedSimulation3DState() {
   window._preparedSimulation3DGcode = null;
   window._preparedSimulation3DMeta = null;
   window._cachedGcode = null;
-  updatePreparedSimulationEstimateDisplay(0);
 
   if (typeof window.set3DSimulationControlsReady === 'function') {
     window.set3DSimulationControlsReady(false);
@@ -608,36 +598,12 @@ async function refreshPrepared3DGcodeNow(options = {}) {
   }
 
   try {
-    const gcode = toGcode(cutSettings);
-    if (requestId !== prepared3DGcodeRequestId) {
-      resolvePrepared3DGcodeRefresh(false);
-      return false;
-    }
-
-    window._preparedSimulation3DGcode = gcode;
-
-    const profile = window.currentGcodeProfile || null;
-    const preprocessRequestId = ++prepared3DGcodePreprocessRequestId;
-    const preprocessResult = await preprocessPreparedGcodeAsync(gcode, profile, preprocessRequestId);
-    if (requestId !== prepared3DGcodeRequestId) {
-      resolvePrepared3DGcodeRefresh(false);
-      return false;
-    }
-
-    window._preparedSimulation3DMeta = {
-      totalAnimationTime: preprocessResult.totalAnimationTime || 0,
-      totalGcodeLines: preprocessResult.totalGcodeLines || 0,
-      updatedAt: Date.now()
-    };
-    updatePreparedSimulationEstimateDisplay(window._preparedSimulation3DMeta.totalAnimationTime);
-
     const hasLoadedSimulation = !!(toolpathAnimation
       && Array.isArray(toolpathAnimation.movementTiming)
       && toolpathAnimation.movementTiming.length > 0
       && toolpathAnimation.totalGcodeLines > 0);
 
     if (hasLoadedSimulation && reloadIfLoaded) {
-      window._cachedGcode = gcode;
       if (scene && toolpathAnimation && workpieceManager) {
         schedule3DViewRefresh({
           preserveProgress: false,
@@ -650,7 +616,7 @@ async function refreshPrepared3DGcodeNow(options = {}) {
     resolvePrepared3DGcodeRefresh(true);
     return true;
   } catch (error) {
-    console.error('Failed to prepare background G-code for 3D view:', error);
+    console.error('Failed to refresh 3D preview state:', error);
     clearPreparedSimulation3DState();
     resolvePrepared3DGcodeRefresh(false);
     return false;
@@ -927,11 +893,8 @@ async function generateAndLoad3DGcode(options = {}) {
   }
 
   try {
-    let gcode = getPreparedSimulation3DGcode();
-    if (!gcode) {
-      gcode = toGcode(cutSettings || undefined);
-      window._preparedSimulation3DGcode = gcode;
-    }
+    const gcode = toGcode(cutSettings || undefined);
+    window._preparedSimulation3DGcode = gcode;
     window._cachedGcode = gcode;
 
     if (!scene || !toolpathAnimation || !workpieceManager) {
@@ -1024,8 +987,7 @@ function getSimulation3DUIElements() {
     startBtn: document.getElementById('3d-start-simulation'),
     progressSlider: document.getElementById('3d-simulation-progress'),
     simTimeElem: document.getElementById('3d-simulation-time'),
-    totalTimeElem: document.getElementById('3d-total-time'),
-    estimateTimeElem: document.getElementById('3d-estimated-carve-time')
+    totalTimeElem: document.getElementById('3d-total-time')
   };
 
   return simulation3DUIElements;
@@ -1068,7 +1030,6 @@ function flushSimulation3DUI(force) {
     if (ui.totalTimeElem) {
       ui.totalTimeElem.textContent = '0:00';
     }
-    updatePreparedSimulationEstimateDisplay(window._preparedSimulation3DMeta?.totalAnimationTime || 0);
     if (ui.progressSlider) {
       ui.progressSlider.max = 1;
       ui.progressSlider.value = 0;
@@ -1096,10 +1057,6 @@ function flushSimulation3DUI(force) {
 
   if (ui.totalTimeElem) {
     ui.totalTimeElem.textContent = formatTime(toolpathAnimation.totalAnimationTime);
-  }
-
-  if (ui.estimateTimeElem) {
-    ui.estimateTimeElem.textContent = formatTime(toolpathAnimation.totalAnimationTime || window._preparedSimulation3DMeta?.totalAnimationTime || 0);
   }
 
   simulation3DUIState.lastUpdateTime = now;
@@ -1186,6 +1143,7 @@ const CONFIG = {
   // Voxel system
   DEFAULT_VOXEL_SIZE: 0.5,  // Default voxel size in mm
   MAX_VOXELS: 300000,  // Maximum voxels before scaling up voxel size
+  PREVIEW_MAX_VOXELS: 350000,  // Lower voxel budget for non-G-code 3D preview responsiveness
   VOXEL_SIZE_INCREMENT: 0.25,  // How much to increase voxel size when exceeding max
 
   // Toolpath visualization
@@ -3092,9 +3050,12 @@ class ToolpathAnimation {
       // only where the tool actually cuts, so we always use the original fine resolution
       // rather than the auto-scaled value computed for the uniform grid above.
       this.voxelSize = originalVoxelSize;  // restore before passing to quadtree
+      const usesPreviewMovementsOnly = this.totalGcodeLines === 0;
+      const voxelBudget = usesPreviewMovementsOnly ? CONFIG.PREVIEW_MAX_VOXELS : CONFIG.MAX_VOXELS;
       const qtGrid = new QuadtreeVoxelGrid(
         gridWidth, gridLength, gridThickness,
-        originalVoxelSize, gridOrigin, materialColor
+        originalVoxelSize, gridOrigin, materialColor,
+        { maxVoxels: voxelBudget }
       );
 
       // Annotate each movement with the active tool radius so buildFromMovements
