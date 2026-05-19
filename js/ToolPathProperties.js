@@ -22,7 +22,7 @@ class ToolPathProperties {
                 defaultOperationType: 'none',
                 operationTypeOptions: [
                     { value: 'none', label: 'None' },
-                    { value: 'vcarve', label: 'VCarve' },
+                    //{ value: 'vcarve', label: 'VCarve' },
                     { value: 'pocket', label: 'Clear out a pocket' },
                     { value: 'center', label: 'Cut on shape path' },
                     { value: 'outside', label: 'Cut outside shape path' },
