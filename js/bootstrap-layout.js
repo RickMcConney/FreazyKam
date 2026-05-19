@@ -2016,19 +2016,23 @@ function bindShapeCutPopup(path, shapeOperation, operationName) {
     });
 
     form.querySelectorAll('#shape-cut-properties-panel input, #shape-cut-properties-panel select, #shape-cut-properties-panel textarea').forEach(input => {
-        function handleCutChange() {
+        const shouldDeferToolpathSync = input.type === 'range' && getPropertyInputKey(input) === 'depth';
+
+        function handleCutChange({ syncToolpath = true } = {}) {
             if (!path) return;
             const data = window.toolPathProperties.collectFormData(operationName);
             const sanitized = sanitizeToolpathProperties(data);
             path.toolpathProperties = sanitized || {};
             path.toolpathProperties.operation = data.operation || operationName;
             redraw();
-            scheduleShapeMachiningToolpathSync(path, { createIfMissing: true });
+            if (syncToolpath) {
+                scheduleShapeMachiningToolpathSync(path, { createIfMissing: true });
+            }
         }
 
-        input.addEventListener('change', handleCutChange);
+        input.addEventListener('change', () => handleCutChange({ syncToolpath: true }));
         if (input.type === 'text' || input.type === 'number' || input.type === 'range' || input.tagName === 'TEXTAREA') {
-            input.addEventListener('input', handleCutChange);
+            input.addEventListener('input', () => handleCutChange({ syncToolpath: !shouldDeferToolpathSync }));
         }
     });
 
@@ -2060,22 +2064,26 @@ function bindShapeGroupPopup(paths, transformOperation, operationName) {
 
     if (operationName) {
         form.querySelectorAll('#shape-cut-properties-panel input, #shape-cut-properties-panel select, #shape-cut-properties-panel textarea').forEach(input => {
-            function handleCutChange() {
+            const shouldDeferToolpathSync = input.type === 'range' && getPropertyInputKey(input) === 'depth';
+
+            function handleCutChange({ syncToolpath = true } = {}) {
                 const data = window.toolPathProperties.collectFormData(operationName);
                 const sanitized = sanitizeToolpathProperties(data);
 
                 paths.forEach(path => {
                     path.toolpathProperties = sanitized ? { ...sanitized } : {};
                     path.toolpathProperties.operation = data.operation || operationName;
-                    scheduleShapeMachiningToolpathSync(path, { createIfMissing: true });
+                    if (syncToolpath) {
+                        scheduleShapeMachiningToolpathSync(path, { createIfMissing: true });
+                    }
                 });
 
                 redraw();
             }
 
-            input.addEventListener('change', handleCutChange);
+            input.addEventListener('change', () => handleCutChange({ syncToolpath: true }));
             if (input.type === 'text' || input.type === 'number' || input.type === 'range' || input.tagName === 'TEXTAREA') {
-                input.addEventListener('input', handleCutChange);
+                input.addEventListener('input', () => handleCutChange({ syncToolpath: !shouldDeferToolpathSync }));
             }
         });
     }
