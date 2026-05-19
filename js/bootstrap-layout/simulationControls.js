@@ -419,6 +419,12 @@ function ensure3DSimulationControls() {
     estimateWrap.appendChild(estimateValue);
     summaryRow.appendChild(estimateWrap);
 
+    const cutSettingsBtn = document.createElement('button');
+    cutSettingsBtn.type = 'button';
+    cutSettingsBtn.className = 'btn btn-outline-secondary btn-sm';
+    cutSettingsBtn.id = '3d-cut-settings';
+    cutSettingsBtn.appendChild(document.createTextNode('Cut settings'));
+
     const simulateBtn = document.createElement('button');
     simulateBtn.type = 'button';
     simulateBtn.className = 'btn btn-primary btn-sm';
@@ -428,6 +434,7 @@ function ensure3DSimulationControls() {
     const summaryActions = document.createElement('div');
     summaryActions.className = 'd-flex align-items-center gap-2';
     const summaryMenu = create3DSimulationMenu('3d-summary');
+    summaryActions.appendChild(cutSettingsBtn);
     summaryActions.appendChild(simulateBtn);
     summaryActions.appendChild(summaryMenu.container);
     summaryRow.appendChild(summaryActions);
@@ -520,6 +527,12 @@ function ensure3DSimulationControls() {
         }
     });
 
+    cutSettingsBtn.addEventListener('click', function () {
+        if (typeof showCutSettingsModal === 'function') {
+            showCutSettingsModal();
+        }
+    });
+
     simulateBtn.addEventListener('click', async function () {
         if (typeof waitForPrepared3DGcodeRefresh === 'function') {
             await waitForPrepared3DGcodeRefresh();
@@ -581,6 +594,7 @@ function ensure3DSimulationControls() {
         controlsMenu: controlsMenu,
         startBtn: startBtn,
         speedInput: speedInput,
+        cutSettingsBtn: cutSettingsBtn,
         generateGcodeBtn: simulateBtn,
         progressInput: progressInput,
         simulationTime: simulationTime,
