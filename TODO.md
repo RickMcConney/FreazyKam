@@ -4,5 +4,3 @@ TODO
 - Add TEXT tool
 - Add PEN tool
 - Add Aligment panel.
-- Add measure tool
-- Lag with large operations

@@ -1480,7 +1480,7 @@ function setupSidebarEventHandlers(sidebar) {
         }
 
         if (operation) {
-            const isDrawTool = ['Select', 'Move', 'Edit', 'Shape', 'Text', 'Boolean', 'Tabs', 'Offset', 'Pattern', ...(window.SHAPE_TOOL_NAMES || [])].includes(operation);
+            const isDrawTool = ['Select', 'Move', 'Edit', 'Shape', 'Text', 'Boolean', 'Tabs', 'Offset', 'Pattern', 'Measure', ...(window.SHAPE_TOOL_NAMES || [])].includes(operation);
 
             if (item.dataset.autoCreateText === 'true') {
                 createTextAtCanvasCenter();
@@ -2198,6 +2198,11 @@ function showShapeGroupPropertiesEditor(paths) {
 function hideFloatingPropertiesPopup() {
     const elements = getFloatingPropertiesElements();
     if (!elements.popup || !elements.body) return;
+
+    const activeOperation = window.cncController?.operationManager?.getCurrentOperation();
+    if (activeOperation && activeOperation.name === 'Measure' && typeof activeOperation.clearMeasurement === 'function') {
+        activeOperation.clearMeasurement(false);
+    }
 
     Array.from(elements.body.children).forEach(child => {
         child.classList.remove('is-active');
@@ -4213,6 +4218,9 @@ function handleOperationClick(operation) {
             break;
         case 'Pattern':
             doPattern();
+            break;
+        case 'Measure':
+            doMeasure();
             break;
         // Machining Operations — batch all generated toolpaths into a single undo step
         case 'Profile':

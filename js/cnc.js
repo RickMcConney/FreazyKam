@@ -966,6 +966,10 @@ function doPattern() {
 	cncController.setMode("Pattern");
 }
 
+function doMeasure() {
+	cncController.setMode("Measure");
+}
+
 function doTabEditor() {
 	cncController.setMode("Tabs");
 }
