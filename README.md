@@ -4,7 +4,7 @@
   <img src="icons/logo.svg" alt="Maslow CAM Logo" width="200">
 </p>
 
-**[Launch MaslowCAM](https://iarchi.github.io/maslowcam/)**
+**[Launch MaslowCAM](https://iarchi.github.io/MaslowCAM/)**
 
 Free and easy browser-based CAM for CNC machines. Turn your designs into G-code — no software to install, no accounts, no cost. Import SVGs, set up your project, and export G-code ready for your router.
 
@@ -50,7 +50,7 @@ Everything runs in your browser. Your files never leave your computer.
 
 ### Using MaslowCAM Online (Easiest)
 
-Just click here: **[Launch MaslowCAM](https://iarchi.github.io/maslowcam/)**
+Just click here: **[Launch MaslowCAM](https://iarchi.github.io/MaslowCAM/)**
 
 Works in any modern browser (Chrome, Firefox, Safari, Edge). No installation needed.
 
@@ -58,7 +58,7 @@ Works in any modern browser (Chrome, Firefox, Safari, Edge). No installation nee
 
 ```bash
 # Clone the repository
-git clone https://github.com/iarchi/maslowcam.git
+git clone https://github.com/iarchi/MaslowCAM.git
 cd toGcode
 
 # Start a local web server (required for ES6 modules)
@@ -110,8 +110,8 @@ This project welcomes contributions:
 
 ## Support
 
-- **Issues**: [GitHub Issues](https://github.com/iarchi/maslowcam/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/iarchi/maslowcam/discussions)
+- **Issues**: [GitHub Issues](https://github.com/iarchi/MaslowCAM/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/iarchi/MaslowCAM/discussions)
 
 ## License
 
