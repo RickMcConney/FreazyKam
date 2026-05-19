@@ -345,7 +345,7 @@ html, body {
     width: min(215px, calc(100vw - 24px));
     max-height: calc(100vh - 128px);
     background: #ffffff;
-    border: 1px solid rgba(15, 23, 42, 0.08);
+    border: 1px solid rgba(15, 23, 42, 1);
     border-radius: 4px;
     box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
     overflow: hidden;
