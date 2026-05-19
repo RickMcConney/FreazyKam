@@ -17,6 +17,8 @@ const DEFAULT_SHAPE_NAME = '';
 const DEFAULT_SHAPE_LOCK_OBJECT = false;
 const DEFAULT_DRILL_SHAPE_DIAMETER = 6;
 const MIN_SHAPE_SIZE = 1;
+const DEFAULT_SHAPE_WORKPIECE_RATIO = 0.2;
+const MAX_DEFAULT_SHAPE_WORKPIECE_RATIO = 0.8;
 const SHAPE_EDIT_HANDLE_SIZE = 8;
 const SHAPE_EDIT_HANDLE_HIT_RADIUS = 28;
 const SHAPE_EDIT_ROTATE_OFFSET_PX = 36;
@@ -26,6 +28,27 @@ function clampShapeSize(value, fallback) {
     const numericValue = Number(value);
     if (!Number.isFinite(numericValue)) return fallback;
     return Math.max(MIN_SHAPE_SIZE, numericValue);
+}
+
+function getDefaultShapeDimension(workpieceDimension, fallback) {
+    const numericDimension = Number(workpieceDimension);
+    if (!Number.isFinite(numericDimension) || numericDimension <= 0) {
+        return fallback;
+    }
+
+    const maxFitDimension = Math.max(MIN_SHAPE_SIZE, numericDimension * MAX_DEFAULT_SHAPE_WORKPIECE_RATIO);
+    const scaledDimension = Math.max(fallback, numericDimension * DEFAULT_SHAPE_WORKPIECE_RATIO);
+    return Math.max(MIN_SHAPE_SIZE, Math.min(maxFitDimension, scaledDimension));
+}
+
+function getDefaultShapeDimensions() {
+    const workpieceWidth = typeof getOption === 'function' ? getOption('workpieceWidth') : null;
+    const workpieceHeight = typeof getOption === 'function' ? getOption('workpieceLength') : null;
+
+    return {
+        width: getDefaultShapeDimension(workpieceWidth, DEFAULT_SHAPE_WIDTH),
+        height: getDefaultShapeDimension(workpieceHeight, DEFAULT_SHAPE_HEIGHT)
+    };
 }
 
 function normalizeAngle(value) {
@@ -52,9 +75,10 @@ function getAspectRatio(width, height) {
 
 function getLockedDimensionsFromAxis(changedKey, primaryValue, ratio) {
     const safeRatio = Number.isFinite(Number(ratio)) && Number(ratio) > 0 ? Number(ratio) : 1;
+    const defaultDimensions = getDefaultShapeDimensions();
 
     if (changedKey === 'width') {
-        let width = clampShapeSize(primaryValue, DEFAULT_SHAPE_WIDTH);
+        let width = clampShapeSize(primaryValue, defaultDimensions.width);
         let height = width / safeRatio;
         if (height < MIN_SHAPE_SIZE) {
             height = MIN_SHAPE_SIZE;
@@ -63,7 +87,7 @@ function getLockedDimensionsFromAxis(changedKey, primaryValue, ratio) {
         return { width, height };
     }
 
-    let height = clampShapeSize(primaryValue, DEFAULT_SHAPE_HEIGHT);
+    let height = clampShapeSize(primaryValue, defaultDimensions.height);
     let width = height * safeRatio;
     if (width < MIN_SHAPE_SIZE) {
         width = MIN_SHAPE_SIZE;
@@ -73,8 +97,9 @@ function getLockedDimensionsFromAxis(changedKey, primaryValue, ratio) {
 }
 
 function getLockedDimensionsFromBounds(widthValue, heightValue, ratio) {
-    const width = clampShapeSize(widthValue, DEFAULT_SHAPE_WIDTH);
-    const height = clampShapeSize(heightValue, DEFAULT_SHAPE_HEIGHT);
+    const defaultDimensions = getDefaultShapeDimensions();
+    const width = clampShapeSize(widthValue, defaultDimensions.width);
+    const height = clampShapeSize(heightValue, defaultDimensions.height);
     const safeRatio = Number.isFinite(Number(ratio)) && Number(ratio) > 0 ? Number(ratio) : 1;
 
     if ((width / height) >= safeRatio) {
@@ -539,6 +564,7 @@ class Shape extends Operation {
     getPathShapeProperties(path) {
         const stored = { ...(path?.creationProperties?.properties || {}) };
         const bbox = path?.bbox || (path?.path ? boundingBox(path.path) : null);
+        const defaultDimensions = getDefaultShapeDimensions();
         const center = path?.creationProperties?.center || (bbox
             ? {
                 x: (bbox.minx + bbox.maxx) / 2,
@@ -551,8 +577,8 @@ class Shape extends Operation {
             name: stored.name !== undefined ? stored.name : (path?.name || DEFAULT_SHAPE_NAME),
             x: stored.x !== undefined ? stored.x : this.toExternal(center.x),
             y: stored.y !== undefined ? stored.y : this.toExternal(center.y),
-            width: stored.width !== undefined ? stored.width : (bbox ? this.toExternal(bbox.maxx - bbox.minx) : DEFAULT_SHAPE_WIDTH),
-            height: stored.height !== undefined ? stored.height : (bbox ? this.toExternal(bbox.maxy - bbox.miny) : DEFAULT_SHAPE_HEIGHT),
+            width: stored.width !== undefined ? stored.width : (bbox ? this.toExternal(bbox.maxx - bbox.minx) : defaultDimensions.width),
+            height: stored.height !== undefined ? stored.height : (bbox ? this.toExternal(bbox.maxy - bbox.miny) : defaultDimensions.height),
             angle: stored.angle !== undefined ? stored.angle : DEFAULT_SHAPE_ANGLE,
             lockRatio: stored.lockRatio !== undefined ? normalizeLockRatio(stored.lockRatio) : DEFAULT_SHAPE_LOCK_RATIO,
             lockObject: stored.lockObject !== undefined ? normalizeLockObject(stored.lockObject) : DEFAULT_SHAPE_LOCK_OBJECT
@@ -562,10 +588,11 @@ class Shape extends Operation {
     normalizeShapeValues(shape, values, fallbackCenter = null) {
         const fallbackX = fallbackCenter ? this.toExternal(fallbackCenter.x) : 0;
         const fallbackY = fallbackCenter ? this.toExternal(fallbackCenter.y) : 0;
+        const defaultDimensions = getDefaultShapeDimensions();
 
         const isDrill = isDrillShape(shape);
-        const width = isDrill ? DEFAULT_DRILL_SHAPE_DIAMETER : clampShapeSize(values.width, DEFAULT_SHAPE_WIDTH);
-        const height = isDrill ? DEFAULT_DRILL_SHAPE_DIAMETER : clampShapeSize(values.height, DEFAULT_SHAPE_HEIGHT);
+        const width = isDrill ? DEFAULT_DRILL_SHAPE_DIAMETER : clampShapeSize(values.width, defaultDimensions.width);
+        const height = isDrill ? DEFAULT_DRILL_SHAPE_DIAMETER : clampShapeSize(values.height, defaultDimensions.height);
         const angle = isDrill ? 0 : normalizeAngle(values.angle);
         const lockRatio = isDrill ? true : normalizeLockRatio(values.lockRatio);
 
@@ -589,13 +616,14 @@ class Shape extends Operation {
 
     resetCreationProperties(shape = null) {
         const nextShape = shape || this.fixedShape || this.properties.shape || this.shapeField.default;
+        const defaultDimensions = getDefaultShapeDimensions();
         this.properties = {
             shape: nextShape,
             name: DEFAULT_SHAPE_NAME,
             x: 0,
             y: 0,
-            width: DEFAULT_SHAPE_WIDTH,
-            height: DEFAULT_SHAPE_HEIGHT,
+            width: defaultDimensions.width,
+            height: defaultDimensions.height,
             angle: DEFAULT_SHAPE_ANGLE,
             lockRatio: DEFAULT_SHAPE_LOCK_RATIO,
             lockObject: DEFAULT_SHAPE_LOCK_OBJECT
@@ -609,7 +637,8 @@ class Shape extends Operation {
         const fallbackRatio = getAspectRatio(fallback?.width, fallback?.height);
         if (fallbackRatio > 0) return fallbackRatio;
 
-        return getAspectRatio(DEFAULT_SHAPE_WIDTH, DEFAULT_SHAPE_HEIGHT);
+        const defaultDimensions = getDefaultShapeDimensions();
+        return getAspectRatio(defaultDimensions.width, defaultDimensions.height);
     }
 
     getRatioLockButtonHTML(lockRatio) {
@@ -1350,6 +1379,9 @@ class Shape extends Operation {
         const widthField = this.geometryFields.find(field => field.key === 'width');
         const heightField = this.geometryFields.find(field => field.key === 'height');
         const angleField = this.geometryFields.find(field => field.key === 'angle');
+        const defaultDimensions = getDefaultShapeDimensions();
+        widthField.default = defaultDimensions.width;
+        heightField.default = defaultDimensions.height;
         const resolvedName = PropertiesManager.resolveValue(nameField, pathProperties, this.properties);
         const resolvedLockObject = PropertiesManager.resolveValue(lockObjectField, pathProperties, this.properties);
         const resolvedX = PropertiesManager.resolveValue(xField, pathProperties, this.properties);
