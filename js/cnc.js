@@ -2657,6 +2657,8 @@ function doPocket(options = {}) {
 }
 
 function startVcarveGeneration(config) {
+	const silent = config && config.silent === true;
+
 	if (typeof Worker === 'undefined') {
 		notify('Web Workers are not supported in this browser', 'error');
 		return;
@@ -2708,7 +2710,9 @@ function startVcarveGeneration(config) {
 
 	const worker = new Worker('js/workers/vcarveWorker.js');
 	registerGenerationWorker('vcarve', worker);
-	notify('Generating VCarve paths…', 'info');
+	if (!silent) {
+		notify('Generating VCarve paths…', 'info');
+	}
 	const resolvedDirection = resolveOperationMillingDirection(currentTool.direction, {
 		mode: config.mode
 	});
@@ -2793,42 +2797,42 @@ function startVcarveGeneration(config) {
 	});
 }
 
-function doVcarve() {
+function doVcarve(options = {}) {
 	if (currentTool.inside == 'inside') {
-		doVcarveIn();
+		doVcarveIn(options);
 	} else if (currentTool.inside == 'outside') {
-		doVcarveOut();
+		doVcarveOut(options);
 	}
 	else {
-		doVcarveCenter();
+		doVcarveCenter(options);
 	}
 }
 
-function doVcarveCenter() {
+function doVcarveCenter(options = {}) {
 	if (selectMgr.noSelection()) {
 		notify('Select a path to VCarve');
 		return;
 	}
 	setMode("VCarve Center");
-	startVcarveGeneration({ mode: 'center', name: 'Center', outside: false });
+	startVcarveGeneration({ mode: 'center', name: 'Center', outside: false, silent: options.silent === true });
 }
 
-function doVcarveIn() {
+function doVcarveIn(options = {}) {
 	if (selectMgr.noSelection()) {
 		notify('Select a path to VCarve');
 		return;
 	}
 	setMode("VCarve In");
-	startVcarveGeneration({ mode: 'inside', name: 'Inside', outside: false });
+	startVcarveGeneration({ mode: 'inside', name: 'Inside', outside: false, silent: options.silent === true });
 }
 
-function doVcarveOut() {
+function doVcarveOut(options = {}) {
 	if (selectMgr.noSelection()) {
 		notify('Select a path to VCarve');
 		return;
 	}
 	setMode("VCarve Out");
-	startVcarveGeneration({ mode: 'outside', name: 'Outside', outside: true });
+	startVcarveGeneration({ mode: 'outside', name: 'Outside', outside: true, silent: options.silent === true });
 }
 
 var link = document.createElement('a');

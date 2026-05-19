@@ -653,7 +653,7 @@ function getToolpathCutPreviewMode(toolpath) {
 		return null;
 	}
 	if (operationType === 'vcarve') {
-		return 'center';
+		return 'pocket';
 	}
 	if (operationType === 'pocket' || operationType === 'inside' || operationType === 'outside' || operationType === 'center') {
 		return operationType;

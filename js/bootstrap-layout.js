@@ -2400,7 +2400,7 @@ function syncShapeMachiningToolpath(path, options = {}) {
             }
             makeHole({ x: shapeCenter.x, y: shapeCenter.y }, { svgId: primaryPath.id, svgIds: [primaryPath.id] });
         } else if (executionOperation === 'VCarve') {
-            doVcarve();
+            doVcarve({ silent: true });
         } else {
             doProfile({ silent: true });
         }
