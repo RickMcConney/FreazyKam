@@ -888,7 +888,7 @@ async function generateAndLoad3DGcode(options = {}) {
   }
 
   if (showLoading) {
-    setThreeLoadingState(true, 'Preparation de la simulation 3D...');
+    setThreeLoadingState(true, 'Loading 3D simulation...');
     await waitForNextFrame();
   }
 
@@ -1653,7 +1653,7 @@ async function initThree(loadToken = threeViewLoadToken) {
   }
 
   if (gcode) {
-    setThreeLoadingState(true, 'Preparation de la simulation 3D...');
+    setThreeLoadingState(true, 'Loading 3D simulation...');
     await toolpathAnimation.loadFromGcodeAsync(gcode);
     if (!isThreeViewLoadCurrent(loadToken)) {
       return;
