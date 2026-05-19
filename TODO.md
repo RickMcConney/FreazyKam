@@ -5,4 +5,4 @@ TODO
 - Add PEN tool
 - Add Aligment panel.
 - Add measure tool
-- Add VCarve
+- Lag with large operations

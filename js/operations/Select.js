@@ -509,6 +509,17 @@ class Select extends Operation {
         const isOnOperationsTab = operationsTab && operationsTab.classList.contains('active');
         const drawToolsTab = document.getElementById('draw-tools-tab');
         const isOnDrawTab = drawToolsTab && drawToolsTab.classList.contains('active');
+        const selectedPaths = this.selectedPaths();
+        const selectedShapePaths = selectedPaths.filter(path => path && path.creationProperties && (
+            path.creationTool === 'Shape'
+            || (window.SHAPE_TOOL_NAMES || []).includes(path.creationTool)
+        ));
+
+        if (isOnDrawTab && selectedShapePaths.length > 1 && typeof showShapeGroupPropertiesEditor === 'function') {
+            showShapeGroupPropertiesEditor(selectedShapePaths);
+            redraw();
+            return;
+        }
 
         let pathToShow = this.lastSelected();
 

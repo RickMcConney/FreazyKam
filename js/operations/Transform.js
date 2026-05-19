@@ -56,7 +56,7 @@ class Transform extends Select {
             deltaY:   { key: 'deltaY',   label: 'Delta Y',    type: 'dimension', default: 0 },
             width:    { key: 'width',    label: 'Width',       type: 'dimension', default: 0 },
             height:   { key: 'height',   label: 'Height',      type: 'dimension', default: 0 },
-            rotation: { key: 'rotation', label: 'Rotation °',  type: 'number',    default: 0, step: 1 },
+            rotation: { key: 'rotation', label: 'Angle °',     type: 'number',    default: 0, step: 1 },
         };
     }
 
@@ -175,6 +175,16 @@ class Transform extends Select {
         const isVisible = propertiesEditor && propertiesEditor.style.display !== 'none';
 
         if (isVisible) {
+            const selectedPaths = selectMgr.selectedPaths().filter(path => path && path.creationProperties && (
+                path.creationTool === 'Shape'
+                || (window.SHAPE_TOOL_NAMES || []).includes(path.creationTool)
+            ));
+
+            if (selectedPaths.length > 1 && typeof showShapeGroupPropertiesEditor === 'function') {
+                showShapeGroupPropertiesEditor(selectedPaths);
+                return;
+            }
+
             // Re-trigger the properties panel display for the Move tool
             showToolPropertiesEditor('Move');
         }
@@ -218,7 +228,12 @@ class Transform extends Select {
             // Transition to appropriate transform state based on handle type
             // At this point, transformBox, initialTransformBox, pivotCenter, and originalPaths are all guaranteed to exist
             if (this.activeHandle.type === 'center') {
-                Transform.state = Transform.ADJUSTING_PIVOT;
+                Select.state = Select.DRAGGING;
+                Transform.state = Transform.DRAGGING;
+                this.dragStartX = mouse.x;
+                this.dragStartY = mouse.y;
+                this.dragStartXWorld = mouseHit.x;
+                this.dragStartYWorld = mouseHit.y;
             } else if (this.activeHandle.type === 'scale') {
                 this.resetTransformState(); // Reset accumulators for clean scale
                 Transform.state = Transform.SCALING;
@@ -284,6 +299,49 @@ class Transform extends Select {
 
         // Handle state-specific transformations when mouse is down
         if (this.mouseDown) {
+            if (Transform.state == Transform.DRAGGING && this.activeHandle?.type === 'center') {
+                const mouseWorld = this.normalizeEventWorld(canvas, evt);
+                let dragDeltaX = mouseWorld.x - this.dragStartXWorld;
+                let dragDeltaY = mouseWorld.y - this.dragStartYWorld;
+
+                if (evt.shiftKey) {
+                    if (Math.abs(mouseWorld.x - this.initialMousePos.x) > Math.abs(mouseWorld.y - this.initialMousePos.y)) {
+                        dragDeltaY = 0;
+                    } else {
+                        dragDeltaX = 0;
+                    }
+                }
+
+                this.deltaX += dragDeltaX;
+                this.deltaY += dragDeltaY;
+
+                if (this.noSelection()) {
+                    this.translate(this.dragPath, dragDeltaX, dragDeltaY);
+                } else {
+                    this.translateSelected(dragDeltaX, dragDeltaY);
+                }
+
+                const prevCenter = this.transformBox
+                    ? { x: this.transformBox.centerX, y: this.transformBox.centerY }
+                    : null;
+
+                svgpaths.forEach(path => {
+                    if (selectMgr.isSelected(path)) {
+                        path.bbox = boundingBox(path.path);
+                    }
+                });
+                this.transformBox = this.createTransformBox(svgpaths);
+                this.updatePivotAfterTransform(prevCenter);
+
+                this.dragStartX = mouseWorld.x;
+                this.dragStartY = mouseWorld.y;
+                this.dragStartXWorld = mouseWorld.x;
+                this.dragStartYWorld = mouseWorld.y;
+                this.updateCenterDisplay();
+                redraw();
+                return;
+            }
+
             if (Transform.state == Transform.ADJUSTING_PIVOT) {
                 this.handlePivotAdjustment(mouse);
             }
@@ -336,6 +394,34 @@ class Transform extends Select {
         } else if (Transform.state == Transform.HOVERING) {
             Transform.state = Transform.IDLE;
         }
+    }
+
+    handleIdleThreshold(mouse, rawMouse, evt, canvas) {
+        this.dragPath = this.potentialDragPath || closestPath(mouse, false);
+
+        if (this.dragPath) {
+            if (this.isPathLocked(this.dragPath)) {
+                Select.state = Select.SELECTING;
+                Transform.state = Transform.SELECTING;
+                this.updateSelectBox(mouse, evt, canvas);
+                return;
+            }
+
+            if (selectMgr.isSelected(this.dragPath) || selectMgr.noSelection()) {
+                Select.state = Select.DRAGGING;
+                Transform.state = Transform.DRAGGING;
+                this.dragStartX = mouse.x;
+                this.dragStartY = mouse.y;
+                this.dragStartXWorld = rawMouse.x;
+                this.dragStartYWorld = rawMouse.y;
+                addUndo(false, true, false);
+                return;
+            }
+        }
+
+        Select.state = Select.SELECTING;
+        Transform.state = Transform.SELECTING;
+        this.updateSelectBox(mouse, evt, canvas);
     }
 
     /**
@@ -492,6 +578,125 @@ class Transform extends Select {
         });
     }
 
+    isEditableShapePath(path) {
+        return !!(path && path.creationProperties && (
+            path.creationTool === 'Shape'
+            || (window.SHAPE_TOOL_NAMES || []).includes(path.creationTool)
+        ));
+    }
+
+    getTransformSnapshot() {
+        if (!this.initialTransformBox) {
+            return null;
+        }
+
+        return {
+            centerX: this.initialTransformBox.centerX,
+            centerY: this.initialTransformBox.centerY,
+            scaleX: this.scaleX,
+            scaleY: this.scaleY,
+            skewX: this.skewX,
+            skewY: this.skewY,
+            rotation: this.rotation,
+            deltaX: this.deltaX,
+            deltaY: this.deltaY,
+            pivotCenterX: this.pivotCenter ? this.pivotCenter.x : this.initialTransformBox.centerX,
+            pivotCenterY: this.pivotCenter ? this.pivotCenter.y : this.initialTransformBox.centerY
+        };
+    }
+
+    applySnapshotToPoint(point, snapshot) {
+        if (!point || !snapshot) {
+            return point;
+        }
+
+        let newX = snapshot.centerX + (point.x - snapshot.centerX) * snapshot.scaleX;
+        let newY = snapshot.centerY + (point.y - snapshot.centerY) * snapshot.scaleY;
+
+        if (snapshot.skewX !== 0 || snapshot.skewY !== 0) {
+            const dx = newX - snapshot.centerX;
+            const dy = newY - snapshot.centerY;
+            const tanX = Math.tan(-snapshot.skewX * Math.PI / 180);
+            const tanY = Math.tan(snapshot.skewY * Math.PI / 180);
+            newX = snapshot.centerX + dx + dy * tanX;
+            newY = snapshot.centerY + dy + dx * tanY;
+        }
+
+        const rotationRad = -snapshot.rotation * Math.PI / 180;
+        if (rotationRad !== 0) {
+            const dx = newX - snapshot.pivotCenterX;
+            const dy = newY - snapshot.pivotCenterY;
+            const cos = Math.cos(rotationRad);
+            const sin = Math.sin(rotationRad);
+            newX = snapshot.pivotCenterX + (dx * cos - dy * sin);
+            newY = snapshot.pivotCenterY + (dx * sin + dy * cos);
+        }
+
+        return {
+            x: newX + snapshot.deltaX,
+            y: newY + snapshot.deltaY
+        };
+    }
+
+    bakeShapeTransformMetadata() {
+        const snapshot = this.getTransformSnapshot();
+        if (!snapshot) {
+            return;
+        }
+
+        const hasNonRepresentableTransform = snapshot.skewX !== 0
+            || snapshot.skewY !== 0
+            || snapshot.scaleX < 0
+            || snapshot.scaleY < 0;
+        if (hasNonRepresentableTransform) {
+            return;
+        }
+
+        selectMgr.selectedPaths().forEach(path => {
+            if (!this.isEditableShapePath(path)) {
+                return;
+            }
+
+            const operation = window.cncController?.operationManager?.getOperation(path.creationTool);
+            if (!operation || typeof operation.getPathShapeProperties !== 'function') {
+                return;
+            }
+
+            const properties = operation.getPathShapeProperties(path);
+            const center = operation.toInternal
+                ? {
+                    x: operation.toInternal(properties.x),
+                    y: operation.toInternal(properties.y)
+                }
+                : (path.creationProperties?.center || {
+                    x: (path.bbox.minx + path.bbox.maxx) / 2,
+                    y: (path.bbox.miny + path.bbox.maxy) / 2
+                });
+            const nextCenter = this.applySnapshotToPoint(center, snapshot);
+            const nextAngle = ((Number(properties.angle) || 0) + snapshot.rotation) % 360;
+            const nextProperties = {
+                ...properties,
+                x: operation.toExternal ? operation.toExternal(nextCenter.x) : properties.x,
+                y: operation.toExternal ? operation.toExternal(nextCenter.y) : properties.y,
+                width: Math.max(0, Number(properties.width) * Math.abs(snapshot.scaleX)),
+                height: Math.max(0, Number(properties.height) * Math.abs(snapshot.scaleY)),
+                angle: nextAngle < 0 ? nextAngle + 360 : nextAngle
+            };
+
+            path.creationProperties = {
+                ...path.creationProperties,
+                center: nextCenter,
+                properties: typeof operation.buildStoredProperties === 'function'
+                    ? operation.buildStoredProperties(nextProperties)
+                    : {
+                        ...(path.creationProperties?.properties || {}),
+                        ...nextProperties
+                    }
+            };
+            delete path.transformHistory;
+        });
+    }
+
     onMouseUp(canvas, evt) {
         const hadSelectBox = this.selectBox;
         const wasTransforming =
@@ -528,6 +733,7 @@ class Transform extends Select {
 
             if (wasTransforming) {
                 this.recordTransformHistory();
+                this.bakeShapeTransformMetadata();
                 this.totalRotation += this.rotation;
                 this.totalSkewX += this.skewX;
                 this.totalSkewY += this.skewY;
@@ -537,6 +743,15 @@ class Transform extends Select {
 
             if (wasTransforming) {
                 onPathsChanged(selectMgr.selectedPaths().map(p => p.id));
+            }
+
+            if (wasTransforming) {
+                const selectedPaths = selectMgr.selectedPaths();
+                selectedPaths.forEach(path => {
+                    if (path.toolpathProperties && typeof scheduleShapeMachiningToolpathSync === 'function') {
+                        scheduleShapeMachiningToolpathSync(path, { createIfMissing: true });
+                    }
+                });
             }
 
             this.resetTransformState();
@@ -1121,30 +1336,30 @@ class Transform extends Select {
         const rotValue   = (this.totalRotation + this.rotation).toFixed(1);
 
         const fh = (field, val) => PropertiesManager.fieldHTML(field, val);
+        const inlineField = (field, val) => `
+            <div class="row g-2 align-items-center mb-2">
+                <div class="col-4">
+                    <label for="pm-${field.key}" class="form-label small mb-0"><strong>${field.label}</strong></label>
+                </div>
+                <div class="col-8">
+                    ${fh({ ...field, label: '' }, val).replace(/<label[\s\S]*?<\/label>/, '')}
+                </div>
+            </div>`;
 
         return centerInfo + `
             <div class="mb-3">
-                <label class="form-label small"><strong>Translation</strong></label>
-                <div class="row g-2">
-                    <div class="col-6">${fh(this.fields.deltaX, formatDimension(deltaXmm, true))}</div>
-                    <div class="col-6">${fh(this.fields.deltaY, formatDimension(deltaYmm, true))}</div>
-                </div>
+                <label class="form-label small d-block text-center"><strong>Translation</strong></label>
+                ${inlineField(this.fields.deltaX, formatDimension(deltaXmm, true))}
+                ${inlineField(this.fields.deltaY, formatDimension(deltaYmm, true))}
             </div>
             <div class="mb-3">
-                <label class="form-label small"><strong>Dimensions</strong></label>
-                <div class="row g-2">
-                    <div class="col-6">${fh(this.fields.width,  formatDimension(widthMM,  true))}</div>
-                    <div class="col-6">${fh(this.fields.height, formatDimension(heightMM, true))}</div>
-                </div>
+                <label class="form-label small d-block text-center"><strong>Dimensions</strong></label>
+                ${inlineField(this.fields.width, formatDimension(widthMM, true))}
+                ${inlineField(this.fields.height, formatDimension(heightMM, true))}
             </div>
-            ${fh(this.fields.rotation, rotValue)}
-            <div class="alert alert-secondary">
-                <i data-lucide="info"></i>
-                <small>
-                    <strong>Move Tool:</strong> ${hasSelectedPaths ?
-                        'Drag the center handle to move, corner handles to resize proportionally, or the top handle to rotate. Enter exact width/height to resize to specific dimensions.' :
-                        'Select objects first, then drag the center handle to move, corner handles to resize proportionally, or the top handle to rotate.'}
-                </small>
+            <div class="mb-3">
+                <label class="form-label small d-block text-center"><strong>Rotation</strong></label>
+                ${inlineField(this.fields.rotation, rotValue)}
             </div>`;
     }
 
@@ -1334,6 +1549,8 @@ class Transform extends Select {
                 });
             }
         });
+
+        this.bakeShapeTransformMetadata();
 
         this.transformBox = this.createTransformBox(svgpaths);
         this.initialTransformBox = { ...this.transformBox };

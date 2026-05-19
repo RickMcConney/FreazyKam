@@ -1350,14 +1350,12 @@ function drawSvgPaths() {
 	for(let i = 0;i<selectedPaths.length;i++)
 	{
 		let path = selectedPaths[i];
-		let color = (i == selectedPaths.length - 1) ? activeColor : selectColor;
+		let color = activeColor;
 
 		if (path.type === 'image') {
 			drawReferenceImage(path, color);
-		} else if(i == selectedPaths.length-1) {
-			drawSvgPath(path, activeColor, 3);
 		} else {
-			drawSvgPath(path, selectColor, 3);
+			drawSvgPath(path, activeColor, 3);
 		}
 	}
 }

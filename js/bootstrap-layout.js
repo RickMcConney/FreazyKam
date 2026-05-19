@@ -1861,6 +1861,41 @@ function getPopupEditableProperties(operation, path) {
     return path.creationProperties || null;
 }
 
+function isShapeEditorPath(path) {
+    return !!(path && path.creationProperties && (
+        path.creationTool === 'Shape'
+        || (window.SHAPE_TOOL_NAMES || []).includes(path.creationTool)
+    ));
+}
+
+function getSelectedShapeEditorPaths(anchorPath = null) {
+    const selectedPaths = selectMgr.selectedPaths().filter(isShapeEditorPath);
+    if (selectedPaths.length < 2) {
+        return [];
+    }
+
+    if (anchorPath && !selectedPaths.includes(anchorPath)) {
+        return [];
+    }
+
+    return selectedPaths;
+}
+
+function getShapeGroupCutOperationName(paths) {
+    if (!Array.isArray(paths) || paths.length === 0) {
+        return 'Profile';
+    }
+
+    const drillCount = paths.filter(path => path?.creationProperties?.shape === 'DrillShape').length;
+    if (drillCount === paths.length) {
+        return 'Drill';
+    }
+    if (drillCount > 0) {
+        return null;
+    }
+    return 'Profile';
+}
+
 function getUnifiedToolpathSourceIds(toolpath) {
     const sourceIds = getToolpathSourceIds(toolpath);
     if (sourceIds.length === 0) return [];
@@ -1905,6 +1940,50 @@ function buildShapeCutPopupHTML(shapeOperation, path, operationName) {
                 </div>
             </div>`,
         cutMeta
+    };
+}
+
+function buildShapeGroupPopupHTML(transformOperation, paths, operationName) {
+    const primaryPath = paths[0] || null;
+    const transformMeta = extractPropertiesPanelMeta(transformOperation.getPropertiesHTML());
+    const hasCutPanel = !!operationName && !!window.toolPathProperties;
+    const cutHtml = hasCutPanel
+        ? window.toolPathProperties.getPropertiesHTML(operationName, primaryPath?.toolpathProperties || null, {
+            showUpdateButton: false
+        })
+        : `
+            <div class="alert alert-info mb-0">
+                Mixed drill and standard shapes cannot share one cut preset. Apply the cut on a compatible selection.
+            </div>`;
+    const cutMeta = extractPropertiesPanelMeta(cutHtml);
+
+    return {
+        html: `
+            <div class="shape-cut-popup">
+                <ul class="nav nav-tabs shape-cut-tabs mb-3" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="shape-cut-tab-shape" data-bs-toggle="tab" data-bs-target="#shape-cut-panel-shape" type="button" role="tab" aria-controls="shape-cut-panel-shape" aria-selected="true">Group</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="shape-cut-tab-cut" data-bs-toggle="tab" data-bs-target="#shape-cut-panel-cut" type="button" role="tab" aria-controls="shape-cut-panel-cut" aria-selected="false">Cut</button>
+                    </li>
+                </ul>
+                <div class="tab-content shape-cut-tab-content">
+                    <div class="tab-pane fade show active" id="shape-cut-panel-shape" role="tabpanel" aria-labelledby="shape-cut-tab-shape">
+                        <div id="shape-group-transform-panel">
+                            ${transformMeta.cleanedHtml || ''}
+                        </div>
+                    </div>
+                    <div class="tab-pane fade" id="shape-cut-panel-cut" role="tabpanel" aria-labelledby="shape-cut-tab-cut">
+                        <div id="shape-cut-properties-panel">
+                            ${cutMeta.cleanedHtml || ''}
+                        </div>
+                    </div>
+                </div>
+            </div>`,
+        transformMeta,
+        cutMeta,
+        hasCutPanel
     };
 }
 
@@ -1956,6 +2035,54 @@ function bindShapeCutPopup(path, shapeOperation, operationName) {
     redraw();
 }
 
+function bindShapeGroupPopup(paths, transformOperation, operationName) {
+    const form = document.getElementById('tool-properties-form');
+    if (!form) return;
+
+    form.querySelectorAll('#shape-group-transform-panel input, #shape-group-transform-panel select, #shape-group-transform-panel textarea').forEach(input => {
+        function handleTransformChange() {
+            if (!transformOperation || typeof transformOperation.updateFromProperties !== 'function') {
+                return;
+            }
+
+            const data = collectOperationProperties(transformOperation);
+            transformOperation.updateFromProperties(data, { changedKey: getPropertyInputKey(input) });
+            if (transformOperation.fields) {
+                PropertiesManager.save(transformOperation.name, data, Object.values(transformOperation.fields));
+            }
+        }
+
+        input.addEventListener('change', handleTransformChange);
+        if (input.type === 'text' || input.type === 'number' || input.type === 'range' || input.tagName === 'TEXTAREA') {
+            input.addEventListener('input', handleTransformChange);
+        }
+    });
+
+    if (operationName) {
+        form.querySelectorAll('#shape-cut-properties-panel input, #shape-cut-properties-panel select, #shape-cut-properties-panel textarea').forEach(input => {
+            function handleCutChange() {
+                const data = window.toolPathProperties.collectFormData(operationName);
+                const sanitized = sanitizeToolpathProperties(data);
+
+                paths.forEach(path => {
+                    path.toolpathProperties = sanitized ? { ...sanitized } : {};
+                    path.toolpathProperties.operation = data.operation || operationName;
+                    scheduleShapeMachiningToolpathSync(path, { createIfMissing: true });
+                });
+
+                redraw();
+            }
+
+            input.addEventListener('change', handleCutChange);
+            if (input.type === 'text' || input.type === 'number' || input.type === 'range' || input.tagName === 'TEXTAREA') {
+                input.addEventListener('input', handleCutChange);
+            }
+        });
+    }
+
+    redraw();
+}
+
 function setFloatingPropertiesPopupContext(context = null) {
     window.floatingPropertiesPopupContext = context;
 }
@@ -1966,6 +2093,10 @@ function shouldCloseFloatingPropertiesPopupForDeletedItem(id) {
 
     if (context.type === 'shape') {
         return context.id === id;
+    }
+
+    if (context.type === 'shape-group') {
+        return Array.isArray(context.ids) && context.ids.includes(id);
     }
 
     if (context.type === 'toolpath') {
@@ -1999,6 +2130,61 @@ function showFloatingPropertiesPopup(contentElement, meta = null) {
     elements.popup.style.display = 'block';
     contentElement.classList.add('is-active');
     contentElement.style.display = 'block';
+}
+
+function showShapeGroupPropertiesEditor(paths) {
+    const groupPaths = Array.isArray(paths) ? paths.filter(isShapeEditorPath) : [];
+    if (groupPaths.length < 2) {
+        return false;
+    }
+
+    const toolsList = document.getElementById('draw-tools-list');
+    const propertiesEditor = document.getElementById('tool-properties-editor');
+    const operationPropertiesEditor = document.getElementById('operation-properties-editor');
+    const form = document.getElementById('tool-properties-form');
+    const drawToolsTab = document.getElementById('draw-tools-tab');
+    const drawToolsPane = document.getElementById('draw-tools');
+    const transformOperation = window.cncController?.operationManager?.getOperation('Move');
+    if (!toolsList || !propertiesEditor || !form || !transformOperation) {
+        return false;
+    }
+
+    clearFloatingPopupFooter();
+
+    document.querySelectorAll('#sidebar-tabs .nav-link').forEach(tab => tab.classList.remove('active'));
+    document.querySelectorAll('#sidebar-tabs ~ .sidebar-tab-content .tab-pane').forEach(pane => pane.classList.remove('show', 'active'));
+    if (drawToolsTab) drawToolsTab.classList.add('active');
+    if (drawToolsPane) drawToolsPane.classList.add('show', 'active');
+
+    toolsList.style.display = 'block';
+    if (operationPropertiesEditor) operationPropertiesEditor.style.display = 'none';
+    propertiesEditor.style.flexDirection = 'column';
+
+    if (window.cncController) {
+        window.cncController.setMode('Move');
+    }
+    currentOperationName = 'Move';
+
+    const cutOperationName = getShapeGroupCutOperationName(groupPaths);
+    const popupConfig = buildShapeGroupPopupHTML(transformOperation, groupPaths, cutOperationName);
+    form.innerHTML = popupConfig.html;
+    bindShapeGroupPopup(groupPaths, transformOperation, cutOperationName);
+
+    setFloatingPropertiesPopupContext({
+        type: 'shape-group',
+        ids: groupPaths.map(path => path.id),
+        operationName: 'Move'
+    });
+
+    showFloatingPropertiesPopup(propertiesEditor, {
+        titleHtml: transformOperation.icon
+            ? `<i data-lucide="${transformOperation.icon}"></i> Edit ${groupPaths.length} shapes`
+            : `Edit ${groupPaths.length} shapes`,
+        subtitle: ''
+    });
+
+    lucide.createIcons();
+    return true;
 }
 
 function hideFloatingPropertiesPopup() {
@@ -3059,6 +3245,13 @@ function regenerateToolpathsForPaths(changedPathIds) {
 
     // Find all toolpaths linked to any of the changed paths
     const affectedToolpaths = toolpaths.filter(tp => {
+        // Shape preview toolpaths are regenerated separately through
+        // scheduleShapeMachiningToolpathSync(), which runs silently and
+        // debounced after direct shape/group edits.
+        if (tp?.isShapePreviewToolpath === true) {
+            return false;
+        }
+
         if (tp.svgIds && Array.isArray(tp.svgIds)) {
             return tp.svgIds.some(id => changedPathIds.includes(id));
         }
@@ -3336,6 +3529,11 @@ function showPathPropertiesEditor(path) {
     const propertiesEditor = document.getElementById('tool-properties-editor');
     const operationPropertiesEditor = document.getElementById('operation-properties-editor');
     const form = document.getElementById('tool-properties-form');
+
+    const selectedGroupPaths = getSelectedShapeEditorPaths(path);
+    if (selectedGroupPaths.length > 1) {
+        return showShapeGroupPropertiesEditor(selectedGroupPaths);
+    }
 
     clearFloatingPopupFooter();
 
@@ -4083,6 +4281,11 @@ function openPathEditor(path) {
             selectMgr.unselectAll();
             groupPaths.forEach(groupPath => selectMgr.selectPath(groupPath));
         }
+    }
+
+    const selectedGroupPaths = getSelectedShapeEditorPaths(path);
+    if (selectedGroupPaths.length > 1) {
+        return showShapeGroupPropertiesEditor(selectedGroupPaths);
     }
 
     const sidebarNode = document.querySelector(`#svg-paths-section [data-path-id="${path.id}"]`);
