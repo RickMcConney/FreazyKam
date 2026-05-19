@@ -438,7 +438,6 @@ function restoreSvgpaths(projectSvgpaths, selectedIds) {
 	selectMgr.unselectAll();
 	svgpaths = projectSvgpaths;
 	svgpathId = 1;
-	var addedTextGroups = {};
 	for (var i = 0; i < svgpaths.length; i++) {
 		var sp = svgpaths[i];
 		// Track highest numeric ID to prevent collisions
@@ -447,14 +446,7 @@ function restoreSvgpaths(projectSvgpaths, selectedIds) {
 			var num = parseInt(idMatch[0], 10);
 			if (num >= svgpathId) svgpathId = num + 1;
 		}
-		if (sp.textGroupId && !addedTextGroups[sp.textGroupId]) {
-			var groupPaths = svgpaths.filter(function(p) { return p.textGroupId === sp.textGroupId; });
-			var text = (sp.creationProperties && sp.creationProperties.text) || sp.name;
-			addTextGroup(sp.textGroupId, text, groupPaths);
-			addedTextGroups[sp.textGroupId] = true;
-		} else if (!sp.textGroupId) {
-			addSvgPath(sp.id, sp.name);
-		}
+		addSvgPath(sp.id, sp.name);
 	}
 	if (selectedIds) {
 		for (var i = 0; i < svgpaths.length; i++) {

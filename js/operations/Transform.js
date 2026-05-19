@@ -175,13 +175,8 @@ class Transform extends Select {
         const isVisible = propertiesEditor && propertiesEditor.style.display !== 'none';
 
         if (isVisible) {
-            const selectedPaths = selectMgr.selectedPaths().filter(path => path && path.creationProperties && (
-                path.creationTool === 'Shape'
-                || (window.SHAPE_TOOL_NAMES || []).includes(path.creationTool)
-            ));
-
-            if (selectedPaths.length > 1 && typeof showShapeGroupPropertiesEditor === 'function') {
-                showShapeGroupPropertiesEditor(selectedPaths);
+            const popupContext = window.floatingPropertiesPopupContext;
+            if (popupContext?.type === 'shape-group') {
                 return;
             }
 

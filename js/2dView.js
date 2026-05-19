@@ -845,36 +845,10 @@ function drawActiveToolpathShapePreviews() {
 
 function drawStoredShapeCutPreviews() {
 	if (!Array.isArray(svgpaths) || svgpaths.length === 0) return;
-	var renderedTextGroups = new Set();
 
 	for (var i = 0; i < svgpaths.length; i++) {
 		var path = svgpaths[i];
 		if (!path || path.type === 'image' || !path.visible || !path.toolpathProperties) continue;
-
-		if (path.textGroupId) {
-			if (renderedTextGroups.has(path.textGroupId)) {
-				continue;
-			}
-
-			renderedTextGroups.add(path.textGroupId);
-			var textGroupPaths = svgpaths.filter(function(candidate) {
-				return candidate.textGroupId === path.textGroupId && candidate.visible !== false;
-			});
-
-			var groupTool = null;
-			if (window.toolPathProperties && typeof window.toolPathProperties.getToolById === 'function') {
-				groupTool = window.toolPathProperties.getToolById(path.toolpathProperties.tool);
-			}
-
-			for (var groupIndex = 0; groupIndex < textGroupPaths.length; groupIndex++) {
-				drawToolpathShapePreview(textGroupPaths[groupIndex], {
-					operation: path.toolpathProperties.operation,
-					toolpathProperties: path.toolpathProperties,
-					tool: groupTool || { diameter: 0 }
-				});
-			}
-			continue;
-		}
 
 		var tool = null;
 		if (window.toolPathProperties && typeof window.toolPathProperties.getToolById === 'function') {

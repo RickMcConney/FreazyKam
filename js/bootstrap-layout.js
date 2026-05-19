@@ -936,19 +936,8 @@ function getToolpathSourceIds(toolpath) {
     return toolpath?.svgId ? [toolpath.svgId] : [];
 }
 
-function getTextGroupPathIds(textGroupId) {
-    if (!textGroupId || !Array.isArray(svgpaths)) return [];
-    return svgpaths
-        .filter(path => path.textGroupId === textGroupId)
-        .map(path => path.id)
-        .sort();
-}
-
 function getUnifiedPathSourceIds(path) {
     if (!path) return [];
-    if (path.textGroupId) {
-        return getTextGroupPathIds(path.textGroupId);
-    }
     return path.id ? [path.id] : [];
 }
 
@@ -996,7 +985,7 @@ function getToolpathPositionMeta(toolpath) {
 
 function getObjectTypeLabel(path) {
     if (!path) return 'Path';
-    if (path.creationTool === 'Text' || path.textGroupId) return 'Text';
+    if (path.creationTool === 'Text') return 'Text';
     if (path.creationTool === 'STL') return 'STL';
     if (path.creationTool === 'Image') return 'Image';
     if (path.creationTool === 'Pattern') return 'Pattern';
@@ -1073,7 +1062,6 @@ function renderObjectSidebarGroup(config) {
     const groupContainer = document.createElement('div');
     groupContainer.className = 'sidebar-object-group';
     groupContainer.dataset.objectGroupId = groupId;
-    if (path?.textGroupId) groupContainer.dataset.textGroupId = path.textGroupId;
     if (path?.svgGroupId) groupContainer.dataset.svgGroupId = path.svgGroupId;
     if (path?.patternGroupId) groupContainer.dataset.patternGroupId = path.patternGroupId;
 
@@ -1081,7 +1069,6 @@ function renderObjectSidebarGroup(config) {
     header.className = 'sidebar-item sidebar-object-header d-flex align-items-start justify-content-between';
     header.dataset.objectGroupHeader = groupId;
     header.dataset.pathId = path.id;
-    if (contextData.textGroupHeader) header.dataset.textGroupHeader = contextData.textGroupHeader;
     if (contextData.svgGroupHeader) header.dataset.svgGroupHeader = contextData.svgGroupHeader;
     if (contextData.patternGroupHeader) header.dataset.patternGroupHeader = contextData.patternGroupHeader;
     if (path.visible === false) header.classList.add('is-hidden');
@@ -1148,23 +1135,6 @@ function buildObjectSidebarGroups() {
     const seen = new Set();
 
     svgpaths.forEach(path => {
-        if (path.textGroupId) {
-            if (seen.has(`text:${path.textGroupId}`)) return;
-            seen.add(`text:${path.textGroupId}`);
-            const paths = svgpaths.filter(p => p.textGroupId === path.textGroupId);
-            grouped.push({
-                id: `text:${path.textGroupId}`,
-                kind: 'text',
-                path: paths[0],
-                paths,
-                title: `"${(path.creationProperties && path.creationProperties.text) || path.name}"`,
-                headerIcon: 'type-outline',
-                headerMeta: 'Text',
-                contextData: { textGroupHeader: path.textGroupId }
-            });
-            return;
-        }
-
         if (path.patternGroupId) {
             if (seen.has(`pattern:${path.patternGroupId}`)) return;
             seen.add(`pattern:${path.patternGroupId}`);
@@ -1220,21 +1190,6 @@ function buildOrphanToolpaths(toolpathIndex) {
 
 function activateSidebarObjectGroup(item) {
     if (!item) return false;
-
-    if (item.dataset.textGroupHeader) {
-        const textPaths = svgpaths.filter(p => p.textGroupId === item.dataset.textGroupHeader);
-        if (textPaths.length === 0) return true;
-        selectMgr.unselectAll();
-        textPaths.forEach(path => selectMgr.selectPath(path));
-        document.querySelectorAll('.sidebar-item.selected').forEach(el => el.classList.remove('selected'));
-        item.classList.add('selected');
-        if (textPaths[0].creationTool && textPaths[0].creationProperties) {
-            showPathPropertiesEditor(textPaths[0]);
-            cncController.setMode('Text');
-        }
-        redraw();
-        return true;
-    }
 
     if (item.dataset.patternGroupHeader) {
         const groupPaths = svgpaths.filter(p => p.patternGroupId === item.dataset.patternGroupHeader);
@@ -1483,7 +1438,7 @@ function setupSidebarEventHandlers(sidebar) {
             const isDrawTool = ['Select', 'Move', 'Edit', 'Shape', 'Text', 'Boolean', 'Tabs', 'Offset', 'Pattern', 'Measure', ...(window.SHAPE_TOOL_NAMES || [])].includes(operation);
 
             if (item.dataset.autoCreateText === 'true') {
-                createTextAtCanvasCenter();
+                createTextWithModal();
                 return;
             }
 
@@ -1522,13 +1477,6 @@ function setupSidebarEventHandlers(sidebar) {
         if (patternGroup && item.dataset.patternGroupHeader) {
             e.preventDefault();
             showGroupContextMenu(e, item.dataset.patternGroupHeader, 'patternGroupId', 'Pattern Group', 'data-pattern-group-id');
-            return;
-        }
-
-        const textGroup = item.closest('[data-text-group-id]');
-        if (textGroup && item.dataset.textGroupHeader) {
-            e.preventDefault();
-            showTextGroupContextMenu(e, item.dataset.textGroupHeader);
             return;
         }
 
@@ -1727,6 +1675,18 @@ const stopDragging = () => {
     window.addEventListener('pointerup', stopDragging);
     window.addEventListener('pointercancel', stopDragging);
     window.addEventListener('resize', clampPopupPosition);
+    document.addEventListener('pointerdown', (event) => {
+        if (!isFloatingPropertiesPopupVisible()) return;
+        if (document.body.classList.contains('floating-properties-dragging')) return;
+        if (elements.windowEl.contains(event.target)) return;
+
+        const canvas = document.getElementById('canvas');
+        if (canvas && event.target === canvas) {
+            return;
+        }
+
+        showToolsList();
+    }, true);
     document.addEventListener('keydown', (event) => {
         if (event.key !== 'Escape') return;
         if (elements.popup.style.display === 'none' || getComputedStyle(elements.popup).display === 'none') return;
@@ -1840,14 +1800,13 @@ async function createTextAtCanvasCenter() {
 
     const createdPath = await textOperation.createAtCanvasCenter();
     if (!createdPath) return null;
-
-    currentOperationName = 'Text';
-    openPathEditor(createdPath);
-    if (typeof scheduleShapeMachiningToolpathSync === 'function') {
-        const groupPaths = svgpaths.filter(path => path.textGroupId === createdPath.textGroupId);
-        groupPaths.forEach(path => scheduleShapeMachiningToolpathSync(path, { createIfMissing: true, delay: 0 }));
-    }
     return createdPath;
+}
+
+function createTextWithModal() {
+    if (typeof showTextCreationModal === 'function') {
+        showTextCreationModal();
+    }
 }
 
 function getPopupEditableProperties(operation, path) {
@@ -1863,7 +1822,8 @@ function getPopupEditableProperties(operation, path) {
 
 function isShapeEditorPath(path) {
     return !!(path && path.creationProperties && (
-        path.creationTool === 'Shape'
+        path.creationTool === 'Text'
+        || path.creationTool === 'Shape'
         || (window.SHAPE_TOOL_NAMES || []).includes(path.creationTool)
     ));
 }
@@ -1899,11 +1859,6 @@ function getShapeGroupCutOperationName(paths) {
 function getUnifiedToolpathSourceIds(toolpath) {
     const sourceIds = getToolpathSourceIds(toolpath);
     if (sourceIds.length === 0) return [];
-
-    const firstPath = svgpaths.find(path => path.id === sourceIds[0]);
-    if (firstPath?.textGroupId) {
-        return getTextGroupPathIds(firstPath.textGroupId);
-    }
 
     return sourceIds.slice().sort();
 }
@@ -2140,11 +2095,23 @@ function showFloatingPropertiesPopup(contentElement, meta = null) {
     contentElement.style.display = 'block';
 }
 
+function isFloatingPropertiesPopupVisible() {
+    const elements = getFloatingPropertiesElements();
+    if (!elements.popup) return false;
+    return elements.popup.style.display !== 'none' && getComputedStyle(elements.popup).display !== 'none';
+}
+
 function showShapeGroupPropertiesEditor(paths) {
     const groupPaths = Array.isArray(paths) ? paths.filter(isShapeEditorPath) : [];
     if (groupPaths.length < 2) {
         return false;
     }
+
+    const popupContext = {
+        type: 'shape-group',
+        ids: groupPaths.map(path => path.id),
+        operationName: 'Move'
+    };
 
     const toolsList = document.getElementById('draw-tools-list');
     const propertiesEditor = document.getElementById('tool-properties-editor');
@@ -2168,6 +2135,8 @@ function showShapeGroupPropertiesEditor(paths) {
     if (operationPropertiesEditor) operationPropertiesEditor.style.display = 'none';
     propertiesEditor.style.flexDirection = 'column';
 
+    setFloatingPropertiesPopupContext(popupContext);
+
     if (window.cncController) {
         window.cncController.setMode('Move');
     }
@@ -2177,12 +2146,6 @@ function showShapeGroupPropertiesEditor(paths) {
     const popupConfig = buildShapeGroupPopupHTML(transformOperation, groupPaths, cutOperationName);
     form.innerHTML = popupConfig.html;
     bindShapeGroupPopup(groupPaths, transformOperation, cutOperationName);
-
-    setFloatingPropertiesPopupContext({
-        type: 'shape-group',
-        ids: groupPaths.map(path => path.id),
-        operationName: 'Move'
-    });
 
     showFloatingPropertiesPopup(propertiesEditor, {
         titleHtml: transformOperation.icon
@@ -2409,10 +2372,7 @@ function getShapePreviewToolpaths(pathId) {
         return [];
     }
 
-    const sourcePath = svgpaths.find(path => path.id === pathId);
-    const unifiedSourceIds = sourcePath?.textGroupId
-        ? getTextGroupPathIds(sourcePath.textGroupId)
-        : [pathId];
+    const unifiedSourceIds = [pathId];
 
     return toolpaths.filter(toolpath => {
         if (!toolpath || toolpath.isShapePreviewToolpath !== true) {
@@ -2430,10 +2390,7 @@ function markShapePreviewToolpaths(pathId, toolpathsToMark) {
         return;
     }
 
-    const sourcePath = svgpaths.find(path => path.id === pathId);
-    const previewSourceIds = sourcePath?.textGroupId
-        ? getTextGroupPathIds(sourcePath.textGroupId)
-        : [pathId];
+    const previewSourceIds = [pathId];
 
     toolpathsToMark.forEach(toolpath => {
         if (!toolpath) return;
@@ -2448,10 +2405,7 @@ function removeShapePreviewToolpaths(pathId) {
         return 0;
     }
 
-    const sourcePath = svgpaths.find(path => path.id === pathId);
-    const previewSourceIds = sourcePath?.textGroupId
-        ? getTextGroupPathIds(sourcePath.textGroupId)
-        : [pathId];
+    const previewSourceIds = [pathId];
 
     let removedCount = 0;
     for (let index = toolpaths.length - 1; index >= 0; index--) {
@@ -2482,10 +2436,8 @@ function syncShapeMachiningToolpath(path, options = {}) {
         return false;
     }
 
-    const sourcePaths = path.textGroupId
-        ? svgpaths.filter(candidate => candidate.textGroupId === path.textGroupId && candidate.visible !== false)
-        : [path];
-    const primaryPath = sourcePaths[0] || path;
+    const sourcePaths = [path];
+    const primaryPath = path;
 
     const data = sanitizeToolpathProperties(path.toolpathProperties);
     if (!data) {
@@ -2496,9 +2448,9 @@ function syncShapeMachiningToolpath(path, options = {}) {
         return removeShapePreviewToolpaths(path.id) > 0;
     }
 
-    const shapeCutOperationName = primaryPath?.creationTool === 'Text'
-        ? 'Pocket'
-        : (primaryPath?.creationProperties?.shape === 'DrillShape' ? 'Drill' : 'Profile');
+    const shapeCutOperationName = primaryPath?.creationProperties?.shape === 'DrillShape'
+        ? 'Drill'
+        : 'Profile';
     const resolvedOperationType = data.operationType
         || window.toolPathProperties.getDefaults(shapeCutOperationName).operationType;
     const descriptor = window.toolPathProperties.getOperationDescriptor(shapeCutOperationName, resolvedOperationType);
@@ -3062,36 +3014,6 @@ function regenerateToolpathFromSvg(operationName, activeToolpaths, selectedTool,
     // text group so hole detection works (e.g. letter "e", "o", "i").
     // Remove all existing VCarve toolpaths for the group — the regeneration
     // will create the correct number fresh (inside: one per path, center: one per outer).
-    if (operationName === 'VCarve') {
-        const textGroupIds = new Set();
-        svgPathsToRegenerate.forEach(p => {
-            if (p.textGroupId) textGroupIds.add(p.textGroupId);
-        });
-        if (textGroupIds.size > 0) {
-            // Expand source path selection to full text group
-            svgpaths.forEach(p => {
-                if (p.textGroupId && textGroupIds.has(p.textGroupId) &&
-                    !svgPathsToRegenerate.some(sp => sp.id === p.id)) {
-                    svgPathsToRegenerate.push(p);
-                }
-            });
-
-            // Remove all VCarve toolpaths linked to this text group
-            const allGroupPathIds = new Set(svgPathsToRegenerate.map(p => p.id));
-            for (let i = toolpaths.length - 1; i >= 0; i--) {
-                const tp = toolpaths[i];
-                if (tp.operation !== 'VCarve In' && tp.operation !== 'VCarve Out' && tp.operation !== 'VCarve') continue;
-                const tpIds = tp.svgIds || (tp.svgId ? [tp.svgId] : []);
-                if (tpIds.some(id => allGroupPathIds.has(id))) {
-                    toolpaths.splice(i, 1);
-                    removeToolPath(tp.id);
-                }
-            }
-            // Clear update targets — all old toolpaths are removed, create fresh
-            activeToolpaths = [];
-        }
-    }
-
     selectMgr.unselectAll();
     svgPathsToRegenerate.forEach(p => selectMgr.selectPath(p));
 
@@ -3608,13 +3530,7 @@ function updateExistingPath(path, form, changedKey = null) {
     const operation = window.cncController?.operationManager?.getOperation(path.creationTool);
     const data = collectOperationProperties(operation);
 
-    if (path.creationTool === 'Text') {
-        if (operation) {
-            operation.setEditPath(path);
-            operation.updateFromProperties(data, { changedKey });
-        }
-    }
-    else if (path.creationTool === 'Shape' || (window.SHAPE_TOOL_NAMES || []).includes(path.creationTool)) {
+    if (path.creationTool === 'Text' || path.creationTool === 'Shape' || (window.SHAPE_TOOL_NAMES || []).includes(path.creationTool)) {
         // For shapes, update in place
         updateShapeInPlace(path, data, changedKey);
     }
@@ -4246,15 +4162,6 @@ function openPathEditor(path) {
         return false;
     }
 
-    if (path?.textGroupId) {
-        const groupPaths = svgpaths.filter(candidate => candidate.textGroupId === path.textGroupId);
-        if (groupPaths.length > 0) {
-            path = groupPaths[0];
-            selectMgr.unselectAll();
-            groupPaths.forEach(groupPath => selectMgr.selectPath(groupPath));
-        }
-    }
-
     const selectedGroupPaths = getSelectedShapeEditorPaths(path);
     if (selectedGroupPaths.length > 1) {
         return showShapeGroupPropertiesEditor(selectedGroupPaths);
@@ -4275,7 +4182,17 @@ function openPathEditor(path) {
     drawToolsTab.classList.add('active');
     drawToolsPane.classList.add('show', 'active');
 
-    cncController.setMode(path.creationTool);
+    if (path.creationTool === 'Text') {
+        const textOperation = window.cncController?.operationManager?.getOperation('Text');
+        if (window.cncController?.operationManager?.getCurrentOperation()?.name !== 'Text') {
+            cncController.setMode('Text');
+        }
+        if (textOperation && typeof textOperation.setEditPath === 'function') {
+            textOperation.setEditPath(path);
+        }
+    } else {
+        cncController.setMode(path.creationTool);
+    }
 
     showPathPropertiesEditor(path);
 
@@ -4540,53 +4457,6 @@ function showSvgGroupContextMenu(event, groupId) {
     showGroupContextMenu(event, groupId, 'svgGroupId', 'SVG Group', 'data-svg-group-id');
 }
 
-function showTextGroupContextMenu(event, groupId) {
-    createContextMenu(event, {
-        items: [
-            { label: 'Show All', icon: 'eye', action: 'show-all' },
-            { label: 'Hide All', icon: 'eye-off', action: 'hide-all' },
-            { divider: true },
-            { label: 'Delete All', icon: 'trash-2', action: 'delete-all', danger: true }
-        ],
-        data: groupId,
-        onAction: function (action, textGroupId) {
-            switch (action) {
-                case 'show-all':
-                    setGroupVisibility(svgpaths, 'textGroupId', textGroupId, true, 'path(s)');
-                    break;
-                case 'hide-all':
-                    setGroupVisibility(svgpaths, 'textGroupId', textGroupId, false, 'path(s)');
-                    break;
-                case 'delete-all': {
-                    const textPaths = svgpaths.filter(path => path.textGroupId === textGroupId);
-                    if (textPaths.length === 0) return;
-
-                    showConfirmModal({
-                        title: 'Delete Text Group',
-                        message: `
-                            <p>Are you sure you want to delete all <strong>${textPaths.length}</strong> path(s) for this text group?</p>
-                            <p class="text-muted mb-0">This action cannot be undone.</p>
-                        `,
-                        confirmText: 'Delete All',
-                        confirmClass: 'btn-danger',
-                        headerClass: 'bg-danger text-white',
-                        onConfirm: function () {
-                            addUndo(true, true, false);
-                            selectMgr.unselectAll();
-                            textPaths.forEach(path => doRemoveToolPath(path.id));
-                            refreshToolPathsDisplay();
-                            notify(`Deleted ${textPaths.length} path(s)`, 'success');
-                            redraw();
-                        }
-                    });
-                    break;
-                }
-            }
-        }
-    });
-}
-
-
 function addOrReplaceSvgPath(oldId, id, name) {
     refreshToolPathsDisplay();
 }
@@ -4650,10 +4520,6 @@ function deleteSTLModel(stlId) {
 
 // Sidebar management functions (maintaining compatibility with existing code)
 function addSvgPath(id, name) {
-    refreshToolPathsDisplay();
-}
-
-function addTextGroup(groupId, text, paths) {
     refreshToolPathsDisplay();
 }
 
@@ -5021,14 +4887,6 @@ function toggleSidebarItemVisibility(toggleButton) {
 
     const groupHeader = toggleButton.closest('.sidebar-object-header');
     if (!groupHeader) return;
-
-    if (groupHeader.dataset.textGroupHeader) {
-        const groupPaths = svgpaths.filter(path => path.textGroupId === groupHeader.dataset.textGroupHeader);
-        if (groupPaths.length === 0) return;
-        const nextVisible = groupPaths.some(path => path.visible === false);
-        setGroupVisibility(svgpaths, 'textGroupId', groupHeader.dataset.textGroupHeader, nextVisible, 'path(s)');
-        return;
-    }
 
     if (groupHeader.dataset.patternGroupHeader) {
         const groupPaths = svgpaths.filter(path => path.patternGroupId === groupHeader.dataset.patternGroupHeader);

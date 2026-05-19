@@ -244,6 +244,32 @@ function createModals() {
     `;
     body.appendChild(reorderOperationsModal);
 
+    const textCreationModal = document.createElement('div');
+    textCreationModal.innerHTML = `
+        <div class="modal fade" id="textCreationModal" tabindex="-1" aria-labelledby="text-creation-title" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="text-creation-title">
+                            <i data-lucide="type-outline"></i>
+                            Create Text
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div id="text-creation-form"></div>
+                        <div id="text-creation-error" class="invalid-feedback d-block" style="display: none;"></div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="button" class="btn btn-primary" id="confirm-text-creation">Create</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    body.appendChild(textCreationModal);
+
     // Delete Profile Confirmation Modal
     const deleteConfirmModal = document.createElement('div');
     deleteConfirmModal.innerHTML = `
@@ -424,6 +450,282 @@ function createModals() {
     // Add options modal event handlers
     document.getElementById('save-options').addEventListener('click', saveOptions);
     document.getElementById('reset-options').addEventListener('click', showResetOptionsConfirmation);
+    document.getElementById('confirm-text-creation').addEventListener('click', confirmTextCreation);
+    document.getElementById('textCreationModal').addEventListener('shown.bs.modal', function () {
+        const textInput = document.getElementById('pm-text');
+        if (textInput) {
+            textInput.focus();
+            if (typeof textInput.select === 'function') {
+                textInput.select();
+            }
+        }
+    });
+}
+
+function getTextCreationOperation() {
+    return window.cncController?.operationManager?.getOperation('Text') || null;
+}
+
+function getTextCreationFields(textOperation) {
+    if (!textOperation) return [];
+
+    return [
+        {
+            ...textOperation.textField,
+            type: 'textarea',
+            rows: 3,
+            help: 'Press Enter to create multiple lines.'
+        },
+        textOperation.fontField,
+        textOperation._getFontSizeField(),
+        textOperation.alignField,
+        textOperation.lineHeightField
+    ];
+}
+
+function getTextCreationValues(textOperation) {
+    if (!textOperation) return null;
+
+    textOperation.getProperties();
+    return {
+        text: textOperation.properties.text ?? textOperation.textField.default,
+        font: textOperation.properties.font ?? textOperation.fontField.default,
+        fontSize: textOperation.properties.fontSize ?? textOperation._getFontSizeField().default,
+        align: textOperation.properties.align ?? textOperation.alignField.default,
+        lineHeight: textOperation.properties.lineHeight ?? textOperation.lineHeightField.default
+    };
+}
+
+function renderTextCreationForm() {
+    const textOperation = getTextCreationOperation();
+    const form = document.getElementById('text-creation-form');
+    const error = document.getElementById('text-creation-error');
+    if (!textOperation || !form || !error) return false;
+
+    const values = getTextCreationValues(textOperation);
+    form.innerHTML = buildTextCreationCompactForm(textOperation, values);
+    initializeTextCreationCompactForm(textOperation, values);
+    error.textContent = '';
+    error.style.display = 'none';
+    return true;
+}
+
+function buildTextCreationCompactForm(textOperation, values) {
+    const fontOptions = (textOperation.fontField.options || []).map(option => {
+        const previewFamily = option.previewFamily
+            ? ` style="font-family: '${option.previewFamily}', sans-serif;"`
+            : '';
+        const selectedClass = option.value === values.font ? ' is-selected' : '';
+        return `
+            <button type="button"
+                    class="dropdown-item text-creation-font-option${selectedClass}"
+                    data-font-value="${option.value}"
+                    data-font-label="${option.label}"
+                    data-font-family="${option.previewFamily || ''}">
+                <span class="text-creation-font-option__name"${previewFamily}>${option.label}</span>
+                <span class="text-creation-font-option__preview"${previewFamily}>Aa Bb 123</span>
+            </button>
+        `;
+    }).join('');
+
+    const lineHeightOptions = [
+        0.8, 0.9, 1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.75, 2
+    ].map(value => {
+        const selected = Number(values.lineHeight) === value ? ' selected' : '';
+        return `<option value="${value}"${selected}>${value.toFixed(value % 1 === 0 ? 0 : 2).replace(/\.00$/, '')}</option>`;
+    }).join('');
+
+    const fontSizeField = textOperation._getFontSizeField();
+    const sliderValue = fontSizeField.dimension
+        ? values.fontSize / (fontSizeField.mmPerUnit || 1)
+        : values.fontSize;
+    const fontSizeDisplay = fontSizeField.dimension
+        ? formatDimension(values.fontSize, true)
+        : String(values.fontSize);
+    const selectedFontOption = (textOperation.fontField.options || []).find(option => option.value === values.font)
+        || textOperation.fontField.options?.[0]
+        || null;
+    const selectedFontFamily = selectedFontOption?.previewFamily
+        ? ` style="font-family: '${selectedFontOption.previewFamily}', sans-serif;"`
+        : '';
+
+    return `
+        <div class="text-creation-compact-form">
+            <div class="text-creation-toolbar card card-body py-2 px-2">
+                <div class="text-creation-toolbar-row">
+                    <div class="text-creation-control text-creation-control--font flex-grow-1">
+                        <label for="pm-font-trigger" class="form-label small text-uppercase text-muted mb-1">Font</label>
+                        <input type="hidden" id="pm-font" name="font" value="${selectedFontOption?.value || values.font}">
+                        <div class="dropdown text-creation-font-dropdown">
+                            <button class="btn btn-sm btn-outline-secondary dropdown-toggle text-creation-font-trigger"
+                                    type="button"
+                                    id="pm-font-trigger"
+                                    data-bs-toggle="dropdown"
+                                    data-bs-auto-close="true"
+                                    aria-expanded="false">
+                                <span class="text-creation-font-trigger__label"${selectedFontFamily}>${selectedFontOption?.label || ''}</span>
+                            </button>
+                            <div class="dropdown-menu text-creation-font-menu">
+                                ${fontOptions}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="text-creation-control text-creation-control--align">
+                        <label class="form-label small text-uppercase text-muted mb-1 d-block">Align</label>
+                        <input type="hidden" id="pm-align" name="align" value="${values.align}">
+                        <div class="btn-group btn-group-sm text-creation-align-group" role="group" aria-label="Text alignment">
+                            <input type="radio" class="btn-check" name="align" id="pm-align-left" value="left" ${values.align === 'left' ? 'checked' : ''}>
+                            <label class="btn btn-outline-secondary" for="pm-align-left" title="Align left">
+                                <i data-lucide="align-left"></i>
+                            </label>
+                            <input type="radio" class="btn-check" name="align" id="pm-align-center" value="center" ${values.align === 'center' ? 'checked' : ''}>
+                            <label class="btn btn-outline-secondary" for="pm-align-center" title="Align center">
+                                <i data-lucide="align-center"></i>
+                            </label>
+                            <input type="radio" class="btn-check" name="align" id="pm-align-right" value="right" ${values.align === 'right' ? 'checked' : ''}>
+                            <label class="btn btn-outline-secondary" for="pm-align-right" title="Align right">
+                                <i data-lucide="align-right"></i>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="text-creation-control text-creation-control--lineheight">
+                        <label for="pm-lineHeight" class="form-label small text-uppercase text-muted mb-1">Line</label>
+                        <select class="form-select form-select-sm" id="pm-lineHeight" name="lineHeight">
+                            ${lineHeightOptions}
+                        </select>
+                    </div>
+                </div>
+                <div class="text-creation-toolbar-row text-creation-toolbar-row--size">
+                    <label for="pm-fontSize" class="form-label small text-uppercase text-muted mb-1">Size</label>
+                    <div class="text-creation-size-row">
+                        <input type="range" class="form-range" id="pm-fontSize" name="fontSize"
+                               data-key="fontSize"
+                               data-display-id="pm-fontSize-display"
+                               data-dimension-range="${fontSizeField.dimension ? 'true' : 'false'}"
+                               data-mm-per-unit="${fontSizeField.mmPerUnit || 1}"
+                               min="${fontSizeField.min}" max="${fontSizeField.max}" step="${fontSizeField.step}" value="${sliderValue}">
+                        <span class="badge text-bg-light text-creation-size-badge" id="pm-fontSize-display">${fontSizeDisplay}</span>
+                    </div>
+                </div>
+            </div>
+            <div class="mb-3">
+                <label for="pm-text" class="form-label small text-uppercase text-muted mb-1">Text</label>
+                <textarea class="form-control form-control-sm text-creation-textarea" id="pm-text" name="text" rows="3" placeholder="Sample Text">${String(values.text ?? '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</textarea>
+                <div class="form-text">Press Enter to create multiple lines.</div>
+            </div>
+        </div>
+    `;
+}
+
+function initializeTextCreationCompactForm(textOperation, values) {
+    const fontInput = document.getElementById('pm-font');
+    const fontTrigger = document.getElementById('pm-font-trigger');
+    const fontTriggerLabel = fontTrigger?.querySelector('.text-creation-font-trigger__label') || null;
+    const fontOptions = document.querySelectorAll('.text-creation-font-option');
+    const fontSizeInput = document.getElementById('pm-fontSize');
+    const fontSizeDisplay = document.getElementById('pm-fontSize-display');
+    const alignInput = document.getElementById('pm-align');
+    const alignRadios = document.querySelectorAll('.text-creation-align-group input[type="radio"]');
+
+    if (fontInput && fontTrigger && fontTriggerLabel && fontOptions.length > 0) {
+        const updateSelectedFont = fontValue => {
+            const option = (textOperation.fontField.options || []).find(entry => entry.value === fontValue);
+            fontInput.value = option?.value || fontValue;
+            fontTriggerLabel.textContent = option?.label || '';
+            fontTriggerLabel.style.fontFamily = option?.previewFamily
+                ? `'${option.previewFamily}', sans-serif`
+                : '';
+            fontOptions.forEach(button => {
+                button.classList.toggle('is-selected', button.dataset.fontValue === fontInput.value);
+            });
+        };
+
+        updateSelectedFont(fontInput.value || values.font);
+
+        fontOptions.forEach(button => {
+            button.addEventListener('click', function() {
+                updateSelectedFont(this.dataset.fontValue);
+                const dropdown = bootstrap.Dropdown.getOrCreateInstance(fontTrigger);
+                dropdown.hide();
+            });
+        });
+    }
+
+    if (fontSizeInput && fontSizeDisplay) {
+        PropertiesManager.updateRangeDisplay(fontSizeInput, fontSizeDisplay);
+        fontSizeInput.addEventListener('input', function() {
+            PropertiesManager.updateRangeDisplay(this, fontSizeDisplay);
+        });
+    }
+
+    if (alignInput && alignRadios.length > 0) {
+        alignRadios.forEach(radio => {
+            radio.addEventListener('change', function() {
+                if (this.checked) {
+                    alignInput.value = this.value;
+                }
+            });
+        });
+    }
+
+    if (typeof lucide !== 'undefined' && typeof lucide.createIcons === 'function') {
+        lucide.createIcons();
+    }
+}
+
+function showTextCreationModal() {
+    const modalElement = document.getElementById('textCreationModal');
+    if (!modalElement) return;
+
+    showToolsList();
+    if (!renderTextCreationForm()) {
+        return;
+    }
+
+    bootstrap.Modal.getOrCreateInstance(modalElement).show();
+}
+
+async function confirmTextCreation() {
+    const textOperation = getTextCreationOperation();
+    const modalElement = document.getElementById('textCreationModal');
+    const error = document.getElementById('text-creation-error');
+    const confirmButton = document.getElementById('confirm-text-creation');
+    if (!textOperation || !modalElement || !error || !confirmButton) return;
+
+    const fields = getTextCreationFields(textOperation);
+    const values = PropertiesManager.collectValues(fields);
+    const textValue = String(values.text ?? '');
+
+    if (!textValue.trim()) {
+        error.textContent = 'Enter some text before creating the SVG paths.';
+        error.style.display = 'block';
+        document.getElementById('pm-text')?.focus();
+        return;
+    }
+
+    error.textContent = '';
+    error.style.display = 'none';
+    confirmButton.disabled = true;
+
+    textOperation.properties = {
+        ...textOperation.properties,
+        ...values,
+        text: textValue
+    };
+    textOperation._saveTextOptions(textValue, values.font, values.fontSize, values.align, values.lineHeight);
+
+    bootstrap.Modal.getOrCreateInstance(modalElement).hide();
+
+    try {
+        const createdPath = await textOperation.createAtCanvasCenter();
+        if (!createdPath) {
+            return;
+        }
+
+        redraw();
+    } finally {
+        confirmButton.disabled = false;
+    }
 }
 
 function showOptionsModal() {

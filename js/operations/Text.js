@@ -1,21 +1,8 @@
-
-const TEXT_EDIT_HANDLE_SIZE = 8;
-const TEXT_EDIT_HANDLE_HIT_RADIUS = 28;
-const TEXT_EDIT_ROTATE_OFFSET_PX = 36;
-const TEXT_EDIT_ROTATION_SNAP_DEG = 5;
-const TEXT_MIN_SIZE = 1;
-
-function rotateTextPointAround(point, centerX, centerY, angleRad) {
-    const cos = Math.cos(angleRad);
-    const sin = Math.sin(angleRad);
-    const dx = point.x - centerX;
-    const dy = point.y - centerY;
-
-    return {
-        x: centerX + dx * cos - dy * sin,
-        y: centerY + dx * sin + dy * cos
-    };
-}
+const TEXT_EDIT_HANDLE_SIZE = SHAPE_EDIT_HANDLE_SIZE;
+const TEXT_EDIT_HANDLE_HIT_RADIUS = SHAPE_EDIT_HANDLE_HIT_RADIUS;
+const TEXT_EDIT_ROTATE_OFFSET_PX = SHAPE_EDIT_ROTATE_OFFSET_PX;
+const TEXT_EDIT_ROTATION_SNAP_DEG = SHAPE_EDIT_ROTATION_SNAP_DEG;
+const TEXT_MIN_SIZE = MIN_SHAPE_SIZE;
 
 class Text extends Operation {
     constructor() {
@@ -33,7 +20,11 @@ class Text extends Operation {
             label: 'Font',
             type: 'choice',
             default: 'fonts/Roboto-Regular.ttf',
-            options: AVAILABLE_FONTS.map(f => ({ value: f.value, label: f.label }))
+            options: AVAILABLE_FONTS.map(f => ({
+                value: f.value,
+                label: f.label,
+                previewFamily: f.previewFamily || f.label
+            }))
         };
 
         this.alignField = {
@@ -51,11 +42,12 @@ class Text extends Operation {
         this.lineHeightField = {
             key: 'lineHeight',
             label: 'Line Height',
-            type: 'number',
+            type: 'choice',
             default: 1.2,
-            min: 0.5,
-            max: 3,
-            step: 0.05
+            options: [0.8, 0.9, 1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.75, 2].map(value => ({
+                value,
+                label: String(value)
+            }))
         };
 
         this.xField = {
@@ -131,7 +123,6 @@ class Text extends Operation {
         return 'Profile';
     }
 
-    // Build the fontSize field spec at call-time since it depends on runtime options
     _getFontSizeField() {
         const useInches = getOption('Inches');
         const maxDimension = Math.max(getOption('workpieceWidth') || 300, getOption('workpieceLength') || 200);
@@ -182,9 +173,9 @@ class Text extends Operation {
         this.properties.lockRatio = getOption('textLockRatio') !== false;
     }
 
-    // Lifecycle methods
     start() {
         this.getProperties();
+        this.currentPath = null;
         super.start();
     }
 
@@ -202,31 +193,19 @@ class Text extends Operation {
         super.stop();
     }
 
-    setEditPath(path) {
-        this._clearPendingUpdate();
-        this.currentPath = path;
-        this.activeHandle = null;
-        this.hoverHandle = null;
-        this.initialHandleProperties = null;
-        this.dragStartMouse = null;
-        this.isDraggingText = false;
-        this.textChangedDuringDrag = false;
-        this.mouseDown = false;
-        if (path?.creationProperties) {
-            this.properties = {
-                ...this.properties,
-                ...this.getPathTextProperties(path)
-            };
-        }
-    }
-
     onMouseDown(canvas, evt) {
         if (!this.currentPath) return;
+
+        console.debug('[Text.onMouseDown]', {
+            currentPath: this.currentPath?.id || null,
+            targetTag: evt.target?.tagName || null,
+            targetId: evt.target?.id || null
+        });
 
         const mouse = this.normalizeEventWorld(canvas, evt);
         if (this.isObjectLocked()) {
             const clickedPath = Select.getInstance().pointInPath(mouse);
-            if (!this.isPathInCurrentGroup(clickedPath)) {
+            if (clickedPath !== this.currentPath) {
                 this.stop();
                 showToolsList();
                 redraw();
@@ -236,6 +215,7 @@ class Text extends Operation {
 
         const editHandle = this.getEditHandleAtPoint(mouse);
         if (editHandle) {
+            console.debug('[Text.onMouseDown] handle hit', editHandle.id);
             addUndo(false, true, false);
             this.mouseDown = true;
             this.activeHandle = editHandle;
@@ -249,7 +229,8 @@ class Text extends Operation {
         }
 
         const clickedPath = Select.getInstance().pointInPath(mouse);
-        if (this.isPathInCurrentGroup(clickedPath)) {
+        if (clickedPath === this.currentPath) {
+            console.debug('[Text.onMouseDown] drag current path');
             addUndo(false, true, false);
             this.mouseDown = true;
             this.activeHandle = null;
@@ -262,9 +243,11 @@ class Text extends Operation {
             return;
         }
 
-        this.stop();
-        showToolsList();
-        redraw();
+        if (clickedPath !== this.currentPath) {
+            this.stop();
+            showToolsList();
+            redraw();
+        }
     }
 
     onMouseMove(canvas, evt) {
@@ -296,30 +279,49 @@ class Text extends Operation {
     onMouseUp() {
         if (!this.currentPath) return;
 
-        const shouldSyncMachining = this.textChangedDuringDrag;
         const editedPath = this.currentPath;
+        const shouldSyncMachining = this.textChangedDuringDrag;
 
         this.mouseDown = false;
         this.activeHandle = null;
+        this.hoverHandle = null;
         this.initialHandleProperties = null;
         this.dragStartMouse = null;
         this.isDraggingText = false;
         this.textChangedDuringDrag = false;
 
-        if (shouldSyncMachining) {
-            const groupPaths = this.getGroupPaths(editedPath);
-            const changedIds = groupPaths.map(path => path.id);
-
-            if (typeof regenerateToolpathsForPaths === 'function' && changedIds.length > 0) {
-                regenerateToolpathsForPaths(changedIds);
-            }
+        if (shouldSyncMachining && editedPath.toolpathProperties && typeof scheduleShapeMachiningToolpathSync === 'function') {
+            scheduleShapeMachiningToolpathSync(editedPath, { createIfMissing: true, delay: 0 });
         }
     }
 
-    // Properties Editor Interface
+    draw(ctx) {
+        if (!this.currentPath) return;
+        if (this.isObjectLocked()) return;
+        this.drawEditOverlay(ctx);
+    }
+
+    setEditPath(path) {
+        this._clearPendingUpdate();
+        this.currentPath = path;
+        this.activeHandle = null;
+        this.hoverHandle = null;
+        this.initialHandleProperties = null;
+        this.dragStartMouse = null;
+        this.isDraggingText = false;
+        this.textChangedDuringDrag = false;
+        this.mouseDown = false;
+        if (path?.creationProperties) {
+            this.properties = {
+                ...this.properties,
+                ...this.getPathTextProperties(path)
+            };
+        }
+    }
+
     getPropertiesHTML() {
         const pathProperties = this.currentPath?.creationProperties ?? null;
-        if (!pathProperties) this.getProperties(); // ensure this.properties is fresh for new text
+        if (!pathProperties) this.getProperties();
         return `
             <div class="alert alert-info mb-3">
                 <strong>Text Tool</strong><br>
@@ -328,10 +330,53 @@ class Text extends Operation {
             ${PropertiesManager.formHTML(this._fields(), pathProperties, this.properties)}`;
     }
 
+    isObjectLocked(path = this.currentPath) {
+        if (!path) return false;
+        return path.locked === true
+            || path.locked === 'true'
+            || path.creationProperties?.lockObject === true
+            || path.creationProperties?.lockObject === 'true';
+    }
+
+    toInternal(value) {
+        return value * viewScale;
+    }
+
+    toExternal(value) {
+        return value / viewScale;
+    }
+
+    getOriginExternal() {
+        return {
+            x: typeof origin !== 'undefined' && Number.isFinite(origin.x) ? origin.x / viewScale : 0,
+            y: typeof origin !== 'undefined' && Number.isFinite(origin.y) ? origin.y / viewScale : 0
+        };
+    }
+
+    toDisplayPosition(x, y) {
+        if (typeof toMM === 'function') {
+            const coords = toMM(this.toInternal(x), this.toInternal(y));
+            return { x: coords.x, y: coords.y };
+        }
+
+        const originExternal = this.getOriginExternal();
+        return {
+            x: x - originExternal.x,
+            y: originExternal.y - y
+        };
+    }
+
+    toStoredPosition(x, y) {
+        const originExternal = this.getOriginExternal();
+        return {
+            x: x + originExternal.x,
+            y: originExternal.y - y
+        };
+    }
+
     getPathTextProperties(path) {
         const creationProperties = path?.creationProperties || {};
-        const groupPaths = this.getGroupPaths(path);
-        const bbox = this.getGroupBoundingBox(groupPaths);
+        const bbox = path?.bbox || (path?.path ? boundingBox(path.path) : null);
         const center = bbox
             ? {
                 x: (bbox.minx + bbox.maxx) / 2,
@@ -349,7 +394,9 @@ class Text extends Operation {
             y: displayPosition.y,
             width: bbox ? this.toExternal(bbox.maxx - bbox.minx) : 0,
             height: bbox ? this.toExternal(bbox.maxy - bbox.miny) : 0,
-            rotation: this.getGroupRotation(groupPaths),
+            rotation: Array.isArray(path?.transformHistory)
+                ? path.transformHistory.reduce((sum, transform) => sum + (transform.rotation || 0), 0)
+                : 0,
             lockRatio: creationProperties.lockRatio ?? this.properties.lockRatio ?? true,
             lockObject: this.isObjectLocked(path)
         };
@@ -358,14 +405,6 @@ class Text extends Operation {
     renderGeometryFields(pathProperties = null) {
         const values = pathProperties || this.getPathTextProperties(this.currentPath);
         return `
-            <div class="text-properties-stack mb-3">
-                <div class="text-properties-grid-main">
-                    ${PropertiesManager.fieldHTML(this.textField, values.text)}
-                </div>
-                <div class="text-properties-grid-side">
-                    ${PropertiesManager.fieldHTML(this.fontField, values.font)}
-                </div>
-            </div>
             <h5 class="mt-3 mb-2">Position</h5>
             ${PropertiesManager.fieldHTML(this.xField, values.x)}
             ${PropertiesManager.fieldHTML(this.yField, values.y)}
@@ -393,12 +432,15 @@ class Text extends Operation {
         if (!textValue) return null;
 
         return this.addText(textValue, center.x, center.y, this.properties.fontSize, this.properties.font, {
-            delayPreviewSync: true
+            delayPreviewSync: true,
+            onCreated: createdPath => {
+                if (!createdPath || typeof openPathEditor !== 'function') return;
+                openPathEditor(createdPath);
+            }
         });
     }
 
     updateFromProperties(data, options = {}) {
-        // Manage parsing ourselves so the base class doesn't overwrite with raw slider values
         this.onPropertiesChanged(data, options);
     }
 
@@ -408,6 +450,14 @@ class Text extends Operation {
             ...this.properties,
             ...this.getPathTextProperties(path)
         };
+    }
+
+    updateInPlace(svgPath, data) {
+        if (!svgPath) return;
+        this.setEditPath(svgPath);
+        this.onPropertiesChanged(data || {}, {
+            changedKey: null
+        });
     }
 
     onPropertiesChanged(data, options = {}) {
@@ -422,6 +472,10 @@ class Text extends Operation {
                 || options.changedKey === 'height' || options.changedKey === 'rotation' || options.changedKey === 'lockObject'
                 || options.changedKey === 'lockRatio') {
                 this.applyGeometryProperties({ ...currentValues, ...values }, options.changedKey);
+                return;
+            }
+            if (options.immediateTextUpdate === true) {
+                this.updateTextInPlace(this.currentPath);
                 return;
             }
             this._scheduleTextUpdate(options.changedKey || null);
@@ -523,109 +577,20 @@ class Text extends Operation {
         }
     }
 
-    isPathInCurrentGroup(path) {
-        if (!path || !this.currentPath) return false;
-        if (this.currentPath.textGroupId) {
-            return path.textGroupId === this.currentPath.textGroupId;
-        }
-        return path.id === this.currentPath.id;
-    }
-
-    getGroupPaths(path = this.currentPath) {
-        if (!path) return [];
-        if (!path.textGroupId) return [path];
-        return svgpaths.filter(candidate => candidate.textGroupId === path.textGroupId);
-    }
-
-    getGroupPathIds(path = this.currentPath) {
-        return this.getGroupPaths(path).map(candidate => candidate.id).sort();
-    }
-
-    getGroupBoundingBox(paths) {
-        if (!Array.isArray(paths) || paths.length === 0) return null;
-        let minx = Infinity;
-        let miny = Infinity;
-        let maxx = -Infinity;
-        let maxy = -Infinity;
-
-        paths.forEach(path => {
-            const bbox = path?.bbox || (path?.path ? boundingBox(path.path) : null);
-            if (!bbox) return;
-            minx = Math.min(minx, bbox.minx);
-            miny = Math.min(miny, bbox.miny);
-            maxx = Math.max(maxx, bbox.maxx);
-            maxy = Math.max(maxy, bbox.maxy);
-        });
-
-        if (!Number.isFinite(minx) || !Number.isFinite(miny) || !Number.isFinite(maxx) || !Number.isFinite(maxy)) {
-            return null;
-        }
-
-        return { minx, miny, maxx, maxy };
-    }
-
-    getGroupRotation(paths) {
-        const firstPath = Array.isArray(paths) && paths.length > 0 ? paths[0] : null;
-        if (!firstPath?.transformHistory) return 0;
-        return firstPath.transformHistory.reduce((sum, transform) => sum + (transform.rotation || 0), 0);
-    }
-
-    isObjectLocked(path = this.currentPath) {
-        if (!path) return false;
-        return path.locked === true
-            || path.locked === 'true'
-            || path.creationProperties?.lockObject === true
-            || path.creationProperties?.lockObject === 'true';
-    }
-
-    toInternal(value) {
-        return value * viewScale;
-    }
-
-    toExternal(value) {
-        return value / viewScale;
-    }
-
-    getOriginExternal() {
-        return {
-            x: typeof origin !== 'undefined' && Number.isFinite(origin.x) ? origin.x / viewScale : 0,
-            y: typeof origin !== 'undefined' && Number.isFinite(origin.y) ? origin.y / viewScale : 0
-        };
-    }
-
-    toDisplayPosition(x, y) {
-        if (typeof toMM === 'function') {
-            const coords = toMM(this.toInternal(x), this.toInternal(y));
-            return { x: coords.x, y: coords.y };
-        }
-
-        const originExternal = this.getOriginExternal();
-        return {
-            x: x - originExternal.x,
-            y: originExternal.y - y
-        };
-    }
-
-    toStoredPosition(x, y) {
-        const originExternal = this.getOriginExternal();
-        return {
-            x: x + originExternal.x,
-            y: originExternal.y - y
-        };
-    }
-
     applyGeometryProperties(values, changedKey = null) {
-        const groupPaths = this.getGroupPaths(this.currentPath);
-        if (groupPaths.length === 0) return;
+        const targetPath = this.currentPath;
+        if (!targetPath) return;
 
-        const bbox = this.getGroupBoundingBox(groupPaths);
+        const bbox = targetPath.bbox || (targetPath.path ? boundingBox(targetPath.path) : null);
         if (!bbox) return;
 
         const centerX = (bbox.minx + bbox.maxx) / 2;
         const centerY = (bbox.miny + bbox.maxy) / 2;
         const currentWidth = Math.max(Number.EPSILON, this.toExternal(bbox.maxx - bbox.minx));
         const currentHeight = Math.max(Number.EPSILON, this.toExternal(bbox.maxy - bbox.miny));
-        const currentRotation = this.getGroupRotation(groupPaths);
+        const currentRotation = Array.isArray(targetPath.transformHistory)
+            ? targetPath.transformHistory.reduce((sum, transform) => sum + (transform.rotation || 0), 0)
+            : 0;
         const lockRatio = values.lockRatio !== false && values.lockRatio !== 'false';
         const referenceRatio = this.getReferenceAspectRatio({ width: currentWidth, height: currentHeight }, values);
         let targetWidth = Math.max(Number.EPSILON, Number(values.width) || currentWidth);
@@ -650,50 +615,48 @@ class Text extends Operation {
         const deltaY = targetCenterY - centerY;
         const lockObject = values.lockObject === true || values.lockObject === 'true';
 
-        groupPaths.forEach(path => {
-            path.path = path.path.map(point => {
-                let nextX = centerX + (point.x - centerX) * scaleX;
-                let nextY = centerY + (point.y - centerY) * scaleY;
+        targetPath.path = targetPath.path.map(point => {
+            let nextX = centerX + (point.x - centerX) * scaleX;
+            let nextY = centerY + (point.y - centerY) * scaleY;
 
-                if (rotationDelta !== 0) {
-                    const rad = -rotationDelta * Math.PI / 180;
-                    const dx = nextX - centerX;
-                    const dy = nextY - centerY;
-                    const cos = Math.cos(rad);
-                    const sin = Math.sin(rad);
-                    nextX = centerX + (dx * cos - dy * sin);
-                    nextY = centerY + (dx * sin + dy * cos);
-                }
-
-                return {
-                    x: nextX + deltaX,
-                    y: nextY + deltaY
-                };
-            });
-
-            path.bbox = boundingBox(path.path);
-            path.locked = lockObject;
-            path.creationProperties = {
-                ...path.creationProperties,
-                lockRatio,
-                lockObject
-            };
-            if (!Array.isArray(path.transformHistory)) {
-                path.transformHistory = [];
+            if (rotationDelta !== 0) {
+                const rad = -rotationDelta * Math.PI / 180;
+                const dx = nextX - centerX;
+                const dy = nextY - centerY;
+                const cos = Math.cos(rad);
+                const sin = Math.sin(rad);
+                nextX = centerX + (dx * cos - dy * sin);
+                nextY = centerY + (dx * sin + dy * cos);
             }
-            path.transformHistory.push({
-                centerX,
-                centerY,
-                scaleX,
-                scaleY,
-                rotation: rotationDelta,
-                skewX: 0,
-                skewY: 0,
-                deltaX,
-                deltaY,
-                pivotCenterX: centerX,
-                pivotCenterY: centerY
-            });
+
+            return {
+                x: nextX + deltaX,
+                y: nextY + deltaY
+            };
+        });
+
+        targetPath.bbox = boundingBox(targetPath.path);
+        targetPath.locked = lockObject;
+        targetPath.creationProperties = {
+            ...targetPath.creationProperties,
+            lockRatio,
+            lockObject
+        };
+        if (!Array.isArray(targetPath.transformHistory)) {
+            targetPath.transformHistory = [];
+        }
+        targetPath.transformHistory.push({
+            centerX,
+            centerY,
+            scaleX,
+            scaleY,
+            rotation: rotationDelta,
+            skewX: 0,
+            skewY: 0,
+            deltaX,
+            deltaY,
+            pivotCenterX: centerX,
+            pivotCenterY: centerY
         });
 
         this.properties = {
@@ -707,12 +670,6 @@ class Text extends Operation {
 
         this.updateRatioLockButton(lockRatio);
         redraw();
-    }
-
-    draw(ctx) {
-        if (!this.currentPath) return;
-        if (this.isObjectLocked()) return;
-        this.drawEditOverlay(ctx);
     }
 
     getEditGeometry() {
@@ -746,10 +703,10 @@ class Text extends Operation {
 
         const { centerX, centerY, halfWidth, halfHeight, angleRad } = geometry;
         return [
-            rotateTextPointAround({ x: centerX - halfWidth, y: centerY - halfHeight }, centerX, centerY, angleRad),
-            rotateTextPointAround({ x: centerX + halfWidth, y: centerY - halfHeight }, centerX, centerY, angleRad),
-            rotateTextPointAround({ x: centerX + halfWidth, y: centerY + halfHeight }, centerX, centerY, angleRad),
-            rotateTextPointAround({ x: centerX - halfWidth, y: centerY + halfHeight }, centerX, centerY, angleRad)
+            rotatePointAround({ x: centerX - halfWidth, y: centerY - halfHeight }, centerX, centerY, angleRad),
+            rotatePointAround({ x: centerX + halfWidth, y: centerY - halfHeight }, centerX, centerY, angleRad),
+            rotatePointAround({ x: centerX + halfWidth, y: centerY + halfHeight }, centerX, centerY, angleRad),
+            rotatePointAround({ x: centerX - halfWidth, y: centerY + halfHeight }, centerX, centerY, angleRad)
         ];
     }
 
@@ -758,7 +715,7 @@ class Text extends Operation {
         if (!geometry) return [];
 
         const outline = this.getEditOutlinePoints();
-        const topMid = rotateTextPointAround(
+        const topMid = rotatePointAround(
             { x: geometry.centerX, y: geometry.centerY - geometry.halfHeight },
             geometry.centerX,
             geometry.centerY,
@@ -904,9 +861,23 @@ class Text extends Operation {
         const localX = dx * Math.cos(angleRad) + dy * Math.sin(angleRad);
         const localY = -dx * Math.sin(angleRad) + dy * Math.cos(angleRad);
 
-        const width = Math.max(TEXT_MIN_SIZE, this.toExternal(Math.abs(localX) * 2));
-        const height = Math.max(TEXT_MIN_SIZE, this.toExternal(Math.abs(localY) * 2));
-        this.applyGeometryProperties({ ...properties, width, height }, Math.abs(localX) >= Math.abs(localY) ? 'width' : 'height');
+        let width = Math.max(TEXT_MIN_SIZE, this.toExternal(Math.abs(localX) * 2));
+        let height = Math.max(TEXT_MIN_SIZE, this.toExternal(Math.abs(localY) * 2));
+
+        if (properties.lockRatio) {
+            const lockedDimensions = getLockedDimensionsFromBounds(
+                width,
+                height,
+                this.getReferenceAspectRatio(this.initialHandleProperties, properties)
+            );
+            width = lockedDimensions.width;
+            height = lockedDimensions.height;
+        }
+
+        this.applyGeometryProperties(
+            { ...properties, width, height },
+            Math.abs(localX) >= Math.abs(localY) ? 'width' : 'height'
+        );
         this.textChangedDuringDrag = true;
     }
 
@@ -926,24 +897,23 @@ class Text extends Operation {
         this.textChangedDuringDrag = true;
     }
 
-    // Options Management Helper Method
     _saveTextOptions(text, font, sizeInMM, align, lineHeight) {
         if (typeof setOption !== 'undefined') {
-            setOption("textFontSize", sizeInMM); // Always stored in mm
+            setOption('textFontSize', sizeInMM);
             if (font) {
-                setOption("textFont", font);
+                setOption('textFont', font);
             }
             if (text !== undefined) {
-                setOption("textSample", text);
+                setOption('textSample', text);
             }
             if (align) {
-                setOption("textAlign", align);
+                setOption('textAlign', align);
             }
             if (lineHeight !== undefined && lineHeight !== null) {
-                setOption("textLineHeight", lineHeight);
+                setOption('textLineHeight', lineHeight);
             }
             if (this.properties.lockRatio !== undefined) {
-                setOption("textLockRatio", this.properties.lockRatio);
+                setOption('textLockRatio', this.properties.lockRatio);
             }
         }
     }
@@ -955,31 +925,28 @@ class Text extends Operation {
         }
     }
 
-    _scheduleTextUpdate(changedKey = null) {
+    _scheduleTextUpdate() {
         if (!this.currentPath) return;
 
         this._clearPendingUpdate();
         this.pendingUpdateTimer = setTimeout(() => {
             this.pendingUpdateTimer = null;
             addUndo(false, true, false);
-            this.updateTextInPlace(this.currentPath, { changedKey });
+            this.updateTextInPlace(this.currentPath);
         }, 120);
     }
 
-    // Font Processing Helper Methods
-    _processFontCommands(fontPath, currentX, y, fontname) {
-        // Track separate subpaths
+    _processFontCommands(fontPath) {
         var currentPathData = [];
         var allPaths = [];
-        var lastX = currentX;
-        var lastY = y;
+        var lastX = 0;
+        var lastY = 0;
         var firstPoint = null;
 
         fontPath.commands.forEach(function (cmd) {
             switch (cmd.type) {
-                case 'M': // Move - Start new subpath
+                case 'M':
                     if (currentPathData.length >= 2) {
-                        // Close previous subpath if start and end are near each other
                         var last = currentPathData[currentPathData.length - 1];
                         if (firstPoint && (last.x !== firstPoint.x || last.y !== firstPoint.y)) {
                             var dist = Math.hypot(last.x - firstPoint.x, last.y - firstPoint.y);
@@ -989,18 +956,15 @@ class Text extends Operation {
                         }
                         allPaths.push([...currentPathData]);
                     }
-                    // Start new subpath
                     currentPathData = [];
                     firstPoint = { x: cmd.x, y: cmd.y };
                     currentPathData.push(firstPoint);
-
-
                     lastX = cmd.x;
                     lastY = cmd.y;
                     break;
 
-                case 'L': // Line
-                    if(firstPoint.x == cmd.x && firstPoint.y == cmd.y)
+                case 'L':
+                    if (firstPoint.x == cmd.x && firstPoint.y == cmd.y)
                         currentPathData.push(firstPoint);
                     else
                         currentPathData.push({ x: cmd.x, y: cmd.y });
@@ -1008,51 +972,51 @@ class Text extends Operation {
                     lastY = cmd.y;
                     break;
 
-                case 'C': // Curve
-                    // Convert bezier curve to line segments
-                    var startIndex = (currentPathData.length === 0) ? 0 : 1;
-                    var steps = 10;
-                    for (var i = startIndex; i <= steps; i++) {
-                        var t = i / steps;
-                        var mt = 1 - t, mt2 = mt * mt, mt3 = mt2 * mt;
-                        var t2 = t * t, t3 = t2 * t;
-                        var tx = mt3 * lastX + 3 * mt2 * t * cmd.x1 + 3 * mt * t2 * cmd.x2 + t3 * cmd.x;
-                        var ty = mt3 * lastY + 3 * mt2 * t * cmd.y1 + 3 * mt * t2 * cmd.y2 + t3 * cmd.y;
-                        currentPathData.push({ x: tx, y: ty });
+                case 'C': {
+                    var startIndexC = (currentPathData.length === 0) ? 0 : 1;
+                    var stepsC = 10;
+                    for (var iC = startIndexC; iC <= stepsC; iC++) {
+                        var tC = iC / stepsC;
+                        var mtC = 1 - tC, mt2C = mtC * mtC, mt3C = mt2C * mtC;
+                        var t2C = tC * tC, t3C = t2C * tC;
+                        var txC = mt3C * lastX + 3 * mt2C * tC * cmd.x1 + 3 * mtC * t2C * cmd.x2 + t3C * cmd.x;
+                        var tyC = mt3C * lastY + 3 * mt2C * tC * cmd.y1 + 3 * mtC * t2C * cmd.y2 + t3C * cmd.y;
+                        currentPathData.push({ x: txC, y: tyC });
                     }
                     lastX = cmd.x;
                     lastY = cmd.y;
                     break;
+                }
 
-                case 'Q': // Quadratic curve
-                    var startIndex = (currentPathData.length === 0) ? 0 : 1;
-                    var steps = 10;
-                    for (var i = startIndex; i <= steps; i++) {
-                        var t = i / steps;
-                        var mt = 1 - t, mt2 = mt * mt, t2 = t * t;
-                        var tx = mt2 * lastX + 2 * mt * t * cmd.x1 + t2 * cmd.x;
-                        var ty = mt2 * lastY + 2 * mt * t * cmd.y1 + t2 * cmd.y;
-                        currentPathData.push({ x: tx, y: ty });
+                case 'Q': {
+                    var startIndexQ = (currentPathData.length === 0) ? 0 : 1;
+                    var stepsQ = 10;
+                    for (var iQ = startIndexQ; iQ <= stepsQ; iQ++) {
+                        var tQ = iQ / stepsQ;
+                        var mtQ = 1 - tQ, mt2Q = mtQ * mtQ, t2Q = tQ * tQ;
+                        var txQ = mt2Q * lastX + 2 * mtQ * tQ * cmd.x1 + t2Q * cmd.x;
+                        var tyQ = mt2Q * lastY + 2 * mtQ * tQ * cmd.y1 + t2Q * cmd.y;
+                        currentPathData.push({ x: txQ, y: tyQ });
                     }
                     lastX = cmd.x;
                     lastY = cmd.y;
                     break;
+                }
 
-                case 'Z': // Close path
+                case 'Z':
                     if (firstPoint && currentPathData.length > 0) {
-                        if(firstPoint.x != currentPathData[currentPathData.length-1].x || firstPoint.y != currentPathData[currentPathData.length-1].y)
+                        if (firstPoint.x != currentPathData[currentPathData.length - 1].x || firstPoint.y != currentPathData[currentPathData.length - 1].y)
                             currentPathData.push(firstPoint);
                     }
                     break;
             }
         });
 
-        // Add the last subpath if it exists, closing it if start and end are near
         if (currentPathData.length >= 2) {
-            var last = currentPathData[currentPathData.length - 1];
-            if (firstPoint && (last.x !== firstPoint.x || last.y !== firstPoint.y)) {
-                var dist = Math.hypot(last.x - firstPoint.x, last.y - firstPoint.y);
-                if (dist < 2) {
+            var lastFinal = currentPathData[currentPathData.length - 1];
+            if (firstPoint && (lastFinal.x !== firstPoint.x || lastFinal.y !== firstPoint.y)) {
+                var distFinal = Math.hypot(lastFinal.x - firstPoint.x, lastFinal.y - firstPoint.y);
+                if (distFinal < 2) {
                     currentPathData.push(firstPoint);
                 }
             }
@@ -1062,11 +1026,10 @@ class Text extends Operation {
         return allPaths;
     }
 
-    _createSvgPathsFromSubpaths(allPaths, char, textGroupId, x, y, text, fontname, sizeInMM, pathIdMap = null, extraCreationProperties = null) {
+    _createSvgPathsFromSubpaths(allPaths, char, x, y, text, fontname, sizeInMM, pathIdMap = null, extraCreationProperties = null) {
         const createdPaths = [];
         let pathIdCounter = 0;
 
-        // Find the largest path by bbox area to label as outer
         var largestArea = -1;
         var largestIdx = 0;
         for (var ai = 0; ai < allPaths.length; ai++) {
@@ -1079,11 +1042,10 @@ class Text extends Operation {
         }
 
         allPaths.forEach((pathData, pathIndex) => {
-            pathData = clipper.JS.Lighten(pathData, getOption("tolerance") * viewScale);
+            pathData = clipper.JS.Lighten(pathData, getOption('tolerance') * viewScale);
             if (pathData.length > 0) {
                 var pathType = pathIndex === largestIdx ? 'outer' : 'inner';
 
-                // Reuse original ID and name if available (for updates), otherwise create new
                 var pathId, pathName, isSelected, isVisible;
                 if (pathIdMap && pathIdCounter < pathIdMap.length) {
                     pathId = pathIdMap[pathIdCounter].id;
@@ -1091,7 +1053,6 @@ class Text extends Operation {
                     isSelected = pathIdMap[pathIdCounter].selected;
                     isVisible = pathIdMap[pathIdCounter].visible;
                 } else {
-                    // Create new path
                     pathId = 'Text' + svgpathId;
                     pathName = 'Text_' + char + '_' + pathType + '_' + svgpathId;
                     isSelected = 1;
@@ -1107,9 +1068,7 @@ class Text extends Operation {
                     visible: isVisible !== false,
                     path: pathData,
                     bbox: boundingBox(pathData),
-                    // Store creation properties for editing
                     creationTool: 'Text',
-                    textGroupId: textGroupId,
                     creationProperties: {
                         text: text,
                         font: fontname,
@@ -1130,15 +1089,9 @@ class Text extends Operation {
     }
 
     addText(text, x, y, sizeInMM = 20, fontname, options = {}) {
-        // Generate a unique group ID for all paths in this text
-        const textGroupId = options.textGroupId || ('TextGroup' + Date.now());
-
         let fontUrl = fontname;
 
         return new Promise(resolve => {
-
-
-            // Use opentype.js for local TTF fonts
             opentype.load(fontUrl, (err, font) => {
                 if (err) {
                     console.error('Could not load font:', err);
@@ -1149,14 +1102,13 @@ class Text extends Operation {
                     return;
                 }
 
-                const createdPath = this.createTextPath(font, text, x, y, sizeInMM, fontname, textGroupId, options);
+                const createdPath = this.createTextPath(font, text, x, y, sizeInMM, fontname, options);
                 redraw();
                 resolve(createdPath);
             });
         });
     }
 
-    // Compute scaled font size so capital 'H' matches sizeInMM in world units.
     _computeFontSize(font, sizeInMM) {
         const referenceBBox = font.charToGlyph('H').getBoundingBox();
         const referenceHeight = referenceBBox.y2 - referenceBBox.y1;
@@ -1188,7 +1140,7 @@ class Text extends Operation {
         return ((font.ascender - font.descender) / font.unitsPerEm) * fontSize * safeLineHeight;
     }
 
-    _buildTextPaths(font, text, x, y, sizeInMM, fontname, textGroupId, pathIdMap = null, properties = {}) {
+    _buildTextPaths(font, text, x, y, sizeInMM, fontname, pathIdMap = null, properties = {}) {
         const createdPaths = [];
         const fontSize = this._computeFontSize(font, sizeInMM);
         const lines = this._getTextLines(text);
@@ -1204,11 +1156,10 @@ class Text extends Operation {
 
             line.split('').forEach(char => {
                 const fontPath = font.getPath(char, currentX, lineY, fontSize);
-                const allPaths = this._processFontCommands(fontPath, currentX, lineY, fontname);
+                const allPaths = this._processFontCommands(fontPath);
                 const charPaths = this._createSvgPathsFromSubpaths(
                     allPaths,
                     char,
-                    textGroupId,
                     x,
                     y,
                     text,
@@ -1219,7 +1170,9 @@ class Text extends Operation {
                         align,
                         lineHeight,
                         lineIndex,
-                        lineCount: lines.length
+                        lineCount: lines.length,
+                        lockRatio: properties.lockRatio,
+                        lockObject: properties.lockObject
                     }
                 );
 
@@ -1232,11 +1185,11 @@ class Text extends Operation {
         return createdPaths;
     }
 
-    createTextPath(font, text, x, y, sizeInMM, fontname, textGroupId, options = {}) {
+    createTextPath(font, text, x, y, sizeInMM, fontname, options = {}) {
         if (options.skipUndo !== true) {
             addUndo(false, true, false);
         }
-        const createdPaths = this._buildTextPaths(font, text, x, y, sizeInMM, fontname, textGroupId, null, this.properties);
+        const createdPaths = this._buildTextPaths(font, text, x, y, sizeInMM, fontname, null, this.properties);
         createdPaths.forEach(svgPath => {
             if (!svgPath.toolpathProperties) {
                 svgPath.toolpathProperties = window.toolPathProperties?.getDefaultShapeCutProperties(this.getDefaultCutOperationName()) || null;
@@ -1248,41 +1201,27 @@ class Text extends Operation {
             }
         });
 
-        // Add the text group to sidebar after all paths are created
-        const textPaths = svgpaths.filter(p => p.textGroupId === textGroupId);
-        if (typeof addTextGroup === 'function' && textPaths.length > 0) {
-            addTextGroup(textGroupId, text, textPaths);
-        }
-
-        // Set currentPath to enable immediate editing
-        if (textPaths.length > 0) {
-            this.currentPath = textPaths[0];
-            const unifiedIds = this.getGroupPathIds(this.currentPath);
-            textPaths.forEach(path => {
-                path.svgId = unifiedIds[0] || path.id;
-                path.svgIds = unifiedIds.slice();
+        if (createdPaths.length > 0) {
+            this.currentPath = createdPaths[0];
+            createdPaths.forEach(path => {
+                path.svgId = path.id;
+                path.svgIds = [path.id];
             });
             if (typeof scheduleShapeMachiningToolpathSync === 'function' && options.delayPreviewSync !== true) {
-                textPaths.forEach(path => scheduleShapeMachiningToolpathSync(path, { createIfMissing: true, delay: 0 }));
+                scheduleShapeMachiningToolpathSync(this.currentPath, { createIfMissing: true, delay: 0 });
             }
         }
 
-        return textPaths[0] || null;
+        return createdPaths[0] || null;
     }
 
-    // Update text paths in place
     updateTextInPlace(path) {
-        // Find all paths that belong to this text creation
         const data = this.properties;
         if (path === undefined)
             path = this.currentPath;
         if (!path || !path.creationProperties) return;
-        const relatedPaths = svgpaths.filter(p =>
-            p.textGroupId === path.textGroupId
-        );
+        const relatedPaths = [path];
 
-
-        // Text or font changed, need to recreate paths
         if (typeof opentype !== 'undefined') {
             opentype.load(data.font, (err, font) => {
                 if (err) {
@@ -1297,10 +1236,8 @@ class Text extends Operation {
                 }
             });
         }
-
     }
 
-    // Update existing text paths without creating new ones
     updateTextPathsInPlace(textPaths, font, data) {
         const text = data.text;
         const sizeInMM = data.fontSize;
@@ -1308,26 +1245,19 @@ class Text extends Operation {
 
         if (!textPaths.length) return;
 
-        // Get position from the first path
         const position = textPaths[0].creationProperties.position;
         const x = position.x;
         const y = position.y;
 
-        // Store original path IDs, names, textGroupId, and transformHistory to preserve them
-        const textGroupId = textPaths[0].textGroupId || ('TextGroup' + Date.now());
         const originalPathIds = textPaths.map(p => p.id);
         const originalPaths = textPaths.map(p => ({
             id: p.id,
             name: p.name,
             selected: p.selected,
             visible: p.visible,
-            toolpathProperties: p.toolpathProperties ? { ...p.toolpathProperties } : null,
-            transformHistory: Array.isArray(p.transformHistory)
-                ? p.transformHistory.map(t => ({ ...t }))
-                : null
+            toolpathProperties: p.toolpathProperties ? { ...p.toolpathProperties } : null
         }));
 
-        // Find and remove toolpaths linked to any of the old text paths
         const linkedToolpaths = [];
         for (let i = toolpaths.length - 1; i >= 0; i--) {
             const tp = toolpaths[i];
@@ -1339,7 +1269,6 @@ class Text extends Operation {
             }
         }
 
-        // Remove existing text paths from sidebar and array
         selectMgr.unselectAll();
         textPaths.forEach(textPath => {
             const pathIndex = svgpaths.findIndex(p => p.id === textPath.id);
@@ -1349,13 +1278,13 @@ class Text extends Operation {
             }
         });
 
-        const recreatedPaths = this._buildTextPaths(font, text, x, y, sizeInMM, fontname, textGroupId, originalPaths, data);
+        const recreatedPaths = this._buildTextPaths(font, text, x, y, sizeInMM, fontname, originalPaths, data);
         let firstCreatedPath = null;
 
         recreatedPaths.forEach((svgPath, index) => {
             const originalMeta = originalPaths[index];
-            if (originalMeta?.transformHistory?.length) {
-                svgPath.transformHistory = originalMeta.transformHistory.map(t => ({ ...t }));
+            if (Array.isArray(textPaths[index]?.transformHistory) && textPaths[index].transformHistory.length > 0) {
+                svgPath.transformHistory = textPaths[index].transformHistory.map(transform => ({ ...transform }));
                 applyTransformHistory(svgPath);
             }
             if (originalMeta?.toolpathProperties) {
@@ -1372,22 +1301,14 @@ class Text extends Operation {
 
         this.currentPath = firstCreatedPath;
 
-        // Add the updated text group to sidebar
-        const updatedTextPaths = svgpaths.filter(p => p.textGroupId === textGroupId);
-        if (updatedTextPaths.length > 0) {
-            addTextGroup(textGroupId, text, updatedTextPaths);
-        }
-
-        // Re-run linked toolpath operations on the new text paths
-        if (linkedToolpaths.length > 0 && updatedTextPaths.length > 0) {
+        if (linkedToolpaths.length > 0 && recreatedPaths.length > 0) {
             selectMgr.unselectAll();
-            updatedTextPaths.forEach(p => selectMgr.selectPath(p));
+            recreatedPaths.forEach(p => selectMgr.selectPath(p));
 
             for (const lt of linkedToolpaths) {
                 const originalTool = window.currentTool;
                 window.currentTool = lt.tool;
                 window.currentToolpathProperties = lt.toolpathProperties;
-                // Normalize operation names (e.g. 'VCarve In'/'VCarve Out' -> 'VCarve')
                 let opName = lt.operation;
                 if (opName === 'VCarve In' || opName === 'VCarve Out') opName = 'VCarve';
                 try {
@@ -1398,21 +1319,18 @@ class Text extends Operation {
                 }
             }
         } else if (typeof scheduleShapeMachiningToolpathSync === 'function') {
-            updatedTextPaths.forEach(updatedPath => {
+            recreatedPaths.forEach(updatedPath => {
                 if (updatedPath.toolpathProperties) {
                     scheduleShapeMachiningToolpathSync(updatedPath, { createIfMissing: true, delay: 0 });
                 }
             });
         }
 
-        const unifiedIds = this.getGroupPathIds(this.currentPath);
-        updatedTextPaths.forEach(updatedPath => {
-            updatedPath.svgId = unifiedIds[0] || updatedPath.id;
-            updatedPath.svgIds = unifiedIds.slice();
+        recreatedPaths.forEach(updatedPath => {
+            updatedPath.svgId = updatedPath.id;
+            updatedPath.svgIds = [updatedPath.id];
         });
 
         redraw();
     }
-
-
 }

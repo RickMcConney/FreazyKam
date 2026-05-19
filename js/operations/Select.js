@@ -43,9 +43,6 @@ class Select extends Operation {
 
     getSelectablePaths(path) {
         if (!path) return [];
-        if (path.textGroupId) {
-            return svgpaths.filter(candidate => candidate.textGroupId === path.textGroupId);
-        }
         return [path];
     }
 
@@ -146,6 +143,14 @@ class Select extends Operation {
      * @param {MouseEvent} evt - The mouse event
      */
     onMouseDown(canvas, evt) {
+        const floatingWindow = document.getElementById('floating-properties-window');
+        const isEditingTextPath = window.cncController?.operationManager?.getCurrentOperation()?.name === 'Text'
+            && !!window.cncController?.operationManager?.getOperation('Text')?.currentPath;
+
+        if (isEditingTextPath && (!floatingWindow || !floatingWindow.contains(evt.target))) {
+            return;
+        }
+
         this.mouseDown = true;
         const mouse = this.normalizeEvent(canvas, evt);
         this.dragStartX = mouse.x;
@@ -217,6 +222,14 @@ class Select extends Operation {
 
     hasClosedHitArea(svgpath) {
         if (!svgpath || svgpath.type === 'image' || !Array.isArray(svgpath.path) || svgpath.path.length < 3) {
+            return false;
+        }
+
+        // Text glyph contours are edited as independent stroked paths.
+        // Treating their closed interior as clickable prevents outside-click
+        // dismissal for letters like O, A, B because clicks in the hole/inside
+        // area still resolve to a path hit.
+        if (svgpath.creationTool === 'Text') {
             return false;
         }
 
@@ -348,7 +361,6 @@ class Select extends Operation {
 
         if (this.dragPath) {
             const isShapePath = this.dragPath.creationTool === 'Shape'
-                || this.dragPath.creationTool === 'Text'
                 || (window.SHAPE_TOOL_NAMES || []).includes(this.dragPath.creationTool);
             if (this.isPathLocked(this.dragPath)) {
                 Select.state = Select.SELECTING;
@@ -429,16 +441,24 @@ class Select extends Operation {
         // Only toggle selection if we stayed in IDLE (never crossed 8px threshold)
         // If we transitioned to DRAGGING or SELECTING, don't change selection
         if (Select.state == Select.IDLE) {
-            // Use the path captured at mouse down (which includes highlighted paths)
-            // Fall back to closestPath for clicks near edges
-            let path = this.potentialDragPath || closestPath(mouseHit, false);
+            // Resolve the actual clicked path first. This prevents a stale
+            // potentialDragPath/highlighted path from masking a real outside click.
+            const directPath = this.pointInPath(mouseHit);
 
-            if (!path && isFloatingPopupOpen && floatingWindow && !floatingWindow.contains(evt.target)) {
+            if (!directPath && isFloatingPopupOpen && floatingWindow && !floatingWindow.contains(evt.target)) {
                 showToolsList();
                 this.potentialDragPath = null;
                 Select.state = Select.IDLE;
-                this.showSelection();
                 return;
+            }
+
+            // Use the captured path for normal click/drag behavior only after the
+            // outside-click case has been handled.
+            let path = directPath || this.potentialDragPath;
+
+            if (!path) {
+                // Keep near-edge selection behavior when no popup-close happened.
+                path = closestPath(mouseHit, false);
             }
 
             const isMachiningOperationActive = currentOperationName
@@ -532,7 +552,9 @@ class Select extends Operation {
 
         if (pathToShow) {
             const currentOp = window.cncController.operationManager.currentOperation.name;
-            const isShapePath = pathToShow.creationTool === 'Shape' || (window.SHAPE_TOOL_NAMES || []).includes(pathToShow.creationTool);
+            const isShapePath = pathToShow.creationTool === 'Shape'
+                || pathToShow.creationTool === 'Text'
+                || (window.SHAPE_TOOL_NAMES || []).includes(pathToShow.creationTool);
             if (isOnDrawTab && !isShapePath && currentOp !== 'Move' && currentOp !== 'Boolean' && currentOp !== 'Offset' && currentOp !== 'Pattern') {
                 doMove();
             } else if (isOnOperationsTab) {

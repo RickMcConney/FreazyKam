@@ -195,6 +195,240 @@
 .pm-radio-cell:has(.form-check-input:checked) { background-color: #cfe2ff; border-color: #0d6efd; }
 .pm-radio-cell .form-check-input { margin: 0; transform: scale(0.8); }
 
+.text-creation-compact-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.text-creation-textarea {
+    min-height: 84px;
+    resize: vertical;
+}
+
+.text-creation-toolbar {
+    gap: 0.75rem;
+    border-color: var(--color-gray-300);
+    background: linear-gradient(180deg, #fbfcfe 0%, #f5f7fa 100%);
+}
+
+.text-creation-toolbar-row {
+    display: flex;
+    align-items: end;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.text-creation-toolbar-row--size {
+    align-items: stretch;
+}
+
+.text-creation-control {
+    min-width: 0;
+}
+
+.text-creation-control--font {
+    min-width: 220px;
+}
+
+.text-creation-font-dropdown,
+.text-creation-font-trigger {
+    width: 100%;
+}
+
+.text-creation-font-trigger {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 31px;
+    text-align: left;
+}
+
+.text-creation-font-trigger__label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.text-creation-font-menu {
+    width: 100%;
+    max-height: 200px;
+    padding: 0.35rem;
+    overflow-y: auto;
+}
+
+.text-creation-font-option {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    border-radius: 0.4rem;
+    padding: 0.45rem 0.6rem;
+}
+
+.text-creation-font-option.is-selected {
+    background-color: var(--color-primary-light);
+    color: var(--color-primary-dark);
+}
+
+.text-creation-font-option__name,
+.text-creation-font-option__preview {
+    display: block;
+    line-height: 1.2;
+}
+
+.text-creation-font-option__name {
+    min-width: 0;
+    flex: 1 1 auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.text-creation-font-option__preview {
+    flex: 0 0 auto;
+    color: var(--color-gray-600);
+    font-size: 0.92rem;
+    white-space: nowrap;
+}
+
+.text-creation-control--align {
+    flex: 0 0 auto;
+}
+
+.text-creation-control--align .btn-check {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.text-creation-control--lineheight {
+    width: 90px;
+    flex: 0 0 90px;
+}
+
+.text-creation-font-select {
+    min-width: 220px;
+}
+
+.text-creation-align-group .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 32px;
+    padding: 0;
+}
+
+.text-creation-align-group .btn svg {
+    width: 16px;
+    height: 16px;
+}
+
+.text-creation-size-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    width: 100%;
+}
+
+.text-creation-size-row .form-range {
+    margin: 0;
+}
+
+.text-creation-size-badge {
+    min-width: 72px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+}
+
+#textCreationModal .modal-dialog {
+    max-width: 620px;
+}
+
+@font-face {
+    font-family: 'Roboto';
+    src: url('../fonts/Roboto-Regular.ttf') format('truetype');
+    font-weight: 400;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'Jointly3';
+    src: url('../fonts/Jointly3.otf') format('opentype');
+    font-weight: 400;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'National Park ExtraLight';
+    src: url('../fonts/NationalPark-ExtraLight.otf') format('opentype');
+    font-weight: 200;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'National Park Light';
+    src: url('../fonts/NationalPark-Light.otf') format('opentype');
+    font-weight: 300;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'National Park Regular';
+    src: url('../fonts/NationalPark-Regular.otf') format('opentype');
+    font-weight: 400;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'National Park Medium';
+    src: url('../fonts/NationalPark-Medium.otf') format('opentype');
+    font-weight: 500;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'National Park SemiBold';
+    src: url('../fonts/NationalPark-SemiBold.otf') format('opentype');
+    font-weight: 600;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'National Park Bold';
+    src: url('../fonts/NationalPark-Bold.otf') format('opentype');
+    font-weight: 700;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'National Park ExtraBold';
+    src: url('../fonts/NationalPark-ExtraBold.otf') format('opentype');
+    font-weight: 800;
+    font-style: normal;
+}
+
+@media (max-width: 576px) {
+    .text-creation-toolbar-row {
+        align-items: stretch;
+    }
+
+    .text-creation-control--font,
+    .text-creation-control--lineheight {
+        width: 100%;
+        flex: 1 1 100%;
+    }
+
+    .text-creation-size-row {
+        flex-wrap: wrap;
+    }
+
+    .text-creation-size-badge {
+        width: 100%;
+    }
+}
+
 /* ============================================================================
    COLOR PALETTE - CSS Variables
    ============================================================================

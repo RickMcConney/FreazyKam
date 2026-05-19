@@ -86,7 +86,7 @@ class CncController {
       }
 
       const isShapeTool = (window.SHAPE_TOOL_NAMES || []).includes(clickedPath.creationTool);
-      if (clickedPath.creationTool === 'Text' || clickedPath.creationTool === 'Shape' || isShapeTool || clickedPath.creationTool === 'Offset' || clickedPath.creationTool === 'Pattern') {
+      if (clickedPath.creationTool === 'Shape' || isShapeTool || clickedPath.creationTool === 'Offset' || clickedPath.creationTool === 'Pattern') {
         selectMgr.unselectAll();
         selectMgr.selectPath(clickedPath);
         handlePathClick(clickedPath.id);

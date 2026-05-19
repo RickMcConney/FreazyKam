@@ -646,7 +646,6 @@ function normalizeWindingOrder(inputPaths) {
 
 function getMachiningSelectionGroupKey(path) {
 	if (!path) return null;
-	if (path.textGroupId) return 'text:' + path.textGroupId;
 	if (path.patternGroupId) return 'pattern:' + path.patternGroupId;
 	if (path.svgGroupId) return 'svg:' + path.svgGroupId;
 	return null;
