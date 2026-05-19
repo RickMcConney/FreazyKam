@@ -1338,8 +1338,10 @@ function shouldRemoveInsideRegionForThroughCut(toolpath) {
     return false;
   }
 
-  const operation = String(toolpath.displayOperation || toolpath.operation || '').trim();
-  return operation !== 'Outside';
+  // Through-cut profiles should only remove the swept tool volume in the voxel view.
+  // Auto-clearing the full closed region turns Center profiles into pockets and
+  // corrupts Inside profiles once the cut reaches the stock bottom.
+  return false;
 }
 
 function buildThroughCutSubdivisionMovements(toolpaths, workpieceThickness, sampleSpacing, fallbackRadius) {
