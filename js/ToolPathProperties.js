@@ -21,7 +21,7 @@ class ToolPathProperties {
                 noToolMsg: 'Please add an End Mill, Ball Nose, or VBit in the tool library.',
                 defaultOperationType: 'center',
                 operationTypeOptions: [
-                    { value: 'none', label: 'No operation' },
+                    this._operationTypeOption('none', 'No operation', 'icons/none.svg'),
                     //{ value: 'vcarve', label: 'VCarve' },
                     this._operationTypeOption('pocket', 'Clear out a pocket', 'icons/pocket.svg'),
                     this._operationTypeOption('center', 'Cut on shape path', 'icons/profile_center.svg'),
