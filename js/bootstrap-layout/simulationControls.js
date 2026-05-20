@@ -257,6 +257,7 @@ function create2DSimulationControls() {
 }
 
 function update3DSimulationOverlayLayout() {
+    return; // Temporary disable dynamic height adjustment to avoid layout thrashing during simulation playback. Will revisit with more efficient approach if needed.
     const overlay = document.getElementById('simulation-overlay-3d');
     const container = document.getElementById('3d-canvas-container');
 
@@ -323,13 +324,21 @@ function create3DSimulationMenu(prefix) {
     const container = document.createElement('div');
     container.className = 'col-auto dropdown';
 
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'btn btn-outline-secondary btn-sm 3d-simulation-menu-button';
+    const button = document.createElement('span');
+    button.className = '3d-simulation-menu-button';
+    button.setAttribute('role', 'button');
+    button.tabIndex = 0;
     button.setAttribute('data-bs-toggle', 'dropdown');
     button.setAttribute('aria-expanded', 'false');
     button.setAttribute('aria-label', '3D display options');
-    button.innerHTML = '<span class="three-dots-vertical" aria-hidden="true"></span>';
+    button.appendChild(createIconNode('ellipsis-vertical'));
+
+    button.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            button.click();
+        }
+    });
 
     const menu = document.createElement('div');
     menu.className = 'dropdown-menu dropdown-menu-end simulation-overlay-menu';
@@ -404,7 +413,7 @@ function ensure3DSimulationControls() {
 
     const fragment = document.createDocumentFragment();
     const summaryRow = document.createElement('div');
-    summaryRow.className = 'd-flex w-100 align-items-center justify-content-end gap-3 flex-wrap';
+    summaryRow.className = 'd-flex w-100 align-items-center justify-content-center position-relative';
 
     const simulateBtn = document.createElement('button');
     simulateBtn.type = 'button';
@@ -412,12 +421,10 @@ function ensure3DSimulationControls() {
     simulateBtn.id = '3d-generate-gcode';
     simulateBtn.appendChild(document.createTextNode('Simulate'));
 
-    const summaryActions = document.createElement('div');
-    summaryActions.className = 'd-flex align-items-center gap-2';
     const summaryMenu = create3DSimulationMenu('3d-summary');
-    summaryActions.appendChild(simulateBtn);
-    summaryActions.appendChild(summaryMenu.container);
-    summaryRow.appendChild(summaryActions);
+    summaryMenu.container.classList.add('position-absolute', 'end-0', 'top-50', 'translate-middle-y');
+    summaryRow.appendChild(simulateBtn);
+    summaryRow.appendChild(summaryMenu.container);
 
     const controlsRow = document.createElement('div');
     controlsRow.className = 'd-none 3d-simulation-player';
@@ -434,13 +441,14 @@ function ensure3DSimulationControls() {
     startBtn.setAttribute('aria-disabled', 'true');
     startBtn.appendChild(createIconNode('play'));
 
-    const closeBtn = document.createElement('button');
-    closeBtn.type = 'button';
-    closeBtn.className = 'btn btn-outline-secondary btn-sm 3d-simulation-close-button';
+    const closeBtn = document.createElement('span');
+    closeBtn.className = '3d-simulation-close-button';
     closeBtn.id = '3d-close-simulation';
+    closeBtn.setAttribute('role', 'button');
+    closeBtn.tabIndex = 0;
     closeBtn.setAttribute('aria-label', 'Close simulation');
     closeBtn.title = 'Close simulation';
-    closeBtn.appendChild(document.createTextNode('X'));
+    closeBtn.appendChild(createIconNode('x'));
 
     const timeWrap = document.createElement('div');
     timeWrap.className = '3d-simulation-time-group';
@@ -592,6 +600,12 @@ function ensure3DSimulationControls() {
             window.schedulePrepared3DGcodeRefresh({ delay: 0 });
         } else {
             set3DSimulationControlsReady(false);
+        }
+    });
+    closeBtn.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            closeBtn.click();
         }
     });
 
