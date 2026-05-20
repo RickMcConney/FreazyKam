@@ -1,10 +1,10 @@
-# Maslow CAM
+# Freazy KAM
 
 <p align="center">
-  <img src="icons/logo.svg" alt="Maslow CAM Logo" width="200">
+  <img src="icons/logo.svg" alt="Freazy KAM Logo" width="200">
 </p>
 
-**[Launch MaslowCAM](https://iarchi.github.io/MaslowCAM/)**
+**[Launch FreazyKam](https://iarchi.github.io/FreazyKam/)**
 
 Free and easy browser-based CAM for CNC machines. Turn your designs into G-code — no software to install, no accounts, no cost. Import SVGs, set up your project, and export G-code ready for your router.
 
@@ -12,7 +12,7 @@ Free and easy browser-based CAM for CNC machines. Turn your designs into G-code 
 
 ## Quick Start
 
-1. **Open Maslow CAM** - Click the link above (no installation needed)
+1. **Open Freazy KAM** - Click the link above (no installation needed)
 2. **Set up your workpiece** - Enter dimensions and choose your wood species
 3. **Add your design** - Import an SVG or draw directly in the browser
 4. **Create toolpaths** - Choose your operation (profile, pocket)
@@ -48,9 +48,9 @@ Everything runs in your browser. Your files never leave your computer.
 
 ## Getting Started
 
-### Using MaslowCAM Online (Easiest)
+### Using FreazyKam Online (Easiest)
 
-Just click here: **[Launch MaslowCAM](https://iarchi.github.io/MaslowCAM/)**
+Just click here: **[Launch FreazyKam](https://iarchi.github.io/FreazyKam/)**
 
 Works in any modern browser (Chrome, Firefox, Safari, Edge). No installation needed.
 
@@ -58,7 +58,7 @@ Works in any modern browser (Chrome, Firefox, Safari, Edge). No installation nee
 
 ```bash
 # Clone the repository
-git clone https://github.com/iarchi/MaslowCAM.git
+git clone https://github.com/iarchi/FreazyKam.git
 cd toGcode
 
 # Start a local web server (required for ES6 modules)
@@ -110,8 +110,8 @@ This project welcomes contributions:
 
 ## Support
 
-- **Issues**: [GitHub Issues](https://github.com/iarchi/MaslowCAM/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/iarchi/MaslowCAM/discussions)
+- **Issues**: [GitHub Issues](https://github.com/iarchi/FreazyKam/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/iarchi/FreazyKam/discussions)
 
 ## License
 

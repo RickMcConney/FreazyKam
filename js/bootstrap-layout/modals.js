@@ -175,8 +175,8 @@ function createModals() {
 
                         <div class="text-center">
                             <p class="text-muted small mb-0">CC BY-NC 4.0</p>
-                            <p class="text-muted small">Source: <a href="https://github.com/iarchi/MaslowCAM" target="_blank">GitHub</a></p>
-                            <p class="text-muted small">Online instance: <a href="https://iarchi.github.io/MaslowCAM" target="_blank">MaslowCAM</a></p>
+                            <p class="text-muted small">Source: <a href="https://github.com/iarchi/FreazyKam" target="_blank">GitHub</a></p>
+                            <p class="text-muted small">Online instance: <a href="https://iarchi.github.io/FreazyKam" target="_blank">FreazyKam</a></p>
                         </div>
                     </div>
                     <div class="modal-footer">
