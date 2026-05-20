@@ -72,7 +72,7 @@ npx http-server
 ### Step-by-Step Workflow
 
 **Step 1: Set Up Your Workpiece**
-- Click the "Cut settings" button in the bottom right panel
+- Click the "Change cut settings" button in the top right panel
 - Enter your stock dimensions (width, length, thickness)
 - Choose your material
 - Leave parameters to AUTO to let the app decides the best settings

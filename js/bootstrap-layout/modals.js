@@ -1268,6 +1268,12 @@ function getCutSettingsFields() {
             min: 1,
         },
         {
+            key: 'autoFeedRate',
+            label: 'Auto Calculate Feed Rate',
+            type: 'checkbox',
+            default: true
+        },
+        {
             key: 'zfeed',
             label: `Plunge rate (${unitLabel}/min)`,
             type: 'dimension',

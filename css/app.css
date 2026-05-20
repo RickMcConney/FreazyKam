@@ -502,6 +502,14 @@ html, body {
     gap: 8px;
 }
 
+.canvas-overlay-controls-3d {
+    left: 50%;
+    top: 16px;
+    bottom: auto;
+    transform: translateX(-50%);
+    align-items: center;
+}
+
 .canvas-overlay-nav {
     position: absolute;
     right: 16px;
