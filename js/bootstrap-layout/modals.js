@@ -484,14 +484,32 @@ function getTextCreationFields(textOperation) {
     ];
 }
 
+function getTextCreationDefaultFontSize(textOperation) {
+    const fontSizeField = textOperation?._getFontSizeField?.();
+    if (!fontSizeField) return null;
+
+    const mmPerUnit = fontSizeField.mmPerUnit || 1;
+    const minSize = Number(fontSizeField.min) * mmPerUnit;
+    const maxSize = Number(fontSizeField.max) * mmPerUnit;
+    const fallbackSize = Number(fontSizeField.default) || 50;
+    const workpieceWidth = Number(typeof getOption === 'function' ? getOption('workpieceWidth') : 0) || 300;
+    const workpieceLength = Number(typeof getOption === 'function' ? getOption('workpieceLength') : 0) || 200;
+    const baseSize = Math.min(workpieceWidth, workpieceLength) * 0.1;
+
+    return Math.min(maxSize, Math.max(minSize, baseSize || fallbackSize));
+}
+
 function getTextCreationValues(textOperation) {
     if (!textOperation) return null;
 
     textOperation.getProperties();
+    const savedFontSize = typeof getOption === 'function' ? getOption('textFontSize') : null;
+    const defaultFontSize = getTextCreationDefaultFontSize(textOperation);
+
     return {
         text: textOperation.properties.text ?? textOperation.textField.default,
         font: textOperation.properties.font ?? textOperation.fontField.default,
-        fontSize: textOperation.properties.fontSize ?? textOperation._getFontSizeField().default,
+        fontSize: savedFontSize ?? defaultFontSize ?? textOperation.properties.fontSize ?? textOperation._getFontSizeField().default,
         align: textOperation.properties.align ?? textOperation.alignField.default,
         lineHeight: textOperation.properties.lineHeight ?? textOperation.lineHeightField.default
     };
