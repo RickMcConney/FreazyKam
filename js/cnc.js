@@ -551,16 +551,8 @@ async function saveProject() {
 		}
 	}
 
-	// Fallback: prompt for filename and use download method
-	var filename = prompt("Enter filename for project save:", currentFileName + ".json");
-	if (!filename) {
-		return; // User cancelled
-	}
-
-	// Ensure .json extension
-	if (!filename.endsWith('.json')) {
-		filename += '.json';
-	}
+	const date = new Date();
+	const filename = date.toLocaleDateString('en-GB').split('/').reverse().join('') + ".json";
 
 	var blob = new Blob([json], { type: "application/json" });
 	var url = URL.createObjectURL(blob);
@@ -2923,15 +2915,8 @@ async function doGcode(cutSettingsOverride) {
 	}
 
 	// Fallback: prompt for filename and use download method
-	var filename = prompt("Enter filename for G-code export:", currentFileName + ".gcode");
-	if (!filename) {
-		return; // User cancelled
-	}
-
-	// Ensure .gcode extension
-	if (!filename.endsWith('.gcode')) {
-		filename += '.gcode';
-	}
+	const date = new Date();
+	const filename = date.toLocaleDateString('en-GB').split('/').reverse().join('') + ".gcode";
 
 	const projectName = filename.replace(/\.[^.]+$/, '');
 	saveString(_gcodeNameComment(projectName) + text, filename);

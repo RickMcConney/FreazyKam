@@ -988,6 +988,9 @@ function flushSimulation3DUI(force) {
     if (ui.progressSlider) {
       ui.progressSlider.max = 1;
       ui.progressSlider.value = 0;
+      if (typeof window.update3DSimulationProgressFill === 'function') {
+        window.update3DSimulationProgressFill(ui.progressSlider);
+      }
     }
     simulation3DUIState.lastUpdateTime = now;
     return;
@@ -999,6 +1002,9 @@ function flushSimulation3DUI(force) {
   if (ui.progressSlider && totalGcodeLines >= 0) {
     ui.progressSlider.max = Math.max(totalGcodeLines - 1, 1);
     ui.progressSlider.value = currentLineNumber;
+    if (typeof window.update3DSimulationProgressFill === 'function') {
+      window.update3DSimulationProgressFill(ui.progressSlider);
+    }
   }
 
   if (ui.simTimeElem) {
@@ -2263,22 +2269,23 @@ function updateSimulation3DUI() {
     window.set3DSimulationControlsReady(hasLoadedSimulation);
   }
 
-  startBtn.disabled = !hasLoadedSimulation;
+  startBtn.setAttribute('aria-disabled', hasLoadedSimulation ? 'false' : 'true');
+  startBtn.tabIndex = hasLoadedSimulation ? 0 : -1;
 
   if (isPlaying) {
     startBtn.innerHTML = '<i data-lucide="pause"></i>';
     startBtn.setAttribute('aria-label', 'Pause simulation');
-    startBtn.classList.remove('btn-outline-primary');
-    startBtn.classList.add('btn-outline-secondary');
   } else {
     startBtn.innerHTML = '<i data-lucide="play"></i>';
     startBtn.setAttribute('aria-label', 'Play simulation');
-    startBtn.classList.remove('btn-outline-secondary');
-    startBtn.classList.add('btn-outline-primary');
   }
 
   if (typeof lucide !== 'undefined' && typeof lucide.createIcons === 'function') {
     lucide.createIcons();
+  }
+
+  if (typeof window.update3DSimulationStartButtonVisualState === 'function') {
+    window.update3DSimulationStartButtonVisualState(startBtn);
   }
 
   // Update all displays including progress slider
@@ -3336,6 +3343,9 @@ class ToolpathAnimation {
       progressSlider.max = this.totalGcodeLines;
       progressSlider.step = 1;
       progressSlider.value = 0;
+      if (typeof window.update3DSimulationProgressFill === 'function') {
+        window.update3DSimulationProgressFill(progressSlider);
+      }
     }
 
     // Update status

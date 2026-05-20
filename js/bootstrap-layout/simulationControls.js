@@ -424,29 +424,67 @@ function ensure3DSimulationControls() {
     summaryRow.appendChild(summaryActions);
 
     const controlsRow = document.createElement('div');
-    controlsRow.className = 'd-none d-flex w-100 align-items-center gap-3 flex-wrap';
+    controlsRow.className = 'd-none 3d-simulation-player';
 
-    const startBtn = document.createElement('button');
-    startBtn.type = 'button';
-    startBtn.className = 'btn btn-outline-primary btn-sm';
+    const topRow = document.createElement('div');
+    topRow.className = '3d-simulation-player-top-row';
+
+    const startBtn = document.createElement('span');
+    startBtn.className = '3d-simulation-icon-button';
     startBtn.id = '3d-start-simulation';
+    startBtn.setAttribute('role', 'button');
+    startBtn.tabIndex = 0;
     startBtn.setAttribute('aria-label', 'Play simulation');
+    startBtn.setAttribute('aria-disabled', 'true');
     startBtn.appendChild(createIconNode('play'));
-    startBtn.disabled = true;
 
-    controlsRow.appendChild(startBtn);
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.className = 'btn btn-outline-secondary btn-sm 3d-simulation-close-button';
+    closeBtn.id = '3d-close-simulation';
+    closeBtn.setAttribute('aria-label', 'Close simulation');
+    closeBtn.title = 'Close simulation';
+    closeBtn.appendChild(document.createTextNode('X'));
 
-    const speedCol = document.createElement('div');
-    speedCol.className = 'col-auto d-flex align-items-center gap-2';
+    const timeWrap = document.createElement('div');
+    timeWrap.className = '3d-simulation-time-group';
 
-    const speedLabel = document.createElement('span');
-    speedLabel.className = 'small';
-    speedLabel.textContent = 'Speed:';
+    const simulationTime = document.createElement('span');
+    simulationTime.id = '3d-simulation-time';
+    simulationTime.textContent = '0:00';
+
+    const totalTime = document.createElement('span');
+    totalTime.id = '3d-total-time';
+    totalTime.textContent = '0:00';
+
+    timeWrap.appendChild(simulationTime);
+    timeWrap.appendChild(document.createTextNode(' / '));
+    timeWrap.appendChild(totalTime);
+
+    topRow.appendChild(timeWrap);
+    topRow.appendChild(closeBtn);
+
+    const progressRow = document.createElement('div');
+    progressRow.className = '3d-simulation-progress-row';
+
+    const progressCol = document.createElement('div');
+    progressCol.className = '3d-simulation-progress-track';
+
+    const progressInput = document.createElement('input');
+    progressInput.type = 'range';
+    progressInput.className = 'form-range form-range-sm 3d-simulation-progress-input';
+    progressInput.id = '3d-simulation-progress';
+    progressInput.min = '0';
+    progressInput.max = '1';
+    progressInput.step = '1';
+    progressInput.value = '0';
+    progressInput.style.setProperty('--range-progress', '0%');
+
+    progressCol.appendChild(progressInput);
 
     const speedInput = document.createElement('select');
-    speedInput.className = 'form-select form-select-sm';
+    speedInput.className = 'form-select form-select-sm 3d-simulation-speed-select';
     speedInput.id = '3d-simulation-speed';
-    speedInput.style.width = '90px';
 
     ['1', '2', '4', '8', '16', '32', '50'].forEach((speed) => {
         const option = document.createElement('option');
@@ -458,51 +496,58 @@ function ensure3DSimulationControls() {
         speedInput.appendChild(option);
     });
 
-    speedCol.appendChild(speedLabel);
-    speedCol.appendChild(speedInput);
-    controlsRow.appendChild(speedCol);
-
-    const progressCol = document.createElement('div');
-    progressCol.className = 'd-flex align-items-center flex-grow-1';
-
-    const progressInput = document.createElement('input');
-    progressInput.type = 'range';
-    progressInput.className = 'form-range form-range-sm';
-    progressInput.id = '3d-simulation-progress';
-    progressInput.min = '0';
-    progressInput.max = '1';
-    progressInput.step = '1';
-    progressInput.value = '0';
-    progressInput.style.minWidth = '160px';
-
-    progressCol.appendChild(progressInput);
-    controlsRow.appendChild(progressCol);
-
-    const simulationTime = document.createElement('span');
-    simulationTime.id = '3d-simulation-time';
-    simulationTime.textContent = '0:00';
-    const totalTime = document.createElement('span');
-    totalTime.id = '3d-total-time';
-    totalTime.textContent = '0:00';
-    const timeWrap = document.createElement('div');
-    timeWrap.className = 'col-auto d-flex align-items-center gap-1 text-nowrap simulation-time-group';
-    timeWrap.appendChild(simulationTime);
-    timeWrap.appendChild(document.createTextNode(' / '));
-    timeWrap.appendChild(totalTime);
-    controlsRow.appendChild(timeWrap);
+    progressRow.appendChild(progressCol);
+    progressRow.appendChild(speedInput);
 
     const controlsMenu = create3DSimulationMenu('3d-controls');
-    controlsRow.appendChild(controlsMenu.container);
+    controlsMenu.container.classList.add('3d-simulation-menu-anchor');
+
+    const bottomRow = document.createElement('div');
+    bottomRow.className = '3d-simulation-player-bottom-row';
+    bottomRow.appendChild(startBtn);
+    bottomRow.appendChild(controlsMenu.container);
+
+    controlsRow.appendChild(topRow);
+    controlsRow.appendChild(progressRow);
+    controlsRow.appendChild(bottomRow);
 
     fragment.appendChild(summaryRow);
     fragment.appendChild(controlsRow);
     overlayControls.replaceChildren(fragment);
 
-    startBtn.addEventListener('click', () => {
+    function handleStartToggle() {
+        if (startBtn.getAttribute('aria-disabled') === 'true') {
+            return;
+        }
         if (typeof toggleSimulation3DPlayback === 'function') {
             toggleSimulation3DPlayback();
         }
+    }
+
+    startBtn.addEventListener('click', handleStartToggle);
+    startBtn.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            handleStartToggle();
+        }
     });
+    startBtn.addEventListener('mouseenter', function () {
+        startBtn.dataset.hovered = 'true';
+        update3DSimulationStartButtonVisualState(startBtn);
+    });
+    startBtn.addEventListener('mouseleave', function () {
+        delete startBtn.dataset.hovered;
+        update3DSimulationStartButtonVisualState(startBtn);
+    });
+    startBtn.addEventListener('focus', function () {
+        startBtn.dataset.focused = 'true';
+        update3DSimulationStartButtonVisualState(startBtn);
+    });
+    startBtn.addEventListener('blur', function () {
+        delete startBtn.dataset.focused;
+        update3DSimulationStartButtonVisualState(startBtn);
+    });
+    update3DSimulationStartButtonVisualState(startBtn);
 
     speedInput.addEventListener('change', function (e) {
         const speed = parseFloat(e.target.value);
@@ -532,6 +577,22 @@ function ensure3DSimulationControls() {
         const lineNumber = parseInt(e.target.value, 10);
         if (typeof setSimulation3DProgress === 'function') {
             setSimulation3DProgress(lineNumber);
+        }
+    });
+
+    progressInput.addEventListener('input', function () {
+        update3DSimulationProgressFill(progressInput);
+    });
+
+    progressInput.addEventListener('change', function () {
+        update3DSimulationProgressFill(progressInput);
+    });
+
+    closeBtn.addEventListener('click', function () {
+        if (typeof window.schedulePrepared3DGcodeRefresh === 'function') {
+            window.schedulePrepared3DGcodeRefresh({ delay: 0 });
+        } else {
+            set3DSimulationControlsReady(false);
         }
     });
 
@@ -577,6 +638,7 @@ function ensure3DSimulationControls() {
         speedInput: speedInput,
         cutSettingsBtn: cutSettingsBtn,
         generateGcodeBtn: simulateBtn,
+        closeBtn: closeBtn,
         progressInput: progressInput,
         simulationTime: simulationTime,
         totalTime: totalTime,
@@ -613,3 +675,59 @@ function ensure3DSimulationControls() {
 function create3DSimulationControls() {
     ensure3DSimulationControls();
 }
+
+function update3DSimulationStartButtonVisualState(startBtn) {
+    const control = startBtn || document.getElementById('3d-start-simulation');
+    if (!control) {
+        return;
+    }
+
+    const disabled = control.getAttribute('aria-disabled') === 'true';
+    const active = !disabled && (control.dataset.hovered === 'true' || control.dataset.focused === 'true');
+    const icon = control.querySelector('svg');
+
+    control.style.display = 'inline-flex';
+    control.style.alignItems = 'center';
+    control.style.justifyContent = 'center';
+    control.style.minWidth = '0';
+    control.style.minHeight = '0';
+    control.style.padding = '0.18rem';
+    control.style.border = 'none';
+    control.style.outline = 'none';
+    control.style.borderRadius = '999px';
+    control.style.background = active ? 'rgba(61, 133, 198, 0.14)' : 'transparent';
+    control.style.boxShadow = active ? '0 6px 14px rgba(61, 133, 198, 0.14)' : 'none';
+    control.style.cursor = disabled ? 'default' : 'pointer';
+    control.style.color = disabled ? 'var(--color-gray-500)' : 'var(--color-icon-blue)';
+    control.style.opacity = disabled ? '0.45' : '1';
+    control.style.transition = 'background-color 0.16s ease, box-shadow 0.16s ease, color 0.16s ease';
+
+    if (!icon) {
+        return;
+    }
+
+    icon.style.width = '18px';
+    icon.style.height = '18px';
+    icon.style.stroke = disabled ? 'var(--color-gray-500)' : 'var(--color-icon-blue)';
+    icon.style.fill = active ? 'rgba(61, 133, 198, 0.22)' : 'transparent';
+    icon.style.transform = active ? 'scale(1.08)' : 'scale(1)';
+    icon.style.transition = 'fill 0.16s ease, stroke 0.16s ease, transform 0.16s ease';
+}
+
+window.update3DSimulationStartButtonVisualState = update3DSimulationStartButtonVisualState;
+
+function update3DSimulationProgressFill(progressInput) {
+    if (!progressInput) {
+        return;
+    }
+
+    const min = Number(progressInput.min || 0);
+    const max = Number(progressInput.max || 0);
+    const value = Number(progressInput.value || 0);
+    const range = max - min;
+    const ratio = range > 0 ? (value - min) / range : 0;
+    const percent = Math.max(0, Math.min(1, ratio)) * 100;
+    progressInput.style.setProperty('--range-progress', percent + '%');
+}
+
+window.update3DSimulationProgressFill = update3DSimulationProgressFill;
