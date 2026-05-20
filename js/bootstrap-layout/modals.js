@@ -866,7 +866,7 @@ function showCutSettingsModal() {
                     <div class="cut-settings-section-card h-100 d-flex flex-column">
                         <div><h5>Cut Settings</h5></div>
                         <div id="cut-settings-machining-panel">
-                            ${PropertiesManager.formHTML(fields, currentValues, null)}
+                            ${getCutSettingsMachiningFormHTML(fields, currentValues)}
                         </div>
                         <div class="d-flex justify-content-end mt-3">
                             <button type="button" class="btn btn-primary" id="project-save-cut-settings-button">Save</button>
@@ -933,7 +933,9 @@ function refreshCutSettingsPanelForUnits() {
     const autoDirectionInput = document.getElementById('pm-autoDirection');
     const stepInput = document.getElementById('pm-step');
     const autoStepInput = document.getElementById('pm-autoStep');
-    const rpmInput = document.getElementById('pm-rpm');
+    const rpmManualInput = document.getElementById('pm-rpm-manual');
+    const rpmPresetInput = document.getElementById('pm-rpm-preset');
+    const rpmModeInput = document.getElementById('pm-rpmMode');
     const feedInput = document.getElementById('pm-feed');
     const autoFeedInput = document.getElementById('pm-autoFeedRate');
     const zfeedInput = document.getElementById('pm-zfeed');
@@ -948,7 +950,9 @@ function refreshCutSettingsPanelForUnits() {
         autoDirection: autoDirectionInput ? !!autoDirectionInput.checked : undefined,
         step: stepInput ? parseDimension(stepInput.value) : undefined,
         autoStep: autoStepInput ? !!autoStepInput.checked : undefined,
-        rpm: rpmInput ? Number(rpmInput.value) || 0 : undefined,
+        rpm: (rpmManualInput || rpmPresetInput) ? getCutSettingsResolvedRpmFromForm() : undefined,
+        rpmMode: rpmModeInput ? getCutSettingsRpmModeFromForm() : undefined,
+        rpmPreset: rpmPresetInput ? rpmPresetInput.value : undefined,
         feed: feedInput ? parseDimension(feedInput.value) : undefined,
         autoFeedRate: autoFeedInput ? !!autoFeedInput.checked : undefined,
         zfeed: zfeedInput ? parseDimension(zfeedInput.value) : undefined,
@@ -1007,6 +1011,204 @@ function getCutSettingsStorageKey() {
     return 'Gcode.cutSettings';
 }
 
+const CUT_SETTINGS_RPM_PRESETS = {
+    makita: [
+        { value: '1', label: 'Speed 1', rpm: 10000 },
+        { value: '2', label: 'Speed 2', rpm: 12000 },
+        { value: '3', label: 'Speed 3', rpm: 17000 },
+        { value: '4', label: 'Speed 4', rpm: 22000 },
+        { value: '5', label: 'Speed 5', rpm: 27000 },
+        { value: '6', label: 'Speed 6', rpm: 34000 }
+    ],
+    dewalt: [
+        { value: '1', label: 'Speed 1', rpm: 16000 },
+        { value: '2', label: 'Speed 2', rpm: 18200 },
+        { value: '3', label: 'Speed 3', rpm: 20400 },
+        { value: '4', label: 'Speed 4', rpm: 22600 },
+        { value: '5', label: 'Speed 5', rpm: 24800 },
+        { value: '6', label: 'Speed 6', rpm: 27000 }
+    ]
+};
+
+function normalizeCutSettingsRpmMode(mode) {
+    return ['manual', 'makita', 'dewalt'].includes(mode) ? mode : 'manual';
+}
+
+function getCutSettingsRpmPresetOptions(mode) {
+    return CUT_SETTINGS_RPM_PRESETS[normalizeCutSettingsRpmMode(mode)] || [];
+}
+
+function normalizeCutSettingsRpmPreset(mode, preset) {
+    const options = getCutSettingsRpmPresetOptions(mode);
+    if (options.length === 0) return '';
+
+    const presetValue = String(preset || '');
+    return options.some(option => option.value === presetValue)
+        ? presetValue
+        : options[0].value;
+}
+
+function getCutSettingsPresetRpm(mode, preset) {
+    const presetValue = String(preset || '');
+    const match = getCutSettingsRpmPresetOptions(mode).find(option => option.value === presetValue);
+    return match?.rpm || 0;
+}
+
+function formatCutSettingsRpmLabel(rpm) {
+    return `${Number(rpm || 0).toLocaleString()} RPM`;
+}
+
+function getCutSettingsRpmControlHTML(values) {
+    const rpmMode = normalizeCutSettingsRpmMode(values.rpmMode);
+    const rpmPreset = normalizeCutSettingsRpmPreset(rpmMode, values.rpmPreset);
+    const manualRpm = Number(values.rpm) > 0
+        ? Number(values.rpm)
+        : getDefaultCutSettingsRpm(values.tool);
+    const presetOptions = getCutSettingsRpmPresetOptions(rpmMode);
+    const resolvedPresetRpm = getCutSettingsPresetRpm(rpmMode, rpmPreset);
+
+    return `
+        <div class="mb-3 pm-field cut-settings-rpm-field">
+            <label class="form-label small" for="pm-rpm-manual"><strong>RPM:</strong></label>
+            <input type="hidden" id="pm-rpmMode" value="${rpmMode}">
+            <div class="nav nav-tabs cut-settings-rpm-tabs" role="tablist" aria-label="RPM mode">
+                <button type="button" class="nav-link${rpmMode === 'manual' ? ' active' : ''}" data-rpm-mode="manual" role="tab" aria-selected="${rpmMode === 'manual' ? 'true' : 'false'}">Manual</button>
+                <button type="button" class="nav-link${rpmMode === 'makita' ? ' active' : ''}" data-rpm-mode="makita" role="tab" aria-selected="${rpmMode === 'makita' ? 'true' : 'false'}">Makita RT07</button>
+                <button type="button" class="nav-link${rpmMode === 'dewalt' ? ' active' : ''}" data-rpm-mode="dewalt" role="tab" aria-selected="${rpmMode === 'dewalt' ? 'true' : 'false'}">Dewalt DW6xx</button>
+            </div>
+            <div class="cut-settings-rpm-panels">
+                <div class="cut-settings-rpm-panel${rpmMode === 'manual' ? ' is-active' : ''}" data-rpm-panel="manual">
+                    <input type="number" class="form-control form-control-sm"
+                           id="pm-rpm-manual" name="rpmManual"
+                           min="1000" max="40000" step="100"
+                           value="${manualRpm}">
+                </div>
+                <div class="cut-settings-rpm-panel${rpmMode !== 'manual' ? ' is-active' : ''}" data-rpm-panel="preset">
+                    <select class="form-select form-select-sm" id="pm-rpm-preset" name="rpmPreset">
+                        ${presetOptions.map(option => `<option value="${option.value}" data-rpm="${option.rpm}" ${option.value === rpmPreset ? 'selected' : ''}>${option.label}</option>`).join('')}
+                    </select>
+                    <div class="form-text" id="pm-rpm-preset-help">${resolvedPresetRpm > 0 ? formatCutSettingsRpmLabel(resolvedPresetRpm) : 'Select a router speed preset'}</div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function getCutSettingsMachiningFormHTML(fields, values) {
+    const feedFieldIndex = fields.findIndex(field => field.key === 'feed');
+    const upperFields = feedFieldIndex >= 0 ? fields.slice(0, feedFieldIndex) : fields;
+    const lowerFields = feedFieldIndex >= 0 ? fields.slice(feedFieldIndex) : [];
+
+    return `${PropertiesManager.formHTML(upperFields, values, null)}${getCutSettingsRpmControlHTML(values)}${PropertiesManager.formHTML(lowerFields, values, null)}`;
+}
+
+function getDefaultCutSettingsRpm(toolId = null) {
+    const tools = window.tools || [];
+    const selectedTool = tools.find(tool => Number(tool.recid) === Number(toolId));
+    if (selectedTool?.rpm) {
+        return selectedTool.rpm;
+    }
+
+    return tools[0]?.rpm || 18000;
+}
+
+function getCutSettingsRpmModeFromForm() {
+    return normalizeCutSettingsRpmMode(document.getElementById('pm-rpmMode')?.value);
+}
+
+function getCutSettingsResolvedRpmFromForm() {
+    const rpmMode = getCutSettingsRpmModeFromForm();
+    if (rpmMode === 'manual') {
+        return Number(document.getElementById('pm-rpm-manual')?.value) || 0;
+    }
+
+    return getCutSettingsPresetRpm(rpmMode, document.getElementById('pm-rpm-preset')?.value);
+}
+
+function syncCutSettingsRpmPresetOptions(selectedPreset = null) {
+    const rpmMode = getCutSettingsRpmModeFromForm();
+    const presetInput = document.getElementById('pm-rpm-preset');
+    if (!presetInput) return;
+
+    const options = getCutSettingsRpmPresetOptions(rpmMode);
+    const normalizedPreset = normalizeCutSettingsRpmPreset(rpmMode, selectedPreset ?? presetInput.value);
+    presetInput.innerHTML = options
+        .map(option => `<option value="${option.value}" data-rpm="${option.rpm}" ${option.value === normalizedPreset ? 'selected' : ''}>${option.label}</option>`)
+        .join('');
+}
+
+function syncCutSettingsRpmControls() {
+    const rpmModeInput = document.getElementById('pm-rpmMode');
+    const manualInput = document.getElementById('pm-rpm-manual');
+    const presetInput = document.getElementById('pm-rpm-preset');
+    const presetHelp = document.getElementById('pm-rpm-preset-help');
+    const rpmMode = getCutSettingsRpmModeFromForm();
+    if (!rpmModeInput || !manualInput || !presetInput) return;
+
+    syncCutSettingsRpmPresetOptions();
+
+    document.querySelectorAll('.cut-settings-rpm-tabs [data-rpm-mode]').forEach(button => {
+        const isActive = button.dataset.rpmMode === rpmMode;
+        button.classList.toggle('active', isActive);
+        button.setAttribute('aria-selected', isActive ? 'true' : 'false');
+    });
+
+    document.querySelectorAll('.cut-settings-rpm-panel').forEach(panel => {
+        const panelMode = panel.dataset.rpmPanel === 'manual' ? 'manual' : 'preset';
+        const isActive = rpmMode === 'manual' ? panelMode === 'manual' : panelMode === 'preset';
+        panel.classList.toggle('is-active', isActive);
+    });
+
+    manualInput.disabled = rpmMode !== 'manual';
+    presetInput.disabled = rpmMode === 'manual';
+
+    const resolvedPresetRpm = getCutSettingsPresetRpm(rpmMode, presetInput.value);
+    if (presetHelp) {
+        presetHelp.textContent = resolvedPresetRpm > 0
+            ? formatCutSettingsRpmLabel(resolvedPresetRpm)
+            : 'Select a router speed preset';
+    }
+}
+
+function bindCutSettingsRpmControls() {
+    const rpmModeInput = document.getElementById('pm-rpmMode');
+    const manualInput = document.getElementById('pm-rpm-manual');
+    const presetInput = document.getElementById('pm-rpm-preset');
+    if (!rpmModeInput || !manualInput || !presetInput) return;
+
+    document.querySelectorAll('.cut-settings-rpm-tabs [data-rpm-mode]').forEach(button => {
+        button.addEventListener('click', function() {
+            const nextMode = normalizeCutSettingsRpmMode(button.dataset.rpmMode);
+            if (rpmModeInput.value === nextMode) return;
+
+            rpmModeInput.value = nextMode;
+            syncCutSettingsRpmControls();
+            syncAutoFeedRatePreview();
+            refreshPrepared3DFromCurrentCutSettings();
+        });
+    });
+
+    manualInput.addEventListener('input', function() {
+        if (getCutSettingsRpmModeFromForm() !== 'manual') return;
+        syncAutoFeedRatePreview();
+        refreshPrepared3DFromCurrentCutSettings();
+    });
+
+    manualInput.addEventListener('change', function() {
+        if (getCutSettingsRpmModeFromForm() !== 'manual') return;
+        syncAutoFeedRatePreview();
+        refreshPrepared3DFromCurrentCutSettings();
+    });
+
+    presetInput.addEventListener('change', function() {
+        syncCutSettingsRpmControls();
+        syncAutoFeedRatePreview();
+        refreshPrepared3DFromCurrentCutSettings();
+    });
+
+    syncCutSettingsRpmControls();
+}
+
 function getCutSettingsFields() {
     const unitLabel = getUnitLabel();
     const toolOptions = (window.tools || []).map(tool => ({
@@ -1055,17 +1257,6 @@ function getCutSettingsFields() {
             label: 'Auto Calculate Depth per Pass',
             type: 'checkbox',
             default: true
-        },
-        {
-            key: 'rpm',
-            label: 'RPM',
-            type: 'number',
-            default: toolOptions.length > 0
-                ? ((window.tools || []).find(tool => Number(tool.recid) === Number(defaultToolId))?.rpm || 18000)
-                : 18000,
-            min: 1000,
-            max: 30000,
-            step: 100
         },
         {
             key: 'feed',
@@ -1134,6 +1325,12 @@ function getSavedCutSettings() {
         ? (window.tools || []).find(tool => Number(tool.recid) === Number(defaultToolId))?.step || 1
         : 1;
 
+    const defaultRpm = getDefaultCutSettingsRpm(defaultToolId);
+    const rpmMode = normalizeCutSettingsRpmMode(saved.rpmMode);
+    const rpmPreset = normalizeCutSettingsRpmPreset(rpmMode, saved.rpmPreset);
+    const manualRpm = Number(saved.rpm) > 0 ? Number(saved.rpm) : defaultRpm;
+    const presetRpm = getCutSettingsPresetRpm(rpmMode, rpmPreset);
+
     return {
         tool: hasSavedTool ? savedToolId : defaultToolId,
         direction: saved.direction === 'conventional'
@@ -1144,7 +1341,11 @@ function getSavedCutSettings() {
             : !(saved.direction === 'climb' || saved.direction === 'conventional'),
         step: Number(saved.step) > 0 ? Number(saved.step) : defaultStep,
         autoStep: saved.autoStep !== undefined ? !!saved.autoStep : true,
-        rpm: Number(saved.rpm) > 0 ? Number(saved.rpm) : ((window.tools || []).find(tool => Number(tool.recid) === Number(defaultToolId))?.rpm || 18000),
+        rpm: rpmMode === 'manual'
+            ? manualRpm
+            : (presetRpm > 0 ? presetRpm : manualRpm),
+        rpmMode,
+        rpmPreset,
         feed: Number(saved.feed) > 0 ? Number(saved.feed) : ((window.tools || []).find(tool => Number(tool.recid) === Number(defaultToolId))?.feed || 600),
 	        autoFeedRate: saved.autoFeedRate !== undefined ? !!saved.autoFeedRate : true,
         zfeed: Number(saved.zfeed) > 0 ? Number(saved.zfeed) : ((window.tools || []).find(tool => Number(tool.recid) === Number(defaultToolId))?.zfeed || 200),
@@ -1192,7 +1393,9 @@ function collectCurrentCutSettingsFormValues() {
     values.tool = Number(values.tool) || null;
     values.autoDirection = !!values.autoDirection;
     values.step = Number(values.step) || 0;
-    values.rpm = Number(values.rpm) || 0;
+    values.rpmMode = getCutSettingsRpmModeFromForm();
+    values.rpmPreset = document.getElementById('pm-rpm-preset')?.value || '';
+    values.rpm = getCutSettingsResolvedRpmFromForm();
     values.autoStep = !!values.autoStep;
     values.feed = Number(values.feed) || 0;
     values.autoFeedRate = !!values.autoFeedRate;
@@ -1386,17 +1589,17 @@ function syncAutoFeedRatePreview() {
     const toolIdInput = document.getElementById('pm-tool');
     const stepInput = document.getElementById('pm-step');
     const autoStepInput = document.getElementById('pm-autoStep');
-    const rpmInput = document.getElementById('pm-rpm');
+    const rpmModeInput = document.getElementById('pm-rpmMode');
     const feedInput = document.getElementById('pm-feed');
     const zfeedInput = document.getElementById('pm-zfeed');
     const autoFeedInput = document.getElementById('pm-autoFeedRate');
     const autoZFeedInput = document.getElementById('pm-autoZFeedRate');
-    if (!toolIdInput || !stepInput || !autoStepInput || !rpmInput || !feedInput || !zfeedInput || !autoFeedInput || !autoZFeedInput) return;
+    if (!toolIdInput || !stepInput || !autoStepInput || !rpmModeInput || !feedInput || !zfeedInput || !autoFeedInput || !autoZFeedInput) return;
 
     const tool = (window.tools || []).find(candidate => Number(candidate.recid) === Number(toolIdInput.value));
     const step = parseDimension(stepInput.value);
     const autoStep = !!autoStepInput.checked;
-    const rpm = Number(rpmInput.value) || 0;
+    const rpm = getCutSettingsResolvedRpmFromForm();
     const autoFeedRate = !!autoFeedInput.checked;
     const autoZFeedRate = !!autoZFeedInput.checked;
     const autoStepValue = tool && Number.isFinite(Number(tool.diameter)) && Number(tool.diameter) > 0
@@ -1471,6 +1674,19 @@ function bindCutSettingsForm(fields) {
     enhanceCutSettingsAutoControl('step', 'autoStep');
     enhanceCutSettingsAutoControl('feed', 'autoFeedRate');
     enhanceCutSettingsAutoControl('zfeed', 'autoZFeedRate');
+    bindCutSettingsRpmControls();
+
+    const toolInput = document.getElementById('pm-tool');
+    toolInput?.addEventListener('change', function() {
+        if (getCutSettingsRpmModeFromForm() !== 'manual') return;
+
+        const manualInput = document.getElementById('pm-rpm-manual');
+        if (!manualInput) return;
+
+        if (!(Number(manualInput.value) > 0)) {
+            manualInput.value = getDefaultCutSettingsRpm(toolInput.value);
+        }
+    });
 
     const formInputs = fields
         .map(field => document.getElementById(`pm-${field.key}`))
@@ -1538,6 +1754,22 @@ function loadCutSettingsIntoForm(values) {
             PropertiesManager.setValue(field.key, nextValue);
         }
     }
+
+    const rpmModeInput = document.getElementById('pm-rpmMode');
+    const rpmManualInput = document.getElementById('pm-rpm-manual');
+    const rpmPresetInput = document.getElementById('pm-rpm-preset');
+
+    if (rpmModeInput) {
+        rpmModeInput.value = normalizeCutSettingsRpmMode(values.rpmMode);
+    }
+    if (rpmManualInput) {
+        rpmManualInput.value = Number(values.rpm) > 0 ? Number(values.rpm) : getDefaultCutSettingsRpm(values.tool);
+    }
+    if (rpmPresetInput) {
+        syncCutSettingsRpmPresetOptions(values.rpmPreset);
+    }
+
+    syncCutSettingsRpmControls();
 }
 
 function getCompleteCutSettings() {

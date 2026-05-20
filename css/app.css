@@ -1323,6 +1323,62 @@ html, body {
     cursor: not-allowed;
 }
 
+.cut-settings-rpm-tabs {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 0;
+    margin-bottom: 0.75rem;
+    border-bottom: 0;
+}
+
+.cut-settings-rpm-tabs .nav-link {
+    flex: 1 1 0;
+    margin-bottom: 0;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--color-gray-300);
+    border-radius: 0;
+    color: #757d85;
+    background-color: #FFF;
+    font-size: 0.875rem;
+    line-height: 1.2;
+}
+
+.cut-settings-rpm-tabs .nav-link:first-child {
+    border-top-left-radius: 0.5rem;
+    border-bottom-left-radius: 0.5rem;
+}
+
+.cut-settings-rpm-tabs .nav-link:last-child {
+    border-top-right-radius: 0.5rem;
+    border-bottom-right-radius: 0.5rem;
+}
+
+.cut-settings-rpm-tabs .nav-link + .nav-link {
+    margin-left: -1px;
+}
+.cut-settings-rpm-tabs .nav-link {
+    padding: 10px 0px;
+}
+.cut-settings-rpm-tabs .nav-link.active {
+    color: #FFF;
+    background-color: #0d6efd;
+    border-color: #0d6efd;
+}
+
+.cut-settings-rpm-tabs .nav-link:not(.active):hover {
+    color: #757d85;
+    background-color: #FFFFFF;
+    border-color: #b2b7bb;
+}
+
+.cut-settings-rpm-panel {
+    display: none;
+}
+
+.cut-settings-rpm-panel.is-active {
+    display: block;
+}
+
 .tool-table {
     font-size: 12px;
 }

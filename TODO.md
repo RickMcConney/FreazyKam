@@ -5,5 +5,3 @@ TODO
 - Add Aligment panel.
 - Icon for half circle
 - Icon for square triangle
-- Dewalt dial speeds
-- Makita dial speeds
