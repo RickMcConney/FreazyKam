@@ -432,7 +432,6 @@ class Text extends Operation {
         if (!textValue) return null;
 
         return this.addText(textValue, center.x, center.y, this.properties.fontSize, this.properties.font, {
-            delayPreviewSync: true,
             onCreated: createdPath => {
                 if (!createdPath || typeof openPathEditor !== 'function') return;
                 openPathEditor(createdPath);
@@ -1208,7 +1207,9 @@ class Text extends Operation {
                 path.svgIds = [path.id];
             });
             if (typeof scheduleShapeMachiningToolpathSync === 'function' && options.delayPreviewSync !== true) {
-                scheduleShapeMachiningToolpathSync(this.currentPath, { createIfMissing: true, delay: 0 });
+                createdPaths.forEach(path => {
+                    scheduleShapeMachiningToolpathSync(path, { createIfMissing: true, delay: 0 });
+                });
             }
         }
 

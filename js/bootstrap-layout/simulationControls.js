@@ -38,8 +38,6 @@ function set3DSimulationControlsReady(isReady) {
         setToolVisibility3D(showTool);
     }
 
-    update3DSimulationOverlayLayout();
-
     if (typeof requestThreeRender === 'function') {
         requestThreeRender();
     }
@@ -256,19 +254,6 @@ function create2DSimulationControls() {
     ensure2DSimulationControls();
 }
 
-function update3DSimulationOverlayLayout() {
-    return; // Temporary disable dynamic height adjustment to avoid layout thrashing during simulation playback. Will revisit with more efficient approach if needed.
-    const overlay = document.getElementById('simulation-overlay-3d');
-    const container = document.getElementById('3d-canvas-container');
-
-    if (!overlay || !container) {
-        return;
-    }
-
-    const overlayHeight = overlay.classList.contains('d-none') ? 0 : overlay.offsetHeight;
-    container.style.height = overlayHeight > 0 ? `calc(100% - ${overlayHeight}px)` : '100%';
-}
-
 function create3DVisibilityControl(id, labelText, checked) {
     const wrapper = document.createElement('div');
     wrapper.className = 'col-auto d-flex align-items-center gap-2';
@@ -407,7 +392,6 @@ function ensure3DSimulationControls() {
 
     if (simulationControls3DRefs && simulationControls3DRefs.container === overlayControls) {
         simulationControls3DRefs.cutSettingsBtn = cutSettingsBtn;
-        update3DSimulationOverlayLayout();
         return simulationControls3DRefs;
     }
 
@@ -658,8 +642,6 @@ function ensure3DSimulationControls() {
         isSimulationReady: false
     };
 
-    update3DSimulationOverlayLayout();
-
     if (window.ResizeObserver) {
         if (window._simulationOverlay3DResizeObserver) {
             window._simulationOverlay3DResizeObserver.disconnect();
@@ -668,7 +650,6 @@ function ensure3DSimulationControls() {
         const overlay = document.getElementById('simulation-overlay-3d');
         if (overlay) {
             window._simulationOverlay3DResizeObserver = new ResizeObserver(() => {
-                update3DSimulationOverlayLayout();
                 if (typeof requestThreeRender === 'function') {
                     requestThreeRender();
                 }
@@ -681,7 +662,6 @@ function ensure3DSimulationControls() {
         lucide.createIcons();
     }
 
-    window.update3DSimulationOverlayLayout = update3DSimulationOverlayLayout;
     return simulationControls3DRefs;
 }
 

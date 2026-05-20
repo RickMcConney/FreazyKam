@@ -19,9 +19,9 @@ class ToolPathProperties {
                 label: 'Cut',
                 description: 'Cut the selected shape using the chosen path side.',
                 noToolMsg: 'Please add an End Mill, Ball Nose, or VBit in the tool library.',
-                defaultOperationType: 'none',
+                defaultOperationType: 'center',
                 operationTypeOptions: [
-                    { value: 'none', label: 'None' },
+                    { value: 'none', label: 'No operation' },
                     //{ value: 'vcarve', label: 'VCarve' },
                     this._operationTypeOption('pocket', 'Clear out a pocket', 'icons/pocket.svg'),
                     this._operationTypeOption('center', 'Cut on shape path', 'icons/profile_center.svg'),
@@ -288,14 +288,7 @@ class ToolPathProperties {
     }
 
     getDefaultShapeCutProperties(operationName = 'Profile') {
-        if (operationName === 'Drill') {
-            return sanitizeToolpathProperties(this.collectDefaultFormData(operationName, {
-                operationType: 'drill'
-            }));
-        }
-        return sanitizeToolpathProperties(this.collectDefaultFormData(operationName, {
-            operationType: 'none'
-        }));
+        return sanitizeToolpathProperties(this.collectDefaultFormData(operationName));
     }
 
     collectDefaultFormData(operationName, overrides = null) {
