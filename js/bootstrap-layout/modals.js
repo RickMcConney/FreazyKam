@@ -1268,12 +1268,6 @@ function getCutSettingsFields() {
             min: 1,
         },
         {
-            key: 'autoFeedRate',
-            label: 'Auto Calculate Feed Rates',
-            type: 'checkbox',
-            default: true
-        },
-        {
             key: 'zfeed',
             label: `Plunge rate (${unitLabel}/min)`,
             type: 'dimension',
@@ -1978,7 +1972,7 @@ function renderOptionsTable() {
     // These options are rendered in the dedicated section above the generic options table.
     const workpieceManaged = new Set([
         'showGrid', 'showOrigin', 'workpieceWidth', 'workpieceLength', 'workpieceThickness',
-        'material', 'originPosition', 'gridSize', 'showWorkpiece', 'snapGrid'
+        'material', 'originPosition', 'gridSize', 'showWorkpiece', 'snapGrid', 'Inches'
     ]);
     // Only show options that have a desc (declared in defaults) and aren't workpiece-managed.
     // Options pushed dynamically by setOption() at runtime (internal state like textFont,
