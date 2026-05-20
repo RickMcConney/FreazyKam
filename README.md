@@ -1,9 +1,5 @@
 # Freazy KAM
 
-<p align="center">
-  <img src="icons/logo.svg" alt="Freazy KAM Logo" width="200">
-</p>
-
 **[Launch FreazyKam](https://iarchi.github.io/FreazyKam/)**
 
 Free and easy browser-based CAM for CNC machines. Turn your designs into G-code — no software to install, no accounts, no cost. Import SVGs, set up your project, and export G-code ready for your router.

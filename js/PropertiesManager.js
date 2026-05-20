@@ -144,6 +144,18 @@ class PropertiesManager {
             if (el === document.activeElement) return;
             if (el.type === 'checkbox') {
                 el.checked = !!value;
+            } else if (el.dataset.choiceType === 'custom') {
+                el.value = value;
+                const trigger = document.getElementById(`${el.id}-trigger`);
+                const matchingOption = trigger?.parentElement?.querySelector(`.pm-choice__item[data-value="${CSS.escape(String(value))}"]`);
+                if (matchingOption) {
+                    this._syncCustomChoiceTrigger(trigger, matchingOption.dataset.label || '', matchingOption.dataset.iconPath || '');
+                    const menu = matchingOption.closest('.pm-choice__menu');
+                    if (menu) {
+                        menu.querySelectorAll('.pm-choice__item.active').forEach(activeItem => activeItem.classList.remove('active'));
+                    }
+                    matchingOption.classList.add('active');
+                }
             } else if (el.tagName === 'INPUT' || el.tagName === 'SELECT' || el.tagName === 'TEXTAREA') {
                 const display = document.getElementById(`pm-${key}-display`);
                 if (el.type === 'range' && display) {
@@ -284,18 +296,121 @@ class PropertiesManager {
     }
 
     static _choiceHTML(field, value) {
+        const options = (field.options || []).map(opt => ({
+            value: typeof opt === 'string' ? opt : opt.value,
+            label: typeof opt === 'string' ? opt : opt.label,
+            iconPath: typeof opt === 'string' ? null : (opt.iconPath || null)
+        }));
+        const hasCustomOptions = options.some(opt => !!opt.iconPath);
+        const selectedOption = options.find(opt => opt.value === value) || options[0] || null;
+
+        if (!hasCustomOptions) {
+            const optionsHTML = options.map(opt => {
+                return `<option value="${opt.value}" ${opt.value === value ? 'selected' : ''}>${opt.label}</option>`;
+            }).join('');
+            return `<div class="mb-3 pm-field">
+                <label for="pm-${field.key}" class="form-label small"><strong>${field.label}:</strong></label>
+                <select class="form-select form-select-sm" id="pm-${field.key}" name="${field.key}">
+                    ${optionsHTML}
+                </select>${field.help ? `
+                <div class="form-text">${field.help}</div>` : ''}
+            </div>`;
+        }
+
+        const selectedLabel = selectedOption?.label ?? '';
+        const selectedIconPath = selectedOption?.iconPath ?? null;
         const optionsHTML = (field.options || []).map(opt => {
-            const v = typeof opt === 'string' ? opt : opt.value;
-            const l = typeof opt === 'string' ? opt : opt.label;
-            return `<option value="${v}" ${v === value ? 'selected' : ''}>${l}</option>`;
+            const option = typeof opt === 'string'
+                ? { value: opt, label: opt, iconPath: null }
+                : { value: opt.value, label: opt.label, iconPath: opt.iconPath || null };
+            const iconHTML = option.iconPath
+                ? `<img src="${option.iconPath}" alt="" class="pm-choice__icon" aria-hidden="true">`
+                : '<span class="pm-choice__icon pm-choice__icon--empty" aria-hidden="true"></span>';
+            return `<button type="button"
+                            class="dropdown-item pm-choice__item${option.value === value ? ' active' : ''}"
+                            data-input-id="pm-${field.key}"
+                            data-trigger-id="pm-${field.key}-trigger"
+                            data-value="${option.value}"
+                            data-label="${option.label}"
+                            data-icon-path="${option.iconPath || ''}"
+                            onclick="PropertiesManager.handleChoiceSelection(this)">
+                        ${iconHTML}
+                        <span class="pm-choice__text">${option.label}</span>
+                    </button>`;
         }).join('');
+
+        const iconHTML = selectedIconPath
+            ? `<img src="${selectedIconPath}" alt="" class="pm-choice__icon" aria-hidden="true">`
+            : '<span class="pm-choice__icon pm-choice__icon--empty" aria-hidden="true"></span>';
+
         return `<div class="mb-3 pm-field">
             <label for="pm-${field.key}" class="form-label small"><strong>${field.label}:</strong></label>
-            <select class="form-select form-select-sm" id="pm-${field.key}" name="${field.key}">
-                ${optionsHTML}
-            </select>${field.help ? `
+            <div class="dropdown pm-choice">
+                <input type="hidden" id="pm-${field.key}" name="${field.key}" value="${selectedOption?.value ?? ''}" data-choice-type="custom">
+                <button class="btn btn-outline-secondary btn-sm dropdown-toggle pm-choice__trigger" type="button" id="pm-${field.key}-trigger" data-bs-toggle="dropdown" aria-expanded="false">
+                    ${iconHTML}
+                </button>
+                <div class="dropdown-menu pm-choice__menu" aria-labelledby="pm-${field.key}-trigger">
+                    ${optionsHTML}
+                </div>
+            </div>${field.help ? `
             <div class="form-text">${field.help}</div>` : ''}
         </div>`;
+    }
+
+    static handleChoiceSelection(item) {
+        if (!item) return;
+
+        const input = document.getElementById(item.dataset.inputId || '');
+        const trigger = document.getElementById(item.dataset.triggerId || '');
+        if (!input || !trigger) return;
+
+        const previousValue = input.value;
+        input.value = item.dataset.value || '';
+        this._syncCustomChoiceTrigger(trigger, item.dataset.label || '', item.dataset.iconPath || '');
+
+        const menu = item.closest('.pm-choice__menu');
+        if (menu) {
+            menu.querySelectorAll('.pm-choice__item.active').forEach(activeItem => activeItem.classList.remove('active'));
+        }
+        item.classList.add('active');
+
+        if (input.value !== previousValue) {
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+    }
+
+    static _syncCustomChoiceTrigger(trigger, label, iconPath = '') {
+        if (!trigger) return;
+
+        let icon = trigger.querySelector('.pm-choice__icon');
+        if (iconPath) {
+            if (!icon || !icon.tagName || icon.tagName !== 'IMG') {
+                if (icon) icon.remove();
+                icon = document.createElement('img');
+                icon.className = 'pm-choice__icon';
+                icon.alt = '';
+                icon.setAttribute('aria-hidden', 'true');
+                trigger.prepend(icon);
+            }
+            icon.src = iconPath;
+        } else {
+            if (icon && icon.tagName === 'IMG') {
+                icon.remove();
+            }
+            if (!trigger.querySelector('.pm-choice__icon--empty')) {
+                const spacer = document.createElement('span');
+                spacer.className = 'pm-choice__icon pm-choice__icon--empty';
+                spacer.setAttribute('aria-hidden', 'true');
+                trigger.prepend(spacer);
+            }
+        }
+
+        const text = trigger.querySelector('.pm-choice__text');
+        if (text) {
+            text.textContent = label;
+        }
     }
 
     static _rangeHTML(field, value) {

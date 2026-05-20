@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+  <g fill="none">
+    
+   <!-- large profile/path -->
+    <circle
+      cx="24"
+      cy="24"
+      r="20"
+      stroke="#c8c8c8"
+      stroke-width="2.2"/>
+
+    <!-- toolpathes -->
+    <circle
+      cx="24"
+      cy="24"
+      r="16"
+      stroke="#EF5350"
+      stroke-width="1.8"/>
+
+    <circle
+      cx="24"
+      cy="24"
+      r="12"
+      stroke="#EF5350"
+      stroke-width="1.6"/>
+
+    <circle
+      cx="24"
+      cy="24"
+      r="8"
+      stroke="#EF5350"
+      stroke-width="1.4"/>
+
+    <circle
+      cx="24"
+      cy="24"
+      r="4"
+      stroke="#EF5350"
+      stroke-width="1.2"/>
+
+    <!-- tool indicator -->
+    <circle
+      cx="35"
+      cy="12"
+      r="2.2"
+      fill="#EF5350"/>
+      
+  </g>
+</svg>

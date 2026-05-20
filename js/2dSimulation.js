@@ -166,7 +166,6 @@ function setupSimulation2D() {
         // Show G-code viewer panel and populate with G-code
         if (typeof gcodeView !== 'undefined' && gcodeView) {
             gcodeView.populate(simulation2D.gcode);
-            showGcodeViewerPanel();
         }
 
         return true;
@@ -987,9 +986,6 @@ function startSimulation2D() {
     if (typeof gcodeView !== 'undefined' && gcodeView) {
         const gcode = simulation2D.gcode;
         gcodeView.populate(gcode);
-        if (typeof showGcodeViewerPanel === 'function') {
-            showGcodeViewerPanel();
-        }
     }
 
     simulation2D.currentLineIndex = 0;
@@ -1102,11 +1098,6 @@ function stopSimulation2D() {
     if (simulation2D.animationFrameId) {
         cancelAnimationFrame(simulation2D.animationFrameId);
         simulation2D.animationFrameId = null;
-    }
-
-    // Hide gcode viewer when stopping 2D simulation
-    if (typeof hideGcodeViewerPanel === 'function') {
-        hideGcodeViewerPanel();
     }
 
     // Update button states: enable start, disable pause and stop

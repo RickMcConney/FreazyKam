@@ -23,10 +23,10 @@ class ToolPathProperties {
                 operationTypeOptions: [
                     { value: 'none', label: 'None' },
                     //{ value: 'vcarve', label: 'VCarve' },
-                    { value: 'pocket', label: 'Clear out a pocket' },
-                    { value: 'center', label: 'Cut on shape path' },
-                    { value: 'outside', label: 'Cut outside shape path' },
-                    { value: 'inside', label: 'Cut inside shape path' }
+                    this._operationTypeOption('pocket', 'Clear out a pocket', 'icons/pocket.svg'),
+                    this._operationTypeOption('center', 'Cut on shape path', 'icons/profile_center.svg'),
+                    this._operationTypeOption('outside', 'Cut outside shape path', 'icons/profile_outside.svg'),
+                    this._operationTypeOption('inside', 'Cut inside shape path', 'icons/profile_inside.svg')
                 ],
                 compatibleBits: ['End Mill', 'Ball Nose', 'VBit']
             },
@@ -36,7 +36,7 @@ class ToolPathProperties {
                 noToolMsg: 'Please add an End Mill or Ball Nose in the tool library.',
                 defaultOperationType: 'pocket',
                 operationTypeOptions: [
-                    { value: 'pocket', label: 'Clear out a pocket' }
+                    this._operationTypeOption('pocket', 'Clear out a pocket', 'icons/pocket.svg')
                 ],
                 compatibleBits: ['End Mill', 'Ball Nose']
             },
@@ -46,7 +46,7 @@ class ToolPathProperties {
                 noToolMsg: 'Please add a Drill or End Mill in the tool library.',
                 defaultOperationType: 'drill',
                 operationTypeOptions: [
-                    { value: 'drill', label: 'Cut on shape path' }
+                    this._operationTypeOption('drill', 'Cut on shape path', 'icons/profile_center.svg')
                 ],
                 compatibleBits: ['Drill', 'End Mill']
             },
@@ -56,13 +56,21 @@ class ToolPathProperties {
                 noToolMsg: 'Please add a VBit in the tool library.',
                 defaultOperationType: 'pocket',
                 operationTypeOptions: [
-                    { value: 'pocket', label: 'Clear out a pocket' },
-                    { value: 'inside', label: 'Cut inside shape path' },
-                    { value: 'outside', label: 'Cut outside shape path' },
-                    { value: 'center', label: 'Cut on shape path' }
+                    this._operationTypeOption('pocket', 'Clear out a pocket', 'icons/pocket.svg'),
+                    this._operationTypeOption('inside', 'Cut inside shape path', 'icons/profile_inside.svg'),
+                    this._operationTypeOption('outside', 'Cut outside shape path', 'icons/profile_outside.svg'),
+                    this._operationTypeOption('center', 'Cut on shape path', 'icons/profile_center.svg')
                 ],
                 compatibleBits: ['VBit']
             }
+        };
+    }
+
+    _operationTypeOption(value, label, iconPath = null) {
+        return {
+            value,
+            label,
+            iconPath
         };
     }
 

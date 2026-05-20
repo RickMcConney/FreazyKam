@@ -676,7 +676,6 @@ function initializeLayout() {
     cncController.operationManager.addOperations();
     createCanvasSidePanels();
     createModals();
-    initializeGcodeView();
     lucide.createIcons();
     updateSnapButton();
 }
@@ -1532,7 +1531,6 @@ function setupCanvasTabHandlers() {
     if (canvas2DTab) {
         canvas2DTab.addEventListener('shown.bs.tab', function () {
             if (typeof stopSimulation3D === 'function') stopSimulation3D();
-            if (typeof hideGcodeViewerPanel === 'function') hideGcodeViewerPanel();
 
             const currentSidebarTab = document.querySelector('#sidebar-tabs .nav-link.active');
             const overlay2D = document.getElementById('simulation-overlay-2d');
@@ -1561,7 +1559,6 @@ function setupCanvasTabHandlers() {
 
             if (typeof gcodeView !== 'undefined' && gcodeView) {
                 gcodeView.clear();
-                if (typeof showGcodeViewerPanel === 'function') showGcodeViewerPanel();
             }
 
             const overlay2D = document.getElementById('simulation-overlay-2d');
@@ -1583,7 +1580,6 @@ function setupCanvasTabHandlers() {
         canvasToolsTab.addEventListener('shown.bs.tab', function () {
             if (typeof stopSimulation2D === 'function') stopSimulation2D();
             if (typeof stopSimulation3D === 'function') stopSimulation3D();
-            if (typeof hideGcodeViewerPanel === 'function') hideGcodeViewerPanel();
 
             const overlay2D = document.getElementById('simulation-overlay-2d');
             if (overlay2D) overlay2D.classList.add('d-none');
@@ -1593,10 +1589,6 @@ function setupCanvasTabHandlers() {
         });
     }
 }
-
-// G-code viewer panel (initializeGcodeView, show/hideGcodeViewerPanel,
-// gcodeView, previousActiveSidebarTab) extracted to
-// js/bootstrap-layout/gcodeViewerPanel.js
 
 // Initialize G-code profiles UI
 // Properties Editor Control Functions
