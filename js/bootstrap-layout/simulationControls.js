@@ -399,15 +399,26 @@ function ensure3DSimulationControls() {
     const summaryRow = document.createElement('div');
     summaryRow.className = 'd-flex w-100 align-items-center justify-content-center position-relative';
 
+    const summaryActions = document.createElement('div');
+    summaryActions.className = 'd-flex align-items-center gap-2';
+
     const simulateBtn = document.createElement('button');
     simulateBtn.type = 'button';
     simulateBtn.className = 'btn btn-primary btn-sm';
     simulateBtn.id = '3d-generate-gcode';
     simulateBtn.appendChild(document.createTextNode('Simulate'));
 
+    const reorderBtn = document.createElement('button');
+    reorderBtn.type = 'button';
+    reorderBtn.className = 'btn btn-outline-secondary btn-sm';
+    reorderBtn.id = '3d-reorder-operations';
+    reorderBtn.appendChild(document.createTextNode('Reorder operations'));
+
     const summaryMenu = create3DSimulationMenu('3d-summary');
     summaryMenu.container.classList.add('position-absolute', 'end-0', 'top-50', 'translate-middle-y');
-    summaryRow.appendChild(simulateBtn);
+    summaryActions.appendChild(simulateBtn);
+    summaryActions.appendChild(reorderBtn);
+    summaryRow.appendChild(summaryActions);
     summaryRow.appendChild(summaryMenu.container);
 
     const controlsRow = document.createElement('div');
@@ -564,6 +575,12 @@ function ensure3DSimulationControls() {
         }
     });
 
+    reorderBtn.addEventListener('click', function () {
+        if (typeof showReorderOperationsModal === 'function') {
+            showReorderOperationsModal();
+        }
+    });
+
     progressInput.addEventListener('input', function (e) {
         const lineNumber = parseInt(e.target.value, 10);
         if (typeof setSimulation3DProgress === 'function') {
@@ -635,6 +652,7 @@ function ensure3DSimulationControls() {
         speedInput: speedInput,
         cutSettingsBtn: cutSettingsBtn,
         generateGcodeBtn: simulateBtn,
+        reorderBtn: reorderBtn,
         closeBtn: closeBtn,
         progressInput: progressInput,
         simulationTime: simulationTime,
