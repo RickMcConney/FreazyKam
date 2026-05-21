@@ -184,21 +184,19 @@ function calculateFeedRate(tool, material, operation, forceAuto = false) {
 	return Math.max(minFeed, Math.min(maxFeed, Math.round(feedRate)));
 }
 
-const ZFEED_XY_RATIO           = 0.3;  // Z plunge is ~30% of XY feed rate for wood
+const ZFEED_XY_RATIO           = 0.20;  // Z plunge is ~20% of XY feed rate for wood
 const ZFEED_DEEP_PLUNGE_FACTOR = 0.7;  // Extra reduction when plunge depth > 50% of diameter
 const ZFEED_DEEP_PLUNGE_RATIO  = 0.5;  // Threshold: step > diameter * this → "deep plunge"
-const ZFEED_DRILL_FACTOR       = 0.8;  // Drills need slower plunge for chip evacuation
-const ZFEED_VBIT_FACTOR        = 0.75; // V-bits are fragile at the tip
 
 // Calculate Z feed rate (plunge rate)
-function calculateZFeedRate(tool, material, operation) {
+function calculateZFeedRate(tool, material, operation, forceAuto = false) {
 	// Manual mode - return user-specified Z feed rate
-	if (!shouldUseAutomaticZFeedRate(tool) || !tool) {
+	if (!shouldUseAutomaticZFeedRate(tool, forceAuto) || !tool) {
 		return tool ? tool.zfeed : 200;
 	}
 
-	// Z feed is typically 25-35% of XY feed for wood
-	const xyFeed = calculateFeedRate(tool, material, operation, !!tool?.autoFeedRate);
+	// Z feed is typically 20% of XY feed for wood
+	const xyFeed = calculateFeedRate(tool, material, operation, forceAuto || !!tool?.autoFeedRate);
 	let zFeedRate = xyFeed * ZFEED_XY_RATIO;
 
 	// Additional reduction for deep plunges
@@ -211,20 +209,8 @@ function calculateZFeedRate(tool, material, operation) {
 		zFeedRate *= ZFEED_DEEP_PLUNGE_FACTOR;
 	}
 
-	// Drills and V-bits need even slower plunge rates
-	if (tool.bit === 'Drill') {
-		zFeedRate *= ZFEED_DRILL_FACTOR;
-	} else if (tool.bit === 'VBit') {
-		zFeedRate *= ZFEED_VBIT_FACTOR;
-	}
-
-	// Get user-configured limits from options
-	// Z feed max is typically lower than XY feed max
-	const minFeed = getOption('minFeedRate') || 50;
-	const maxFeed = getOption('maxFeedRate') || 500;
-
 	// Ensure reasonable bounds
-	return Math.max(minFeed, Math.min(maxFeed, Math.round(zFeedRate)));
+	return Math.max(50, Math.min(xyFeed, Math.round(zFeedRate)));
 }
 
 function toolRadius() {

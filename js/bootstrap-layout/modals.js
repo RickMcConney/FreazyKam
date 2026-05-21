@@ -1447,13 +1447,13 @@ function collectCurrentCutSettingsFormValues() {
     if (values.autoZFeedRate) {
         const previewTool = (window.tools || []).find(tool => Number(tool.recid) === Number(values.tool));
         if (previewTool) {
-            const optimalFeed = calculateFeedRate({
+            const optimalZFeed = calculateZFeedRate({
                 ...previewTool,
                 step: values.step,
                 rpm: values.rpm
             }, getOption('material'), 'Profile', true);
-            if (Number.isFinite(optimalFeed) && optimalFeed > 0) {
-                values.zfeed = Math.max(1, Math.round(optimalFeed / 3));
+            if (Number.isFinite(optimalZFeed) && optimalZFeed > 0) {
+                values.zfeed = optimalZFeed;
             }
         }
     }
@@ -1672,11 +1672,13 @@ function syncAutoFeedRatePreview() {
         optimalFeed = calculateFeedRate(previewTool, getOption('material'), 'Profile', true);
     }
 
-    if (autoZFeedRate && Number.isFinite(optimalFeed) && optimalFeed > 0) {
-        const autoZFeed = Math.max(1, Math.round(optimalFeed / 3));
-        zfeedInput.value = formatDimension(autoZFeed, true);
-        zfeedInput.disabled = true;
-        zfeedInput.title = 'Automatically calculated as one third of the optimal feed rate';
+    if (autoZFeedRate && previewTool && typeof calculateZFeedRate === 'function') {
+        const autoZFeed = calculateZFeedRate(previewTool, getOption('material'), 'Profile', true);
+        if (Number.isFinite(autoZFeed) && autoZFeed > 0) {
+            zfeedInput.value = formatDimension(autoZFeed, true);
+            zfeedInput.disabled = true;
+            zfeedInput.title = 'Automatically calculated from tool, material, and depth per pass';
+        }
     } else {
         zfeedInput.disabled = false;
         if (!restoreCutSettingsManualValue(zfeedInput)) {
