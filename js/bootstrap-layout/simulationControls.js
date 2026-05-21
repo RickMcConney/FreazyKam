@@ -402,22 +402,22 @@ function ensure3DSimulationControls() {
     const summaryActions = document.createElement('div');
     summaryActions.className = 'd-flex align-items-center gap-2';
 
-    const simulateBtn = document.createElement('button');
-    simulateBtn.type = 'button';
-    simulateBtn.className = 'btn btn-primary btn-sm';
-    simulateBtn.id = '3d-generate-gcode';
-    simulateBtn.appendChild(document.createTextNode('Simulate'));
-
     const reorderBtn = document.createElement('button');
     reorderBtn.type = 'button';
     reorderBtn.className = 'btn btn-outline-secondary btn-sm';
     reorderBtn.id = '3d-reorder-operations';
     reorderBtn.appendChild(document.createTextNode('Reorder operations'));
 
+    const simulateBtn = document.createElement('button');
+    simulateBtn.type = 'button';
+    simulateBtn.className = 'btn btn-primary btn-sm';
+    simulateBtn.id = '3d-generate-gcode';
+    simulateBtn.appendChild(document.createTextNode('Simulate'));
+
     const summaryMenu = create3DSimulationMenu('3d-summary');
     summaryMenu.container.classList.add('position-absolute', 'end-0', 'top-50', 'translate-middle-y');
-    summaryActions.appendChild(simulateBtn);
     summaryActions.appendChild(reorderBtn);
+    summaryActions.appendChild(simulateBtn);
     summaryRow.appendChild(summaryActions);
     summaryRow.appendChild(summaryMenu.container);
 
