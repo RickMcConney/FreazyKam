@@ -4,5 +4,3 @@ TODO
 - Add PEN tool
 - Add Aligment panel.
 - Icon for half circle
-- Icon for square triangle
-- Add reorder window when generating GCode

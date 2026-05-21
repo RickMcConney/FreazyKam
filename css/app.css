@@ -1452,6 +1452,10 @@ html, body {
     display: block;
 }
 
+.sidebar-item svg.lucide-triangle-right {
+    transform: scaleX(-1);
+}
+
 .tool-table {
     font-size: 12px;
 }

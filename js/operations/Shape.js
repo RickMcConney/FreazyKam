@@ -4,7 +4,7 @@ var AVAILABLE_SHAPES = [
     { value: 'Triangle', label: 'Triangle', icon: 'triangle', tooltip: 'Create isosceles triangles from a center point' },
     { value: 'Star', label: 'Star', icon: 'star', tooltip: 'Create star shapes from a center point' },
     { value: 'HalfCircle', label: 'Half circle', icon: 'circle', tooltip: 'Create half circles from a center point' },
-    { value: 'RightTriangle', label: 'Right triangle', icon: 'triangle', tooltip: 'Create right triangles from a center point' },
+    { value: 'RightTriangle', label: 'Right triangle', icon: 'triangle-right', tooltip: 'Create right triangles from a center point' },
     { value: 'DrillShape', label: 'Drill', icon: 'circle-plus', tooltip: 'Create a drill point from a center point' }
 ];
 

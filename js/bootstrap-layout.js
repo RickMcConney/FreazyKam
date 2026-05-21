@@ -4827,9 +4827,9 @@ function getIconForPath(sp) {
 }
 
 function getPathIcon(name) {
-    if (name.includes('Right triangle')) return 'triangle';
+    if (name.includes('Right triangle')) return 'triangle-right';
     if (name.includes('Half circle')) return 'circle';
-    if (name.includes('Right Triangle')) return 'triangle';
+    if (name.includes('Right Triangle')) return 'triangle-right';
     if (name.includes('Half Circle')) return 'circle';
     if (name.includes('Triangle')) return 'triangle';
     if (name.includes('Square')) return 'square';
