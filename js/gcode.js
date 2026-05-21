@@ -156,9 +156,10 @@ function calculateFeedRate(tool, material, operation, forceAuto = false) {
 		return tool ? tool.feed : DEFAULT_FEED_MM_MIN;
 	}
 
-	const stepDepth = tool.step != undefined ? tool.step : (tool.depth || 1);
+	const diameter = Number(tool.diameter) > 0 ? Number(tool.diameter) : 1;
+	const stepDepth = Number(tool.step) > 0 ? Number(tool.step) : (diameter * 0.5);
 	// Get chip load for this material and tool
-	const chipLoad = getChipLoad(material, tool.diameter, tool.bit);
+	const chipLoad = getChipLoad(material, diameter, tool.bit);
 
 	// Get tool parameters with safe defaults
 	const rpm = tool.rpm || 18000;
@@ -167,30 +168,13 @@ function calculateFeedRate(tool, material, operation, forceAuto = false) {
 	// Base feed rate calculation: Feed = RPM × Flutes × Chip Load
 	let feedRate = rpm * flutes * chipLoad;
 
-	// Adjust for depth of cut (deeper cuts need slower feeds)
-	// Conservative approach: reduce feed by up to 50% for deep cuts
-	const maxRecommendedDepth = tool.diameter; // Rule of thumb: max depth = tool diameter
-	const depthRatio = Math.min(1.0, stepDepth / maxRecommendedDepth);
-	const depthFactor = Math.max(0.5, 1.0 - (depthRatio * 0.5));
-	feedRate *= depthFactor;
-
-	// Adjust for radial engagement based on operation type
-	// Profile cuts (Inside, Outside, Center): 100% engagement (full side of bit cutting)
-	// Pocket operations: engagement = stepover percentage (partial engagement)
-	let radialEngagement;
-	if (operation === 'Pocket' || operation === 'Surfacing') {
-		// Pocket/Surfacing: only stepover% of bit is engaged with fresh material
-		radialEngagement = tool.stepover / 100;
-	} else {
-		// Profile cuts: entire side of bit is cutting = 100% engagement
-		radialEngagement = 1.0;
+	// Only reduce feed for unusually deep passes; typical stepdowns should follow
+	// the chip-load baseline without an extra penalty.
+	const depthRatio = stepDepth / diameter;
+	if (depthRatio > 0.75) {
+		const overload = Math.min(1, (depthRatio - 0.75) / 0.75);
+		feedRate *= 1 - (overload * 0.15);
 	}
-
-	// Apply feed reduction based on radial engagement
-	// Higher engagement = more material contact = need slower feed
-	// Conservative: reduce by up to 50% for full engagement
-	const engagementFactor = Math.max(0.5, 1.0 - (radialEngagement * 0.5));
-	feedRate *= engagementFactor;
 
 	// Get user-configured limits from options
 	const minFeed = getOption('minFeedRate') || 100;

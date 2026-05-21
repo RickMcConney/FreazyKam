@@ -72,14 +72,23 @@ const materialsDatabase = {
     'Softwood / MDF': {
         color: '#F5DEB3', // wheat
         chipLoad: {
-            base: 0.30,
-            min: 0.22,
-            max: 0.38
+            base: 0.14,
+            min: 0.11,
+            max: 0.18
         }
     },
 
     'Hardwood / Plywood': {
         color: '#DEB887', // burlywood
+        chipLoad: {
+            base: 0.11,
+            min: 0.09,
+            max: 0.14
+        }
+    },
+
+    'PVC Foam': {
+        color: '#E0FFFF', // light cyan
         chipLoad: {
             base: 0.18,
             min: 0.14,
@@ -87,30 +96,21 @@ const materialsDatabase = {
         }
     },
 
-    'PVC Foam': {
-        color: '#E0FFFF', // light cyan
-        chipLoad: {
-            base: 0.40,
-            min: 0.30,
-            max: 0.50
-        }
-    },
-
     'POM / PMMA / PC': {
         color: '#ADD8E6', // light blue
         chipLoad: {
-            base: 0.10,
-            min: 0.08,
-            max: 0.14
+            base: 0.08,
+            min: 0.06,
+            max: 0.10
         }
     },
 
     'Copper / Brass': {
         color: '#FFD700', // gold
         chipLoad: {
-            base: 0.07,
-            min: 0.05,
-            max: 0.09
+            base: 0.04,
+            min: 0.03,
+            max: 0.05
         }
     }
 };
