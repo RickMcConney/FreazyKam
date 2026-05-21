@@ -72,45 +72,45 @@ const materialsDatabase = {
     'Softwood / MDF': {
         color: '#F5DEB3', // wheat
         chipLoad: {
-            base: 0.14,
-            min: 0.11,
-            max: 0.18
+            base: 0.07,
+            min: 0.055,
+            max: 0.09
         }
     },
 
     'Hardwood / Plywood': {
         color: '#DEB887', // burlywood
         chipLoad: {
-            base: 0.11,
-            min: 0.09,
-            max: 0.14
+            base: 0.055,
+            min: 0.045,
+            max: 0.07
         }
     },
 
     'PVC Foam': {
         color: '#E0FFFF', // light cyan
         chipLoad: {
-            base: 0.18,
-            min: 0.14,
-            max: 0.24
+            base: 0.09,
+            min: 0.07,
+            max: 0.12
         }
     },
 
     'POM / PMMA / PC': {
         color: '#ADD8E6', // light blue
         chipLoad: {
-            base: 0.08,
-            min: 0.06,
-            max: 0.10
+            base: 0.04,
+            min: 0.03,
+            max: 0.05
         }
     },
 
     'Copper / Brass': {
         color: '#FFD700', // gold
         chipLoad: {
-            base: 0.04,
-            min: 0.03,
-            max: 0.05
+            base: 0.02,
+            min: 0.015,
+            max: 0.025
         }
     }
 };
@@ -126,8 +126,8 @@ function getDefaultOptions() {
         { recid: 6,  option: 'zbacklash',           value: 0.1,             desc: 'Back lash compensation in mm',                hidden: false },
         { recid: 7,  option: 'workpieceWidth',      value: 300,             desc: 'Workpiece Width (mm)',                        hidden: true  },
         { recid: 8,  option: 'workpieceLength',     value: 200,             desc: 'Workpiece Length (mm)',                       hidden: true  },
-        { recid: 9,  option: 'workpieceThickness',  value: 19,              desc: 'Workpiece Thickness (mm)',                    hidden: true  },
-        { recid: 10, option: 'material',            value: 'Softwood / MDF', desc: 'Material',                                   hidden: true  },
+        { recid: 9,  option: 'workpieceThickness',  value: 18,              desc: 'Workpiece Thickness (mm)',                    hidden: true  },
+        { recid: 10, option: 'material',            value: 'Hardwood / Plywood', desc: 'Material',                                   hidden: true  },
 		{ recid: 11, option: 'minFeedRate',         value: 100,             desc: 'Minimum Feed Rate (mm/min)',                  hidden: false },
 		{ recid: 12, option: 'maxFeedRate',         value: 2500,            desc: 'Maximum Feed Rate (mm/min)',                  hidden: false },
 		{ recid: 13, option: 'originPosition',      value: 'middle-center', desc: 'Origin Position',                             hidden: true  },

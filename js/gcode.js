@@ -201,8 +201,8 @@ function calculateZFeedRate(tool, material, operation, forceAuto = false) {
 
 	// Additional reduction for deep plunges
 	// Plunging is more aggressive than lateral cutting
-	const diameter = tool.diameter;
-	const step = tool.step || 1;
+	const diameter = Number(tool.diameter) > 0 ? Number(tool.diameter) : 1;
+	const step = Number(tool.step) > 0 ? Number(tool.step) : 1;
 
 	if (step > diameter * ZFEED_DEEP_PLUNGE_RATIO) {
 		// Deep plunge (more than 50% of diameter) - reduce further
