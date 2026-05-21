@@ -129,7 +129,7 @@ function getDefaultOptions() {
         { recid: 9,  option: 'workpieceThickness',  value: 19,              desc: 'Workpiece Thickness (mm)',                    hidden: true  },
         { recid: 10, option: 'material',            value: 'Softwood / MDF', desc: 'Material',                                   hidden: true  },
 		{ recid: 11, option: 'minFeedRate',         value: 100,             desc: 'Minimum Feed Rate (mm/min)',                  hidden: false },
-		{ recid: 12, option: 'maxFeedRate',         value: 2000,            desc: 'Maximum Feed Rate (mm/min)',                  hidden: false },
+		{ recid: 12, option: 'maxFeedRate',         value: 2500,            desc: 'Maximum Feed Rate (mm/min)',                  hidden: false },
 		{ recid: 13, option: 'originPosition',      value: 'middle-center', desc: 'Origin Position',                             hidden: true  },
 		{ recid: 14, option: 'gridSize',            value: defaultGridSize, desc: 'Grid Size (mm)',                              hidden: true  },
 		{ recid: 15, option: 'showWorkpiece',       value: true,            desc: 'Show Workpiece',                              hidden: true  },

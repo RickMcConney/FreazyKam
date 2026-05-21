@@ -1033,14 +1033,14 @@ const CUT_SETTINGS_RPM_PRESETS = {
     makita: [
         { value: '1', label: 'Speed 1', rpm: 10000 },
         { value: '2', label: 'Speed 2', rpm: 12000 },
-        { value: '3', label: 'Speed 3', rpm: 17000 },
+        { value: '3', label: 'Speed 3 (Recommended)', rpm: 17000 },
         { value: '4', label: 'Speed 4', rpm: 22000 },
         { value: '5', label: 'Speed 5', rpm: 27000 },
         { value: '6', label: 'Speed 6', rpm: 34000 }
     ],
     dewalt: [
         { value: '1', label: 'Speed 1', rpm: 16000 },
-        { value: '2', label: 'Speed 2', rpm: 18200 },
+        { value: '2', label: 'Speed 2 (Recommended)', rpm: 18200 },
         { value: '3', label: 'Speed 3', rpm: 20400 },
         { value: '4', label: 'Speed 4', rpm: 22600 },
         { value: '5', label: 'Speed 5', rpm: 24800 },
