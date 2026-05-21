@@ -121,7 +121,7 @@ function getDefaultOptions() {
         { recid: 1,  option: 'showGrid',           value: true,            desc: 'Show Grid',                                    hidden: true  },
         { recid: 2,  option: 'showOrigin',          value: true,            desc: 'Show Origin',                                 hidden: true  },
         { recid: 3,  option: 'Inches',              value: false,           desc: 'Display Inches',                              hidden: false },
-        { recid: 4,  option: 'safeHeight',          value: 5,               desc: 'Safe Height in mm',                           hidden: false },
+        { recid: 4,  option: 'safeHeight',          value: 10,               desc: 'Safe Height in mm',                           hidden: false },
         { recid: 5,  option: 'tolerance',           value: 0.01,             desc: 'Tool path tolerance (mm)',                   hidden: false },
         { recid: 6,  option: 'zbacklash',           value: 0.1,             desc: 'Back lash compensation in mm',                hidden: false },
         { recid: 7,  option: 'workpieceWidth',      value: 300,             desc: 'Workpiece Width (mm)',                        hidden: true  },
