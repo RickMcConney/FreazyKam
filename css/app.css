@@ -2154,8 +2154,24 @@ html, body {
     */
 }
 
-#3d-simulation-controls {
+[id="3d-simulation-controls"] {
     width: 100%;
+}
+
+[id="3d-reorder-operations"].btn.btn-outline-secondary {
+    --bs-btn-bg: rgba(248, 249, 250, 0.92);
+    --bs-btn-border-color: rgba(108, 117, 125, 0.55);
+    --bs-btn-color: var(--bs-secondary);
+    --bs-btn-hover-color: #343a40;
+    --bs-btn-hover-bg: rgba(233, 236, 239, 0.98);
+    --bs-btn-hover-border-color: rgba(108, 117, 125, 0.72);
+    --bs-btn-focus-shadow-rgb: 108, 117, 125;
+    --bs-btn-active-color: #212529;
+    --bs-btn-active-bg: rgba(222, 226, 230, 0.98);
+    --bs-btn-active-border-color: rgba(108, 117, 125, 0.8);
+    background-color: rgba(248, 249, 250, 0.92);
+    border-color: rgba(108, 117, 125, 0.55);
+    box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
 }
 
 .\33 d-simulation-player {
