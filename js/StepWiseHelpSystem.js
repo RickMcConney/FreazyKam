@@ -237,10 +237,10 @@ class StepWiseHelpSystem {
                 'Click to place the center point of the star',
                 'Star created! Adjust properties or close panel'
             ],
-            'HalfCircle': [
+            'Heart': [
                 'Set X, Y, width, height and angle in the properties panel',
-                'Click to place the center point of the half circle',
-                'Half circle created! Adjust properties or close panel'
+                'Click to place the center point of the heart',
+                'Heart created! Adjust properties or close panel'
             ],
             'RightTriangle': [
                 'Set X, Y, width, height and angle in the properties panel',

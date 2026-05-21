@@ -11,7 +11,7 @@ class CncController {
     // Register all operations
     let select = Select.getInstance();
     this.operationManager.registerOperation(select);
-    this.operationManager.registerOperation(new Shape(null, null, 'Create basic shapes (square, circle, triangle, star, half circle, right triangle)'));
+    this.operationManager.registerOperation(new Shape(null, null, 'Create basic shapes (square, circle, triangle, star, heart, right triangle)'));
     AVAILABLE_SHAPES.forEach(shape => {
       this.operationManager.registerOperation(new Shape(shape.value, shape.icon, shape.tooltip));
     });

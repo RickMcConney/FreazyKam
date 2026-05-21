@@ -3,7 +3,7 @@ var AVAILABLE_SHAPES = [
     { value: 'Circle', label: 'Circle', icon: 'circle', tooltip: 'Create circles and ellipses from a center point' },
     { value: 'Triangle', label: 'Triangle', icon: 'triangle', tooltip: 'Create isosceles triangles from a center point' },
     { value: 'Star', label: 'Star', icon: 'star', tooltip: 'Create star shapes from a center point' },
-    { value: 'HalfCircle', label: 'Half circle', icon: 'circle', tooltip: 'Create half circles from a center point' },
+    { value: 'Heart', label: 'Heart', icon: 'heart', tooltip: 'Create heart shapes from a center point' },
     { value: 'RightTriangle', label: 'Right triangle', icon: 'triangle-right', tooltip: 'Create right triangles from a center point' },
     { value: 'DrillShape', label: 'Drill', icon: 'circle-plus', tooltip: 'Create a drill point from a center point' }
 ];
@@ -191,6 +191,36 @@ function createStarPoints(centerX, centerY, width, height) {
     }
 
     return points;
+}
+
+function createHeartPoints(centerX, centerY, width, height) {
+    const segments = Math.max(48, getCurveSegments(width, height));
+    const rawPoints = [];
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
+
+    for (let i = 0; i < segments; i++) {
+        const angle = (i / segments) * Math.PI * 2;
+        const rawX = 16 * Math.pow(Math.sin(angle), 3);
+        const rawY = 13 * Math.cos(angle) - 5 * Math.cos(2 * angle) - 2 * Math.cos(3 * angle) - Math.cos(4 * angle);
+        rawPoints.push({ x: rawX, y: rawY });
+        minX = Math.min(minX, rawX);
+        maxX = Math.max(maxX, rawX);
+        minY = Math.min(minY, rawY);
+        maxY = Math.max(maxY, rawY);
+    }
+
+    const rawWidth = Math.max(maxX - minX, Number.EPSILON);
+    const rawHeight = Math.max(maxY - minY, Number.EPSILON);
+    const rawCenterX = (minX + maxX) / 2;
+    const rawCenterY = (minY + maxY) / 2;
+
+    return rawPoints.map(point => ({
+        x: centerX + ((point.x - rawCenterX) / rawWidth) * width,
+        y: centerY - ((point.y - rawCenterY) / rawHeight) * height
+    }));
 }
 
 function getPathMetrics(path) {
@@ -779,6 +809,9 @@ class Shape extends Operation {
                 break;
             case 'Star':
                 points = createStarPoints(centerX, centerY, width, height);
+                break;
+            case 'Heart':
+                points = createHeartPoints(centerX, centerY, width, height);
                 break;
             case 'HalfCircle':
                 points = createHalfEllipsePoints(centerX, centerY, width / 2, height / 2);
