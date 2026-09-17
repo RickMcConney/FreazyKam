@@ -1,6 +1,6 @@
 # FreazyKam
 
-> ⚠️ **A newer version is available.** This project has moved to [**RickMcConney/freazyKam2**](https://github.com/RickMcConney/freazyKam2). Please use the new repository for the latest features and updates — **[Launch the new version](https://rickmcconney.github.io/freazyKam2/)**.
+> ⚠️ **A newer version is available.** This project has moved to [**RickMcConney/freazyKam2**](https://github.com/RickMcConney/FreazyKam2). Please use the new repository for the latest features and updates — **[Launch the new version](https://rickmcconney.github.io/FreazyKam2/)**.
 
 <p align="center">
   <img src="icons/logo.svg" alt="FreazyKam Logo" width="200">
